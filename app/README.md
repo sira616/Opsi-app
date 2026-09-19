@@ -1,15 +1,13 @@
-# Opsi · frontend
+# app/
 
-Rama del **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
+El **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
 
-> Para saber **qué es Opsi y cómo funciona**, ve a [`main`](../../tree/main).
-> La capa de datos y servidor está en [`backend`](../../tree/backend).
-> Esta rama **no se fusiona con `main`**.
+> Qué es Opsi y cómo funciona: [`../README.md`](../README.md).
+> Cómo levantar el backend en local: [`../docs/SETUP.md`](../docs/SETUP.md).
 
 ## Estructura
 
 ```
-app/
 ├── src/
 │   ├── app/            Rutas (Expo Router): la carpeta es el mapa de pantallas
 │   ├── features/       Un módulo por dominio: inventory, scanner, shopping, chat, settings
@@ -19,10 +17,10 @@ app/
 └── assets/             Iconos, splash, fuentes
 ```
 
-## Reglas de esta rama
+## Reglas de esta mitad
 
 1. **Los tipos de la base de datos se generan, no se escriben.**
-   `supabase gen types typescript` → `src/lib/database.types.ts`. Si el esquema cambia,
+   `npm run types` desde la raíz → `src/lib/database.types.ts`. Si el esquema cambia,
    se regeneran; no se parchean a mano.
 2. **Las acciones se llaman por RPC**, nunca como `update` sueltos. Abrir un elemento es
    una llamada a una función del servidor, no dos escrituras desde el móvil.
@@ -33,29 +31,35 @@ app/
 5. **Nada se añade solo a la lista de la compra.** Siempre una pregunta explícita, salvo
    que el usuario active la opción automática en ajustes.
 6. **Ninguna clave en el cliente.** Solo la `anon key` de Supabase, que existe para eso.
-   Todo lo demás pasa por una Edge Function.
+   Todo lo demás pasa por una Edge Function. Lo que lleva prefijo `EXPO_PUBLIC_` acaba
+   incrustado en el binario: dalo por publicado.
+7. **Se entra por magic link.** Sin contraseñas en el MVP. El enlace vuelve a la app por
+   deep link con el esquema `opsi://`, que debe coincidir con `supabase/config.toml`.
 
 ## Puesta en marcha
 
 > [!WARNING]
-> Pendiente de la **fase 0**: el proyecto de Expo aún no está creado.
-> Lo que sigue es el procedimiento previsto, no un estado verificado.
+> **El proyecto de Expo aún no existe** (tarea D1 de la fase 0). Lo que sigue es el
+> procedimiento previsto, no un estado verificado.
 
 ```bash
+npm install             # desde la raíz: es un workspace
 cd app
-npm install
 npx expo start          # Expo Go para iterar rápido
 npx expo run:ios        # build nativa: necesaria para el escáner y las push
 eas build --profile development
 ```
+
+El backend tiene que estar levantado (`npm run db:start` desde la raíz) y la `anon key`
+copiada al `.env`. Ver [`../docs/SETUP.md`](../docs/SETUP.md).
 
 El escáner de códigos y las notificaciones push **no funcionan en Expo Go**: requieren una
 *development build*. Conviene montarla ya en la fase 0 y no descubrirlo en la fase 2.
 
 ## Estado por fases
 
-- [ ] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, login
-      (email + magic link o contraseña), CI (lint + typecheck)
+- [ ] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, login por
+      magic link con deep link `opsi://`, CI (lint + typecheck)
 - [ ] **Fase 1** — Alta manual, detalle del elemento con acciones, «Consumir primero»
 - [ ] **Fase 2** — Pantalla de cámara EAN-13/EAN-8/UPC, confirmación precargada, fallback manual
 - [ ] **Fase 3** — Permiso y registro del token push, pantalla de ajustes de aviso

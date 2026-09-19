@@ -1,15 +1,14 @@
-# Opsi · backend
+# supabase/
 
-Rama de la **capa de datos y servidor**: Supabase (Postgres, Auth, Storage, Edge Functions).
+La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 
-> Para saber **qué es Opsi y cómo funciona**, ve a [`main`](../../tree/main).
-> El cliente móvil está en [`frontend`](../../tree/frontend).
-> Esta rama **no se fusiona con `main`**.
+> Qué es Opsi y cómo funciona: [`../README.md`](../README.md).
+> Cómo levantarlo en local: [`../docs/SETUP.md`](../docs/SETUP.md).
 
 ## Estructura
 
 ```
-supabase/
+├── config.toml     Configuración del proyecto (puertos, auth, seeds)
 ├── migrations/     Esquema versionado. Una migración por cambio, nunca se edita una aplicada
 ├── functions/      Edge Functions (Deno + TypeScript)
 │   ├── lookup-barcode/     fase 2 · Open Food Facts con caché
@@ -20,7 +19,7 @@ supabase/
 └── seed/           Datos de desarrollo (productos de ejemplo)
 ```
 
-## Reglas de esta rama
+## Reglas de esta mitad
 
 1. **Todo cambio de esquema es una migración.** Nada de tocar el esquema desde el panel de
    Supabase: lo que no está en `migrations/` no existe.
@@ -35,23 +34,23 @@ supabase/
 
 ## Puesta en marcha
 
-> [!WARNING]
-> Pendiente de la **fase 0**: todavía no hay proyecto de Supabase enlazado ni migraciones.
-> Lo que sigue es el procedimiento previsto, no un estado verificado.
+Desde la raíz del repositorio:
 
 ```bash
-npm i -g supabase          # CLI
-supabase login
-supabase link --project-ref <ref>
-supabase start             # entorno local con Docker
-supabase db reset          # aplica migrations/ + seed/
-supabase test db           # pgTAP
+npm install          # instala la CLI fijada en package.json
+npm run db:start     # Postgres, Auth, Storage y Studio en Docker
+npm run db:reset     # aplica migrations/ + seed/
+npm run db:test      # pgTAP
 ```
+
+Los detalles, las claves locales y los problemas frecuentes están en
+[`../docs/SETUP.md`](../docs/SETUP.md). No hace falta cuenta en supabase.com
+para desarrollar.
 
 ## Estado por fases
 
-- [ ] **Fase 0** — Proyecto, CLI enlazada, entorno local, esquema inicial, RLS, trigger de
-      hogar personal, auth, CI (lint + typecheck + tests de BD)
+- [ ] **Fase 0** — CLI y entorno local ✅ · esquema inicial, RLS, trigger de hogar
+      personal, auth y CI (lint + typecheck + tests de BD) pendientes
 - [ ] **Fase 1** — RPC de acciones, `inventory_events`, vista `inventory_with_priority`
 - [ ] **Fase 2** — `lookup-barcode` + caché de productos
 - [ ] **Fase 3** — `daily-digest` + `pg_cron` + tokens push en `user_settings`

@@ -13,9 +13,8 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 ---
 
 > [!NOTE]
-> Esta rama (`main`) es **solo documentación**: explica qué es Opsi y cómo funciona.
-> El código vive en las ramas [`backend`](../../tree/backend) y [`frontend`](../../tree/frontend).
-> Ver [Organización del repositorio](#organización-del-repositorio).
+> **Fase 0 en curso.** El proyecto está en construcción: hay configuración y documentación,
+> todavía no una app que puedas usar. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Índice
 
@@ -25,7 +24,8 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 - [Modelo de datos](#modelo-de-datos)
 - [Principios que no se negocian](#principios-que-no-se-negocian)
 - [Alcance del MVP](#alcance-del-mvp)
-- [Organización del repositorio](#organización-del-repositorio)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Estado](#estado)
 - [Documentación](#documentación)
 
 ## Qué es Opsi
@@ -167,29 +167,52 @@ Ocho piezas, todas colgando de `household_id`:
 **Después del MVP:** hogar compartido · patrones de consumo y desperdicio · precios y
 comparación por €/kg · modo sin conexión.
 
-## Organización del repositorio
+## Estructura del repositorio
 
-Tres ramas de larga vida, cada una con un propósito:
-
-| Rama | Contenido | Se merge a `main` |
-|---|---|:--:|
-| [`main`](../../tree/main) | **Solo documentación.** Qué es Opsi y cómo funciona | — |
-| [`backend`](../../tree/backend) | Supabase: migraciones, RLS, RPC, Edge Functions, tests de BD | No |
-| [`frontend`](../../tree/frontend) | App Expo: pantallas, navegación, cliente de datos, UI | No |
-
-`backend` y `frontend` **no se fusionan con `main`**: son líneas paralelas. El trabajo
-diario se hace en ramas cortas que salen de una de ellas y vuelven a ella:
+Monorepo: la app y el backend viven juntos y se versionan a la vez.
 
 ```
-main       ──●───────────────●──────────►   docs
-              \
-backend        ●────●────●────●────────►    supabase/
-                     \        ↑
-                      ●───────●             feat/rls-hogares
-frontend       ●────●────●─────────────►    app/
+Opsi-app/
+├── app/              Cliente móvil — React Native + Expo (TypeScript)
+│   └── src/
+│       ├── app/          Rutas (Expo Router)
+│       ├── features/     Un módulo por dominio: inventory, scanner, shopping, chat
+│       ├── components/   UI reutilizable
+│       ├── lib/          Cliente de Supabase, TanStack Query, tipos generados
+│       └── theme/        Tokens de color, tipografía y espaciado
+├── supabase/         Backend — Postgres, Auth, Storage, Edge Functions
+│   ├── migrations/       Esquema versionado
+│   ├── functions/        Edge Functions (Deno)
+│   ├── tests/            pgTAP: RLS, RPC, vista de prioridad
+│   └── seed/             Datos de desarrollo
+└── docs/             Esta documentación
 ```
+
+**Por qué un solo repositorio:** el esquema y la app cambian juntos. Una columna nueva en
+`inventory_items` toca una migración, los tipos generados y una pantalla. En un solo commit
+eso es atómico y revisable; repartido en dos repositorios, es una coreografía.
+
+El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull request*:
+`feat/rls-hogares`, `fix/fecha-efectiva-congelado`, `chore/ci-pgtap`.
+
+## Estado
+
+**Fase 0 · en curso.** Lo que hay hoy:
+
+- [x] Monorepo con `app/` y `supabase/`
+- [x] CLI de Supabase fijada y `supabase/config.toml` configurado (magic link, deep links)
+- [x] Separación de secretos: qué es público, qué va en el servidor
+- [ ] Esquema inicial y políticas RLS
+- [ ] Trigger de hogar personal al registrarse
+- [ ] Test de aislamiento entre dos cuentas ← *criterio de salida de la fase 0*
+- [ ] App Expo y pantalla de login
+- [ ] CI
+
+Empezar por [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Documentación
 
+- [`docs/SETUP.md`](docs/SETUP.md) — levantar el entorno local y desplegar
 - [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) — decisiones técnicas en detalle
 - [`docs/GLOSARIO.md`](docs/GLOSARIO.md) — estados, tipos de fecha y vocabulario del dominio
+- [`supabase/README.md`](supabase/README.md) · [`app/README.md`](app/README.md) — reglas de cada mitad

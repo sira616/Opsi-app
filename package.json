@@ -1,0 +1,24 @@
+{
+  "name": "opsi",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Opsi — gestión de alimentos del hogar. Monorepo: app/ (Expo) + supabase/ (Postgres, Auth, Edge Functions).",
+  "workspaces": ["app"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:status": "supabase status",
+    "db:reset": "supabase db reset",
+    "db:diff": "supabase db diff",
+    "db:test": "supabase test db",
+    "db:lint": "supabase db lint --level warning",
+    "types": "supabase gen types typescript --local > app/src/lib/database.types.ts",
+    "link": "supabase link"
+  },
+  "devDependencies": {
+    "supabase": "^2.117.0"
+  }
+}
