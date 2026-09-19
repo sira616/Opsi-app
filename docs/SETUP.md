@@ -4,10 +4,10 @@ Guía para dejar Opsi funcionando en local y, cuando toque, enlazarlo con un pro
 de Supabase en la nube.
 
 > [!NOTE]
-> **Estado verificado:** la configuración de este repositorio (`supabase/config.toml`)
-> es válida y la CLI está fijada en `package.json`. Los comandos que levantan servicios
-> (`db:start`, `db:reset`, `db:test`) **no se han podido ejecutar aún** porque necesitan
-> Docker. Si algo falla al seguir esta guía, es un error a corregir, no algo esperado.
+> **Estado verificado:** el esquema completo se aplica y se comporta como debe —
+> `npm run db:check` lo comprueba sin Docker y pasa. Los comandos que levantan
+> servicios (`db:start`, `db:reset`, `db:test`) **siguen sin ejecutarse** porque
+> necesitan Docker. Si algo falla al seguir esta guía, es un error a corregir.
 
 ## Requisitos
 
@@ -56,11 +56,28 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 | `npm run db:status` | URLs y claves locales |
 | `npm run db:reset` | **Borra la base y la reconstruye** desde `supabase/migrations/` + `supabase/seed/` |
 | `npm run db:test` | Ejecuta los tests pgTAP de `supabase/tests/` |
+| `npm run db:check` | **Comprueba el esquema sin Docker**, en segundos (ver abajo) |
 | `npm run db:diff` | Genera una migración a partir de cambios hechos en Studio |
 | `npm run types` | Regenera `app/src/lib/database.types.ts` desde el esquema local |
 
 `db:reset` es destructivo y se usa constantemente: en local **la base de datos es
 desechable**. Lo que no esté en una migración o en el seed, se pierde. Es intencionado.
+
+### Comprobar el esquema sin Docker
+
+```bash
+npm run db:check
+```
+
+Aplica todas las migraciones sobre un Postgres real compilado a WebAssembly
+([PGlite](https://pglite.dev)) y ejecuta las comprobaciones de aislamiento y de
+restricciones, incluidos los dos ficheros de `supabase/tests/` con dobles de pgTAP.
+Tarda segundos y no necesita nada instalado.
+
+**No sustituye a `npm run db:test`**, que es el veredicto real: allí corre pgTAP de
+verdad sobre el Supabase de verdad. Las diferencias asumidas a cambio de la rapidez:
+el esquema `auth` es un doble mínimo, PGlite trae Postgres 18 (el proyecto fija la 17)
+y no hay Storage, Realtime ni Edge Functions.
 
 ### El correo no sale a internet
 

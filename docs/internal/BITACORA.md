@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-19** (sesión 2)
+> Última actualización: **2026-09-19** (sesión 3)
 
 ---
 
@@ -27,28 +27,38 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
-**2026-09-19 (sesión 2)** — Monorepo consolidado y bloque A (Supabase en marcha) terminado.
-Sigue sin haber **esquema ni app**: hay configuración, no producto.
+**2026-09-19 (sesión 3)** — Bloques B y C terminados: el esquema completo, la RLS y el
+trigger de alta, con tests. **Sigue sin haber app.**
 
 | Área | Qué hay hoy |
 |---|---|
-| Repositorio | Monorepo en `main`: `app/` + `supabase/` + `docs/`. Ramas `backend`/`frontend` fusionadas |
-| Supabase | CLI 2.117.0 fijada en `package.json`; `config.toml` ajustado a Opsi y validado |
-| Auth | Magic link configurado, deep link `opsi://`, confirmación de correo obligatoria |
-| Secretos | `.env.example` (cliente) y `supabase/.env.example` (servidor) separados y documentados |
-| Docs | `README.md`, `docs/SETUP.md`, `ARQUITECTURA.md`, `GLOSARIO.md` |
+| Repositorio | Monorepo en `main`: `app/` + `supabase/` + `docs/` + `scripts/` |
+| Supabase | CLI 2.117.0 fijada, `config.toml` ajustado a Opsi |
+| Esquema | **7 migraciones**, 7 tablas, 8 tipos enumerados, RLS en todas |
+| Seguridad | `is_household_member()` + 20 políticas + trigger de hogar personal |
+| Tests | 2 ficheros pgTAP (39 aserciones) + `npm run db:check` (73 comprobaciones) |
+| Datos | Seed con 10 productos ficticios de catálogo global |
 | App Expo | **Nada.** Sigue siendo la tarea D1 |
-| Esquema | **Nada.** Ni una migración, ni una política RLS |
 
 ### Verificado vs. no verificado
 
 | | |
 |---|---|
-| ✅ **Verificado aquí** | `npm install` instala la CLI · `supabase init` corrió · `config.toml` parsea y tiene los valores esperados |
-| ⚠️ **Sin verificar** | `db:start`, `db:reset`, `db:test`. **El contenedor de trabajo no tiene daemon de Docker.** Hay que probarlos en una máquina real antes de dar la fase 0 por buena |
+| ✅ **Verificado aquí** | Las 7 migraciones aplican en orden sobre Postgres 18 · el aislamiento entre dos cuentas funciona · el registro de eventos es inmutable · las restricciones rechazan lo que deben · **los dos ficheros pgTAP se ejecutan enteros** |
+| ⚠️ **Sin verificar** | Nada se ha ejecutado contra Supabase real: **este contenedor no tiene daemon de Docker**. Falta `db:start`, `db:reset` y `db:test` |
 
-> Primera tarea de la próxima sesión, antes de escribir una sola migración:
-> `npm run db:start` en una máquina con Docker. Si falla, se arregla ahí.
+**Cómo se verificó sin Docker:** `scripts/check-schema.mjs` levanta un Postgres real
+compilado a WebAssembly ([PGlite](https://pglite.dev)), aplica las migraciones y corre
+las aserciones. Los ficheros de `supabase/tests/` también se ejecutan ahí, con dobles de
+las funciones de pgTAP, así que se validan de verdad y no solo «parecen correctos».
+
+Diferencias asumidas frente al Supabase real, que es lo que queda por comprobar:
+
+- El esquema `auth` es un doble mínimo (`users` + `uid()`), no GoTrue. **El riesgo real
+  está aquí**: si `auth.users` tiene columnas NOT NULL que los tests no rellenan, los
+  INSERT de los ficheros pgTAP fallarán. Es un arreglo de una línea, pero hay que verlo.
+- PGlite trae Postgres 18; `config.toml` fija la 17.
+- No hay pgTAP real, ni Storage, ni Realtime, ni Edge Functions.
 
 ## 2. Decisiones tomadas
 
@@ -153,6 +163,46 @@ cantidades sin adivinar. El coste es una columna más y una conversión en la in
 la fase 1 si al usarlo se echan de menos; añadirlas después es una columna, no una migración
 dolorosa.
 
+### D-08 · El catálogo global es la única excepción a «todo cuelga de un hogar» · 2026-09-19
+
+`products.household_id` admite NULL, y eso significa «catálogo global»: la caché
+compartida que rellena `lookup-barcode` desde Open Food Facts.
+
+**Por qué se acepta la excepción:** sin ella, cada hogar tendría su propia copia de Open
+Food Facts. Escanear un producto que otro usuario ya escaneó volvería a provocar una
+llamada externa, y la caché de la fase 2 no serviría de nada.
+
+**Cómo se contiene el riesgo:** `is_household_member(NULL)` devuelve `false`, así que las
+políticas de INSERT, UPDATE y DELETE **excluyen las filas globales por construcción**.
+Un usuario puede leer el catálogo global, pero no escribir en él. Ahí solo escribe
+`lookup-barcode` con la `service_role` key, que salta la RLS. Un CHECK remata la regla:
+una fila global tiene que declarar `data_source = 'openfoodfacts'`.
+
+### D-09 · El registro de eventos no tiene políticas de escritura · 2026-09-19
+
+`inventory_events` tiene política de SELECT y de INSERT. **No tiene de UPDATE ni de
+DELETE**, y eso es lo que las prohíbe: con RLS activada, lo que no está permitido
+explícitamente está denegado.
+
+No es un descuido que haya que «completar» más adelante. Un registro que se puede
+reescribir no es un registro, y los patrones de consumo y desperdicio posteriores al MVP
+se apoyan en que esta tabla sea fiable. El `item_id` usa `ON DELETE SET NULL`, no
+CASCADE, por lo mismo: si se borra el elemento, su historia sobrevive.
+
+### D-10 · Todo en unidad base, con la unidad del usuario al lado · 2026-09-19 *(aplica D-07)*
+
+Traducción de D-07 a columnas, ya en `inventory_items`:
+
+| Columna | Qué guarda |
+|---|---|
+| `unit_family` | `mass` \| `volume` \| `count` |
+| `initial_quantity`, `remaining_quantity` | **Siempre en unidad base**: gramos, mililitros o piezas |
+| `display_unit` | Lo que eligió el usuario (`g`, `kg`, `ml`, `l`, `unit`) |
+
+Un CHECK impide las combinaciones imposibles: `volume` no acepta `kg`, `count` solo
+acepta `unit`. Así «usar cantidad» es una resta de enteros y la conversión vive en la
+interfaz, en un solo sitio.
+
 ## 3. Convenciones
 
 ### Ramas
@@ -185,7 +235,13 @@ chore(ci): ejecutar pgTAP en cada push
   corrige con otra nueva.
 - La tabla y su política RLS van **en la misma migración**. Nunca una tabla sin política,
   ni siquiera «por un rato».
-- Nombre: `20260919T1200_crear_inventory_items.sql`.
+- Nombre: `<YYYYMMDDHHMMSS>_descripcion.sql`, por ejemplo
+  `20260919120200_inventory_items.sql`.
+
+> **Corrección de la sesión 1.** Aquí ponía `20260919T1200_…`, con una `T`. La CLI de
+> Supabase lee la versión de la migración de los **dígitos iniciales** del nombre, así que
+> esa `T` habría partido el identificador y roto el orden de aplicación. Catorce dígitos
+> seguidos, sin separadores.
 
 ### Tipos generados
 
@@ -227,34 +283,59 @@ por RLS. La `service_role` key y la de Anthropic no tocan el cliente jamás.
 **Scripts disponibles desde la raíz:** `db:start`, `db:stop`, `db:status`, `db:reset`,
 `db:diff`, `db:test`, `db:lint`, `types`, `link`.
 
-### Bloque B · Esquema inicial — siguiente
+### Bloques B y C · Esquema y seguridad — ✅ hechos (2026-09-19)
 
-Una migración por tabla, en este orden (las dependencias mandan):
+Siete migraciones, una por tabla salvo la primera, que lleva `households`,
+`household_members` y la función de la que depende toda la RLS.
 
-| # | Tabla | Notas |
-|:--:|---|---|
-| B1 | `households` | `id`, `nombre`, `created_at` |
-| B2 | `household_members` | `household_id`, `user_id`, `rol`. **La tabla que define toda la RLS** |
-| B3 | `products` | Catálogo. `barcode` único, campos de Open Food Facts, `source` |
-| B4 | `inventory_items` | Estado, ubicación, fecha + **tipo y origen**. Cantidad según [D-07](#d-07--masa-volumen-y-unidades--2026-09-19-cierra-q5): `quantity` en unidad base + `unit_family` + `display_unit` |
-| B5 | `inventory_events` | Append-only: `item_id`, `user_id`, `tipo`, `payload`, `created_at` |
-| B6 | `shopping_list_items` | Puede esperar a la fase 4, pero crearla ahora evita otra ronda de RLS |
-| B7 | `user_settings` | Zona horaria, hora del aviso, token push, `auto_add_to_list` (por defecto **false**) |
+| Migración | Contiene |
+|---|---|
+| `…120000_households.sql` | `households`, `household_members`, `is_household_member()`, `touch_updated_at()` |
+| `…120100_products.sql` | Catálogo, con la mitad global ([D-08](#d-08--el-catálogo-global-es-la-única-excepción-a-todo-cuelga-de-un-hogar--2026-09-19)) |
+| `…120200_inventory_items.sql` | El elemento real, con los principios como CHECK |
+| `…120300_inventory_events.sql` | Registro inmutable ([D-09](#d-09--el-registro-de-eventos-no-tiene-políticas-de-escritura--2026-09-19)) |
+| `…120400_shopping_list_items.sql` | Lista de la compra (tabla ya, funcionalidad en fase 4) |
+| `…120500_user_settings.sql` | Ajustes por usuario, no por hogar |
+| `…120600_new_user_trigger.sql` | `handle_new_user()` + trigger sobre `auth.users` |
 
-> **Los enums del [glosario](../GLOSARIO.md) se crean como tipos de Postgres, no como texto
-> libre.** `item_state`, `date_kind` (caducidad \| consumo preferente) y `date_source`
-> (envase \| usuario \| fabricante \| referencia \| estimacion).
+**Las tres decisiones de diseño que conviene no olvidar:**
 
-### Bloque C · Seguridad — *el bloque que no se recorta*
+1. **`is_household_member()` es `SECURITY DEFINER` por necesidad, no por comodidad.** Se
+   usa dentro de la política de la propia `household_members`; si se ejecutara con los
+   permisos de quien consulta, leer la tabla volvería a evaluar la política, que volvería
+   a llamar a la función: Postgres corta con *infinite recursion detected in policy*.
+   Ejecutándose como el propietario, la lectura interna no pasa por RLS y el ciclo se
+   rompe. A cambio hay que blindarla: `search_path = ''` y nombres cualificados, para que
+   nadie pueda colar un esquema propio por delante.
 
-| # | Tarea | Hecho cuando |
-|:--:|---|---|
-| C1 | Función `is_household_member(household_id)` en SQL | Una sola definición de «pertenezco a este hogar» |
-| C2 | Políticas RLS en las 7 tablas usando C1 | Ninguna tabla sin `enable row level security` |
-| C3 | Trigger en `auth.users` que crea hogar + membresía al registrarse | Registrarse deja hogar y fila en `household_members` |
-| C4 | **Test pgTAP con dos usuarios**: A no ve nada de B, en las 7 tablas | El test pasa y falla si se quita una política |
+2. **Los principios del proyecto son CHECK, no convenciones.** `num_nonnulls(limit_date,
+   date_kind, date_source) in (0, 3)` es «no inventar datos» hecho cumplir por la base:
+   una fecha sin saber si es caducidad o preferente y de dónde salió **no entra**.
 
-> C4 es el criterio de salida de la fase 0. Todo lo demás es andamiaje; esto es la garantía.
+3. **RLS y GRANT son dos capas distintas y hacen falta las dos.** La RLS filtra filas;
+   los GRANT deciden quién puede siquiera intentarlo. Se revoca todo a `anon` en cada
+   tabla: sin GRANT, la política nunca llega a evaluarse.
+
+**Lo que se dejó fuera a propósito:** la vista `inventory_with_priority` y las funciones
+RPC de acciones son **fase 1**, no fase 0. La vista además depende de [Q6](#6-preguntas-abiertas),
+que sigue abierta: no se puede calcular la fecha límite efectiva de un elemento
+descongelado sin decidir antes qué le pasa a su cuenta atrás.
+
+### Bloque C4 · Tests — ✅ hechos
+
+| Fichero | Qué prueba |
+|---|---|
+| `supabase/tests/rls_isolation_test.sql` | El criterio de salida: dos cuentas, siete tablas, y que Bruno no ve ni toca nada de Ana. También que `anon` no llega ni a leer |
+| `supabase/tests/domain_constraints_test.sql` | Que las restricciones rechazan el dato malo: fechas sin origen, unidades imposibles, eventos incoherentes |
+
+**Sin `plan(N)`, con `no_plan()`**, a propósito: un plan mal contado falla por una razón
+que no tiene nada que ver con la seguridad, y aquí nadie ha podido ejecutar pgTAP real
+todavía. Cuando los ficheros se estabilicen, pasar a `plan(N)` para detectar además los
+tests que no llegan a correr.
+
+**Un detalle que costó un fallo y conviene recordar:** un UPDATE o un DELETE bloqueados
+por RLS **no lanzan error**, simplemente no encuentran filas. Un test que solo busque
+excepciones da por buenas esas dos vías. Por eso se comprueban contando.
 
 ### Bloque D · App en marcha
 
@@ -278,18 +359,22 @@ Una migración por tabla, en este orden (las dependencias mandan):
 ### Orden sugerido
 
 ```
-[A1✅ A2✅ A3✅] → B1 → B2 → C1 → C2(parcial) → C3 → C4 ──┐  ← el aislamiento, probado
-                    └→ B3 → B4 → B5 → B6 → B7 → C2(resto) ┤
-                  D1 → D2 → D3 → D4 → D5 ─────────────────┤  ← en paralelo desde ya
-                                       E1 → E2 → E3 → E4 ─┘
+[A✅ B✅ C✅] ──► queda ejecutarlo con Docker
+                 D1 → D2 → D3 → D4 → D5      ← el camino que sigue
+                             E1 → E2 → E3 → E4
 ```
 
-**El bloque D es independiente de B y C** hasta D2: la app se puede montar en paralelo al
-esquema, y solo se encuentran cuando el login necesita un Supabase vivo.
+**Siguiente tarea concreta, y es una sola:**
 
-**Siguiente tarea concreta:** probar `npm run db:start` en una máquina con Docker y, si
-levanta, escribir B1 y B2 (`households` y `household_members`) con su RLS en la misma
-migración.
+```bash
+npm run db:start && npm run db:reset && npm run db:test
+```
+
+En una máquina con Docker. Es lo único que separa la fase 0 de estar terminada. Si los
+INSERT en `auth.users` de los ficheros pgTAP fallan por una columna NOT NULL, es un
+arreglo de una línea en la lista de columnas.
+
+Después, D1: `npx create-expo-app` con TypeScript y Expo Router.
 
 ---
 
@@ -377,3 +462,17 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   secretos separados en dos `.env.example`, `docs/SETUP.md` escrito.
 - **Pendiente de verificar:** ningún comando que levante Docker se ha podido ejecutar.
 - Abierta Q7 (SMTP de producción), consecuencia directa de elegir magic link.
+
+### 2026-09-19 (sesión 3) · Esquema, seguridad y tests
+
+- **Bloques B y C terminados**: 7 migraciones, 7 tablas, 8 enumerados, 20 políticas RLS,
+  función `is_household_member()` y trigger de hogar personal.
+- **Bloque C4**: dos ficheros pgTAP con 39 aserciones, incluido el criterio de salida.
+- **Montado `npm run db:check`**: aplica las migraciones sobre Postgres compilado a
+  WebAssembly y ejecuta las aserciones, incluidos los ficheros pgTAP con dobles. 73
+  comprobaciones, todas en verde, sin necesidad de Docker.
+- **Tres decisiones nuevas**: [D-08](#d-08--el-catálogo-global-es-la-única-excepción-a-todo-cuelga-de-un-hogar--2026-09-19) (catálogo global), [D-09](#d-09--el-registro-de-eventos-no-tiene-políticas-de-escritura--2026-09-19) (eventos inmutables) y [D-10](#d-10--todo-en-unidad-base-con-la-unidad-del-usuario-al-lado--2026-09-19-aplica-d-07) (unidades en columnas).
+- **Corregido un error de la sesión 1**: la convención de nombre de migración llevaba una
+  `T` (`20260919T1200_`) que habría roto el orden de aplicación de la CLI.
+- Seed con 10 productos ficticios para poder probar el escáner sin ir a la compra.
+- **Sigue sin ejecutarse nada contra Supabase real.** Es lo único pendiente de la fase 0.

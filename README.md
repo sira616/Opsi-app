@@ -202,11 +202,14 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] Monorepo con `app/` y `supabase/`
 - [x] CLI de Supabase fijada y `supabase/config.toml` configurado (magic link, deep links)
 - [x] Separación de secretos: qué es público, qué va en el servidor
-- [ ] Esquema inicial y políticas RLS
-- [ ] Trigger de hogar personal al registrarse
-- [ ] Test de aislamiento entre dos cuentas ← *criterio de salida de la fase 0*
+- [x] Esquema inicial: 7 tablas, con RLS en todas
+- [x] Trigger de hogar personal al registrarse
+- [x] Tests de aislamiento entre dos cuentas y de restricciones del dominio
+- [ ] Ejecutarlos contra Supabase real (`npm run db:test`, necesita Docker)
 - [ ] App Expo y pantalla de login
 - [ ] CI
+
+El esquema pasa 73 comprobaciones con `npm run db:check`, que corre sin Docker.
 
 Empezar por [`docs/SETUP.md`](docs/SETUP.md).
 

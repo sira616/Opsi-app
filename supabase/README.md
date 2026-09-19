@@ -19,6 +19,22 @@ La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 └── seed/           Datos de desarrollo (productos de ejemplo)
 ```
 
+## El esquema
+
+| Tabla | Qué guarda | Políticas |
+|---|---|---|
+| `households` | El hogar. Lo crea el trigger de alta | select, update |
+| `household_members` | Quién pertenece a qué hogar. **Define toda la RLS** | select |
+| `products` | Catálogo. `household_id` NULL = global (caché de Open Food Facts) | las cuatro |
+| `inventory_items` | El alimento real en casa: estado, cantidad, fechas y su origen | las cuatro |
+| `inventory_events` | Registro **inmutable**: sin UPDATE ni DELETE, por diseño | select, insert |
+| `shopping_list_items` | La lista de la compra | las cuatro |
+| `user_settings` | Zona horaria, hora del aviso, token push. **No cuelga del hogar** | select, insert, update |
+
+Todas las políticas se apoyan en una sola función, `is_household_member()`, que es
+`SECURITY DEFINER` por necesidad: sin eso, usarla dentro de la política de
+`household_members` provocaría recursión infinita.
+
 ## Reglas de esta mitad
 
 1. **Todo cambio de esquema es una migración.** Nada de tocar el esquema desde el panel de
@@ -41,6 +57,7 @@ npm install          # instala la CLI fijada en package.json
 npm run db:start     # Postgres, Auth, Storage y Studio en Docker
 npm run db:reset     # aplica migrations/ + seed/
 npm run db:test      # pgTAP
+npm run db:check     # comprobación rápida del esquema, sin Docker
 ```
 
 Los detalles, las claves locales y los problemas frecuentes están en
@@ -49,8 +66,8 @@ para desarrollar.
 
 ## Estado por fases
 
-- [ ] **Fase 0** — CLI y entorno local ✅ · esquema inicial, RLS, trigger de hogar
-      personal, auth y CI (lint + typecheck + tests de BD) pendientes
+- [x] **Fase 0** — CLI y entorno local, esquema (7 tablas), RLS en todas, trigger de
+      hogar personal y tests. Falta **ejecutarlos con Docker** y montar la CI
 - [ ] **Fase 1** — RPC de acciones, `inventory_events`, vista `inventory_with_priority`
 - [ ] **Fase 2** — `lookup-barcode` + caché de productos
 - [ ] **Fase 3** — `daily-digest` + `pg_cron` + tokens push en `user_settings`
