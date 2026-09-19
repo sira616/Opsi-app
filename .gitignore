@@ -1,17 +1,34 @@
-# Supabase
+# Dependencias
+node_modules/
+
+# Entorno (nunca se versionan claves)
+.env
+.env.*
+!.env.example
+
+# --- Supabase ---
 .branches
 .temp
 supabase/.temp/
 supabase/.env
 supabase/functions/**/.env
 
-# Entorno
-.env
-.env.*
-!.env.example
+# --- Expo / React Native ---
+app/.expo/
+app/dist/
+app/web-build/
+app/expo-env.d.ts
+app/ios/
+app/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
 
-# Dependencias
-node_modules/
+# Tipos generados desde el esquema (ver docs/internal/BITACORA.md, D-05)
+app/src/lib/database.types.ts
 
 # Sistema
 .DS_Store
