@@ -1,0 +1,30 @@
+# Dependencias
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Nativo
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Entorno
+.env
+.env.*
+!.env.example
+
+# Tipos generados
+app/src/lib/database.types.ts
+
+# Sistema
+.DS_Store
+*.log
