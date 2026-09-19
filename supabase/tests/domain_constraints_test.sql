@@ -145,6 +145,55 @@ select throws_ok(
   'algo desechado tiene que decir cuando se desecho'
 );
 
+-- ── Congelado: la cuenta atras se pausa y se reanuda (D-12) ───────────────
+
+select throws_ok(
+  format(
+    $$insert into public.inventory_items
+        (household_id, name, state, unit_family, display_unit, initial_quantity, remaining_quantity)
+      values (%L, 'Pan', 'frozen', 'mass', 'g', 460, 460)$$,
+    current_setting('opsi.household')
+  ),
+  '23514',
+  null,
+  'algo congelado tiene que decir desde cuando'
+);
+
+select throws_ok(
+  format(
+    $$insert into public.inventory_items
+        (household_id, name, unit_family, display_unit, initial_quantity, remaining_quantity, frozen_at)
+      values (%L, 'Pan', 'mass', 'g', 460, 460, now())$$,
+    current_setting('opsi.household')
+  ),
+  '23514',
+  null,
+  'algo que no esta congelado no puede arrastrar un tramo abierto'
+);
+
+select throws_ok(
+  format(
+    $$insert into public.inventory_items
+        (household_id, name, unit_family, display_unit, initial_quantity, remaining_quantity, frozen_days)
+      values (%L, 'Pan', 'mass', 'g', 460, 460, -3)$$,
+    current_setting('opsi.household')
+  ),
+  '23514',
+  null,
+  'los dias acumulados en el congelador no pueden ser negativos'
+);
+
+select lives_ok(
+  format(
+    $$insert into public.inventory_items
+        (household_id, name, state, unit_family, display_unit, initial_quantity,
+         remaining_quantity, frozen_at, frozen_days)
+      values (%L, 'Pan', 'frozen', 'mass', 'g', 460, 460, now(), 12)$$,
+    current_setting('opsi.household')
+  ),
+  'congelado por segunda vez: tramo en curso mas dias ya acumulados'
+);
+
 -- ── El registro de eventos ────────────────────────────────────────────────
 
 select throws_ok(

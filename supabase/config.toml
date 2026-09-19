@@ -155,14 +155,16 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-# Opsi es una app movil: el magic link vuelve por deep link, no a una web.
-# El esquema "opsi" debe coincidir con el campo "scheme" de app/app.json.
+# Opsi es una app móvil: no hay web a la que volver. Con contraseña (D-13) el
+# login no necesita deep link, pero el correo de recuperación sí, así que el
+# esquema "opsi" debe coincidir con el campo "scheme" de app/app.json.
 site_url = "opsi://"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# Lista exacta. Los "exp://" son para Expo Go en desarrollo; la development
-# build y la de produccion usan "opsi://".
+# Lista exacta, solo para el enlace de recuperación de contraseña. Los "exp://"
+# son para Expo Go en desarrollo; la development build y la de producción usan
+# "opsi://".
 additional_redirect_urls = [
   "opsi://auth/callback",
   "exp://127.0.0.1:8081",
@@ -186,9 +188,10 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-# Sin efecto en el MVP: solo se entra por magic link (decision D-06).
-# Si algun dia se anaden contrasenas, subir a 8 como minimo.
-minimum_password_length = 8
+# La longitud es lo que protege de verdad; las reglas de composición solo
+# empujan a la gente hacia "Contrasena1!". Por eso 10 caracteres y
+# password_requirements vacío, en vez de 8 con símbolos obligatorios.
+minimum_password_length = 10
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -205,9 +208,9 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-# Por defecto son 2/hora. Con el magic link como unica via de entrada eso deja
-# fuera a quien se equivoque al teclear el correo. 30/hora sigue siendo estrecho
-# para un atacante y comodo para una persona.
+# Por defecto son 2/hora. Ahora el correo solo se usa para recuperar la
+# contraseña, así que 2 bastarían; se dejan 30 porque tampoco estorban y
+# evitan bloquear a quien se equivoque al teclear su dirección.
 email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
@@ -235,9 +238,11 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-# Con magic link el propio enlace es la confirmacion: exigirla garantiza que
-# no existan cuentas con un correo sin verificar.
-enable_confirmations = true
+# Desactivado a propósito: así registrarse y entrar funciona SIN NINGÚN correo
+# configurado, que es el motivo de haber elegido contraseña (D-13). El precio
+# es que puede haber cuentas con un correo sin verificar.
+# PONER A true cuando haya un SMTP real, antes de publicar.
+enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.

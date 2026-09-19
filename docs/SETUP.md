@@ -32,7 +32,7 @@ y las claves locales:
 ```
 API URL: http://127.0.0.1:54321
 Studio URL: http://127.0.0.1:54323
-Mailpit URL: http://127.0.0.1:54324      ← aquí llegan los magic links
+Mailpit URL: http://127.0.0.1:54324      ← aquí llegan los correos de recuperación
 anon key: eyJhb...
 service_role key: eyJhb...               ← esta NO sale nunca del servidor
 ```
@@ -79,11 +79,19 @@ verdad sobre el Supabase de verdad. Las diferencias asumidas a cambio de la rapi
 el esquema `auth` es un doble mínimo, PGlite trae Postgres 18 (el proyecto fija la 17)
 y no hay Storage, Realtime ni Edge Functions.
 
-### El correo no sale a internet
+### El correo no hace falta para entrar
 
-Los magic links de desarrollo **no se envían**: los captura Mailpit en
-<http://127.0.0.1:54324>. Registrarte con `test@ejemplo.com` funciona sin que exista
-ese buzón.
+Registrarse y entrar funciona **sin ningún correo configurado**: `enable_confirmations`
+está desactivado a propósito, así que creas la cuenta y ya estás dentro. Puedes usar
+`test@ejemplo.com` sin que ese buzón exista.
+
+El correo solo se usa para **recuperar la contraseña**. En local no sale a internet:
+lo captura Mailpit en <http://127.0.0.1:54324>.
+
+> [!IMPORTANT]
+> Antes de publicar hay que configurar un SMTP real y poner
+> `auth.email.enable_confirmations = true`. Mientras siga desactivado puede haber
+> cuentas con un correo sin verificar.
 
 ## 2. Nube (cuando haya algo que desplegar)
 

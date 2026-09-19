@@ -76,7 +76,19 @@ create table public.inventory_items (
 
   -- ── Rastro temporal de los cambios de estado ──────────────────────────
   opened_at           timestamptz,
+
+  -- Congelar detiene la cuenta atrás; descongelar la reanuda donde estaba
+  -- (decisión D-12). Eso obliga a llevar dos datos distintos:
+  --   · frozen_at   cuándo empezó la congelación EN CURSO (null si no lo está).
+  --   · frozen_days cuántos días completos lleva acumulados de congelaciones
+  --                 YA TERMINADAS. Se suma al descongelar y nunca se resta.
+  -- La fecha límite efectiva es entonces limit_date + frozen_days: un yogur al
+  -- que le quedaban 3 días, congelado 30 y descongelado hoy, vuelve a tener 3.
+  -- Hacen falta las dos porque se puede congelar, descongelar y volver a
+  -- congelar: un solo campo perdería los tramos anteriores.
   frozen_at           timestamptz,
+  frozen_days         integer not null default 0 check (frozen_days >= 0),
+
   thawed_at           timestamptz,
   closed_out_at       timestamptz,   -- cuando pasó a finished o discarded
 
@@ -107,7 +119,13 @@ create table public.inventory_items (
   constraint inventory_items_opened_ck
     check (state <> 'closed' or opened_at is null),
   constraint inventory_items_closed_out_ck
-    check ((state in ('finished', 'discarded')) = (closed_out_at is not null))
+    check ((state in ('finished', 'discarded')) = (closed_out_at is not null)),
+
+  -- O está congelado y sabemos desde cuándo, o no lo está y frozen_at está
+  -- limpio porque su tramo ya pasó a frozen_days. Esto es lo que impide que
+  -- un tramo se cuente dos veces o se pierda.
+  constraint inventory_items_frozen_ck
+    check ((state = 'frozen') = (frozen_at is not null))
 );
 
 comment on table public.inventory_items is
@@ -115,6 +133,9 @@ comment on table public.inventory_items is
   'products: dos bricks iguales son un producto y dos elementos.';
 comment on column public.inventory_items.remaining_quantity is
   'En unidad base (g, ml o piezas), nunca en display_unit.';
+comment on column public.inventory_items.frozen_days is
+  'Días acumulados en el congelador de tramos ya terminados. La fecha límite '
+  'efectiva es limit_date + frozen_days: congelar pausa, descongelar reanuda.';
 comment on column public.inventory_items.date_source is
   'De dónde sale la fecha. La interfaz lo muestra siempre: es un principio '
   'del proyecto, no un detalle.';

@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-19** (sesión 3)
+> Última actualización: **2026-09-19** (sesión 4)
 
 ---
 
@@ -36,7 +36,8 @@ trigger de alta, con tests. **Sigue sin haber app.**
 | Supabase | CLI 2.117.0 fijada, `config.toml` ajustado a Opsi |
 | Esquema | **7 migraciones**, 7 tablas, 8 tipos enumerados, RLS en todas |
 | Seguridad | `is_household_member()` + 20 políticas + trigger de hogar personal |
-| Tests | 2 ficheros pgTAP (39 aserciones) + `npm run db:check` (73 comprobaciones) |
+| Auth | Correo y contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)); sin dependencia de correo para entrar |
+| Tests | 2 ficheros pgTAP (43 aserciones) + `npm run db:check` (81 comprobaciones) |
 | Datos | Seed con 10 productos ficticios de catálogo global |
 | App Expo | **Nada.** Sigue siendo la tarea D1 |
 
@@ -203,6 +204,67 @@ Un CHECK impide las combinaciones imposibles: `volume` no acepta `kg`, `count` s
 acepta `unit`. Así «usar cantidad» es una resta de enteros y la conversión vive en la
 interfaz, en un solo sitio.
 
+### D-12 · Congelar pausa la cuenta atrás; descongelar la reanuda · 2026-09-19 *(cierra Q6)*
+
+Un yogur al que le quedaban 3 días, congelado 30 y descongelado hoy, vuelve a tener
+**3 días**, no 30 ni 1.
+
+**En columnas** (ya en `inventory_items`):
+
+| Columna | Qué guarda |
+|---|---|
+| `frozen_at` | Cuándo empezó la congelación **en curso**. NULL si no está congelado |
+| `frozen_days` | Días completos acumulados de tramos **ya terminados** |
+
+Al descongelar: `frozen_days += (hoy − frozen_at)`, `frozen_at = NULL`, `thawed_at = ahora`.
+La fecha límite efectiva es `limit_date + frozen_days`.
+
+Hacen falta las dos columnas porque se puede congelar, descongelar y volver a congelar:
+un solo campo perdería los tramos anteriores. Un CHECK garantiza la coherencia
+(`state = 'frozen'` ⟺ `frozen_at is not null`), y es lo que impide que un tramo se cuente
+dos veces o se pierda.
+
+> **Riesgo que esta decisión acepta, y conviene tener presente.**
+> Reanudar el reloj no es lo que dicen las guías de seguridad alimentaria para muchos
+> alimentos: lo descongelado suele consumirse en 24 h, tenga los días que tenga. Una
+> leche con 3 días, congelada 3 meses y descongelada, aquí muestra 3 días; la
+> recomendación real sería «hoy».
+>
+> Choca con el principio «seguridad antes que desperdicio», así que queda **Q8** abierta:
+> ¿se pone un tope al descongelar, del tipo `min(fecha reanudada, descongelado + N días)`?
+> Sería un cambio de una línea en la vista de la fase 1, no una migración.
+
+### D-13 · Correo y contraseña en vez de magic link · 2026-09-19 *(revierte D-06, cierra Q7)*
+
+El SMTP de producción (Q7) exige darse de alta en un proveedor y verificar un dominio, y
+eso no lo puedo hacer yo. Ante la alternativa planteada, se elige lo simple.
+
+**Lo que se gana, y no es poco:**
+
+- **Registrarse y entrar funciona sin ningún correo configurado.** `enable_confirmations`
+  queda en `false` a propósito: creas la cuenta y ya estás dentro.
+- **El login funciona en Expo Go desde el primer día.** Con magic link había que volver
+  de un correo por deep link, lo que obligaba a montar la development build antes de
+  poder probar nada. Ya no.
+- Con magic link, un fallo del proveedor de correo dejaba a **todo el mundo fuera**. Con
+  contraseña, solo afecta a quien quiera recuperarla.
+
+**Lo que se pierde:** hay contraseñas que gestionar, y **puede haber cuentas con un correo
+sin verificar** mientras `enable_confirmations` siga desactivado.
+
+**Ajustes en `config.toml`:**
+
+| Ajuste | Valor | Por qué |
+|---|---|---|
+| `minimum_password_length` | `10` | La longitud es lo que protege; las reglas de composición solo empujan a «Contrasena1!» |
+| `password_requirements` | `""` | Vacío a propósito, por lo mismo |
+| `enable_confirmations` | `false` | Para no depender de ningún correo. **Poner a `true` cuando haya SMTP** |
+| `site_url` | `opsi://` | Se queda: el correo de recuperación sí necesita volver a la app |
+
+**Q7 no desaparece, baja de prioridad.** Sigue haciendo falta un SMTP real antes de
+publicar, para la recuperación de contraseña y para verificar los correos. Pero ya no
+bloquea el desarrollo.
+
 ## 3. Convenciones
 
 ### Ramas
@@ -233,6 +295,10 @@ chore(ci): ejecutar pgTAP en cada push
 
 - Una migración por cambio conceptual. **Una migración aplicada no se edita jamás**: se
   corrige con otra nueva.
+- «Aplicada» significa **ejecutada en algún sitio que sobreviva**: un `db:push` a la nube,
+  o la base local de alguien. Mientras nada se haya desplegado —el caso de hoy— editar una
+  migración en el sitio es lo correcto: no hay divergencia que proteger y el historial
+  queda limpio. Desde el primer `db:push`, la regla manda sin excepciones.
 - La tabla y su política RLS van **en la misma migración**. Nunca una tabla sin política,
   ni siquiera «por un rato».
 - Nombre: `<YYYYMMDDHHMMSS>_descripcion.sql`, por ejemplo
@@ -435,8 +501,9 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 | Q3 | ¿De dónde salen las fechas de conservación tras apertura? | Es el riesgo #1 del roadmap. Sin fuente, todo es `estimacion` | Fase 1 |
 | Q4 | ¿Qué modelo de Claude para chat y cuál para tickets? | Coste. El roadmap dice «modelo pequeño para parseo» | Fase 5 / 6 |
 | ~~Q5~~ | ~~¿Cuántas unidades permite el MVP?~~ | **Cerrada: masa, volumen y unidades** ([D-07](#d-07--masa-volumen-y-unidades--2026-09-19-cierra-q5)) | ✅ |
-| Q6 | ¿Qué pasa con un elemento congelado y su fecha? | La cuenta atrás se detiene, pero ¿se reanuda al descongelar o se fija un plazo corto? | Fase 1 |
-| Q7 | ¿Qué SMTP en producción? | Con magic link, el correo es punto único de fallo. El de Supabase tiene límites bajos | Antes de publicar |
+| ~~Q6~~ | ~~¿Qué pasa con un elemento congelado?~~ | **Cerrada: se reanuda** ([D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6)) | ✅ |
+| Q7 | ¿Qué SMTP en producción? | Ya no bloquea: se entra con contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)). Sigue haciendo falta para recuperar contraseña y verificar correos | Antes de publicar |
+| **Q8** | ¿Se pone tope de seguridad al descongelar? | Reanudar el reloj choca con «seguridad antes que desperdicio» para lo descongelado. Ver el aviso en [D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6) | Fase 1, con la vista |
 
 ---
 
@@ -476,3 +543,13 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   `T` (`20260919T1200_`) que habría roto el orden de aplicación de la CLI.
 - Seed con 10 productos ficticios para poder probar el escáner sin ir a la compra.
 - **Sigue sin ejecutarse nada contra Supabase real.** Es lo único pendiente de la fase 0.
+
+### 2026-09-19 (sesión 4) · Q6 y Q7 resueltas
+
+- **Q6 → [D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6)**: congelar pausa, descongelar reanuda. Añadidas `frozen_days` y el
+  CHECK de coherencia a `inventory_items` (editando la migración en el sitio: no se ha
+  desplegado en ningún lado). Abre **Q8**, el tope de seguridad al descongelar.
+- **Q7 → [D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)**: correo y contraseña, revirtiendo D-06. Desbloquea dos cosas: entrar
+  sin ningún correo configurado, y probar el login en Expo Go sin development build.
+- 8 comprobaciones nuevas sobre congelado y descongelado. **81 en total, todas en verde.**
+- Sigue sin ejecutarse nada contra Supabase real.

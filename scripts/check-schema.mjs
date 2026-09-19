@@ -332,6 +332,22 @@ async function main() {
       )) !== null
     );
     check(
+      'algo congelado tiene que decir desde cuándo (D-12)',
+      (await mustFail(db, base(`, state`, `'count', 'unit', 1, 1, 'frozen'`))) !== null
+    );
+    check(
+      'algo que no está congelado no puede arrastrar un tramo abierto',
+      (await mustFail(db, base(`, frozen_at`, `'count', 'unit', 1, 1, now()`))) !== null
+    );
+    check(
+      'los días acumulados en el congelador no pueden ser negativos',
+      (await mustFail(db, base(`, frozen_days`, `'count', 'unit', 1, 1, -3`))) !== null
+    );
+    check(
+      'un elemento congelado con su fecha de congelación sí se acepta',
+      (await mustFail(db, base(`, state, frozen_at`, `'count', 'unit', 1, 1, 'frozen', now()`))) === null
+    );
+    check(
       'una fecha completa (valor + tipo + origen) sí se acepta',
       (await mustFail(
         db,

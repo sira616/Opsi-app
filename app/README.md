@@ -33,8 +33,9 @@ El **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
 6. **Ninguna clave en el cliente.** Solo la `anon key` de Supabase, que existe para eso.
    Todo lo demás pasa por una Edge Function. Lo que lleva prefijo `EXPO_PUBLIC_` acaba
    incrustado en el binario: dalo por publicado.
-7. **Se entra por magic link.** Sin contraseñas en el MVP. El enlace vuelve a la app por
-   deep link con el esquema `opsi://`, que debe coincidir con `supabase/config.toml`.
+7. **Se entra con correo y contraseña.** Mínimo 10 caracteres, sin reglas de composición.
+   El login no necesita deep links; solo el correo de recuperación, que usa el esquema
+   `opsi://` declarado en `supabase/config.toml`.
 
 ## Puesta en marcha
 
@@ -56,10 +57,13 @@ copiada al `.env`. Ver [`../docs/SETUP.md`](../docs/SETUP.md).
 El escáner de códigos y las notificaciones push **no funcionan en Expo Go**: requieren una
 *development build*. Conviene montarla ya en la fase 0 y no descubrirlo en la fase 2.
 
+El **login sí funciona en Expo Go** desde el primer día: con contraseña no hace falta
+volver de ningún correo, así que no depende de los deep links ni de la development build.
+
 ## Estado por fases
 
-- [ ] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, login por
-      magic link con deep link `opsi://`, CI (lint + typecheck)
+- [ ] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, alta y login
+      con correo y contraseña, CI (lint + typecheck)
 - [ ] **Fase 1** — Alta manual, detalle del elemento con acciones, «Consumir primero»
 - [ ] **Fase 2** — Pantalla de cámara EAN-13/EAN-8/UPC, confirmación precargada, fallback manual
 - [ ] **Fase 3** — Permiso y registro del token push, pantalla de ajustes de aviso
