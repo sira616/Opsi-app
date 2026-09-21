@@ -7,6 +7,10 @@ salir de ahí y tener un `.apk` o un `.ipa` de verdad.
 > **La respuesta corta:** Android sale gratis y en 20 minutos. iOS cuesta **99 $ al año**
 > y no hay forma legal de saltárselo si quieres la app en un iPhone que no sea a través de
 > un Mac con Xcode.
+>
+> **Ojo, que se confunde:** esto es para la app **instalada**. Para *ver* la app en un
+> iPhone mientras se desarrolla, Expo Go es gratis y no hace falta nada de esto. Ver
+> [`MOVIL.md`](MOVIL.md).
 
 ---
 
@@ -14,7 +18,7 @@ salir de ahí y tener un `.apk` o un `.ipa` de verdad.
 
 | | Qué es | Qué hace falta | Cuándo usarlo |
 |---|---|---|---|
-| **Expo Go** | Lo de ahora. La app dentro de un contenedor | Nada | Desarrollo del día a día |
+| **Expo Go** | Lo de ahora. La app dentro de un contenedor | Nada. **Gratis también en iPhone** | Desarrollo del día a día |
 | **Development build** | App nativa **tuya**, con tus dependencias, que sigue recargando al guardar | Cuenta de Expo (gratis) · iOS pide Apple | **Obligatoria para la fase 2**: el escáner de códigos no funciona en Expo Go |
 | **Preview / producción** | El `.apk` o `.ipa` final | Lo anterior + cuentas de tienda si publicas | Cuando quieras instalarla de verdad o publicarla |
 

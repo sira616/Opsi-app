@@ -7,8 +7,11 @@ ordenador y el móvil se conecta a él por la Wi-Fi de casa.
 
 > [!NOTE]
 > Esto es **desarrollo**, no una instalación de verdad. Si apagas el ordenador, la app
-> deja de funcionar. Para tenerla instalada de verdad harán falta builds de EAS, que es
-> otra historia y viene más adelante.
+> deja de funcionar. Para tenerla instalada de verdad harán falta builds de EAS: ver
+> [`NATIVA.md`](NATIVA.md).
+>
+> **En iPhone esto NO cuesta nada.** Los 99 $ al año del programa de Apple son para una
+> app nativa instalada; para ver la app en desarrollo, Expo Go es gratis y basta.
 
 ---
 
@@ -141,9 +144,23 @@ Aparecerá un código QR grande en la terminal.
 
 **En Android:** abre **Expo Go** y pulsa *Scan QR code*.
 
-**En iPhone:** abre la **cámara** normal, apunta al QR y toca el aviso que sale arriba.
+**En iPhone:** abre la app **Cámara** normal —no Expo Go—, apunta al QR y toca el aviso
+que aparece arriba. Expo Go en iOS ya no trae lector de QR propio: se usa el del sistema.
 
-La primera vez tarda unos segundos en cargar: está enviando la app al móvil.
+La primera vez tarda unos segundos: está enviando la app al móvil.
+
+### iPhone · el permiso que hay que dar
+
+La primera vez, iOS preguntará si Expo Go puede acceder a la **red local**. **Di que
+sí.** Sin ese permiso, Expo Go no puede hablar con tu ordenador y se queda cargando para
+siempre sin decir por qué.
+
+Si le diste a «No permitir» sin querer, se arregla en:
+
+**Ajustes → Expo Go → Red local**, y lo activas.
+
+Es el fallo más común en iPhone y no da ningún mensaje útil, así que si el QR se abre
+pero la pantalla se queda en blanco o cargando, mira ahí primero.
 
 ---
 
@@ -199,6 +216,9 @@ Para volver a empezar otro día: pasos 2, 3, 5 y 6. Los datos siguen ahí.
 | El QR no carga en el móvil | El móvil no está en la misma Wi-Fi | Quítale los datos móviles y conéctalo a la Wi-Fi de casa |
 | La app abre pero **falla al registrarse** | Casi siempre, el paso 4 sin hacer | Comprueba que `app/.env` tiene tu IP y no `127.0.0.1`. Tras cambiarlo, Ctrl+C y `npm run app` otra vez |
 | Sigue fallando tras poner la IP | El cortafuegos de Windows bloquea el puerto | Permite Node.js en redes privadas cuando Windows lo pregunte, o abre el puerto 54321 |
+| **iPhone:** el QR abre Expo Go y se queda cargando | Falta el permiso de red local | **Ajustes → Expo Go → Red local**, actívalo |
+| **iPhone:** Expo Go no encuentra el lector de QR | En iOS no lo trae | Usa la app **Cámara** del sistema |
+| El QR no carga y la Wi-Fi es de invitados o de oficina | La red aísla los dispositivos | `npm run app:tunnel` (ver arriba, con su aviso) |
 | `Falta EXPO_PUBLIC_SUPABASE_URL` | Expo arrancó antes de que existiera el fichero | Ctrl+C y `npm run app` de nuevo |
 | Puerto ocupado | Hay otro Supabase levantado | `npx supabase stop --all` y vuelve al paso 3 |
 
@@ -206,6 +226,30 @@ Para volver a empezar otro día: pasos 2, 3, 5 y 6. Los datos siguen ahí.
 
 <http://127.0.0.1:54323> abre el panel de Supabase en el navegador: las tablas, lo que
 has dado de alta y los usuarios creados. Útil para comprobar que algo se guardó de verdad.
+
+### Si la Wi-Fi no deja que se vean
+
+Algunas redes —sobre todo las de invitados, las de oficina y algunos routers de
+operadora— aíslan los dispositivos entre sí, así que el móvil no puede llegar a tu
+ordenador aunque estén en la misma Wi-Fi. El síntoma es el mismo: el QR se abre y no
+carga nada.
+
+La salida es hacer que la conexión pase por los servidores de Expo en vez de por tu red:
+
+```
+npm run app:tunnel
+```
+
+La primera vez te pedirá instalar un paquete extra (`@expo/ngrok`); acepta. Escanea el QR
+nuevo y funcionará desde cualquier red, incluso con datos móviles.
+
+> [!WARNING]
+> **El túnel solo lleva la app, no la base de datos.** Expo Go cargará bien, pero la app
+> seguirá sin poder hablar con tu Supabase, que sigue estando solo en tu red local. Verás
+> la app y sus pantallas, pero fallará al registrarte o al cargar el inventario.
+>
+> Para que funcione de verdad desde fuera de casa hace falta subir Supabase a la nube:
+> ver [`SETUP.md`](SETUP.md), sección «Nube».
 
 ### Verla sin móvil
 

@@ -23,7 +23,8 @@
     "types": "supabase gen types typescript --local > app/src/lib/database.types.ts",
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
-    "up": "node scripts/up.mjs"
+    "up": "node scripts/up.mjs",
+    "app:tunnel": "npm run --workspace app start -- --tunnel"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
