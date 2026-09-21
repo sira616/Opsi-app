@@ -1,6 +1,8 @@
+import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { Basket, ChatCircleDots, GearSix, ListChecks } from 'phosphor-react-native';
-import { useTheme } from '@/shared/theme/tokens';
+import { Platform, StyleSheet, View } from 'react-native';
+import { fonts, useAspecto } from '@/shared/theme/tokens';
 
 /**
  * Las cuatro secciones de Opsi.
@@ -22,19 +24,51 @@ import { useTheme } from '@/shared/theme/tokens';
  * el patrón de iOS de toda la vida, y solo se puede hacer con el mismo icono
  * —sin buscar un sustituto— porque Phosphor trae seis pesos del mismo dibujo.
  */
+/**
+ * El fondo de la barra.
+ *
+ * Cristal suave SOLO en iOS. En Android el desenfoque en tiempo real es caro y
+ * se nota en gama media, así que ahí va un color casi opaco: la barra se ve
+ * igual de bien y no cuesta fotogramas.
+ *
+ * Y una regla que no se salta: el desenfoque va DETRÁS de los iconos, nunca
+ * sobre texto. La translucidez baja el contraste, y en esta app el contraste
+ * no se negocia.
+ */
+function FondoBarra({ esquema, ground }: { esquema: 'light' | 'dark'; ground: string }) {
+  if (Platform.OS === 'ios') {
+    return (
+      <BlurView
+        intensity={70}
+        tint={esquema === 'dark' ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+        style={StyleSheet.absoluteFill}
+      />
+    );
+  }
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: ground, opacity: 0.97 }]} />
+  );
+}
+
 export default function TabsLayout() {
-  const c = useTheme();
+  const { colores: c, esquema } = useAspecto();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: c.brand,
         tabBarInactiveTintColor: c.inkMuted,
+        // La barra flota sobre el contenido: es lo que permite que el
+        // inventario se vea correr por debajo al desplazar.
         tabBarStyle: {
-          backgroundColor: c.ground,
+          position: 'absolute',
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: c.border,
+          backgroundColor: 'transparent',
+          elevation: 0,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarBackground: () => <FondoBarra esquema={esquema} ground={c.ground} />,
+        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11 },
       }}
     >
       <Tabs.Screen

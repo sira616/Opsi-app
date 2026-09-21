@@ -1,4 +1,13 @@
-import { useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
 /**
@@ -95,9 +104,80 @@ const OSCURO: Palette = {
   frostSoft: '#17262F',
 };
 
-/** La paleta que toca según el sistema. */
+// ── Preferencia de aspecto ────────────────────────────────────────────────
+//
+// Se guarda EN EL DISPOSITIVO y no en la cuenta, a propósito: el aspecto es
+// una preferencia del aparato —un móvil en oscuro y una tablet en claro es
+// razonable—, funciona sin conexión y se aplica al instante. Guardarla en
+// user_settings habría obligado a una migración para algo que no necesita
+// viajar entre dispositivos.
+export type Aspecto = 'system' | 'light' | 'dark';
+
+const CLAVE = 'opsi.aspecto';
+
+type Tema = {
+  /** Lo que eligió el usuario. */
+  aspecto: Aspecto;
+  /** Lo que se pinta de verdad, ya resuelto contra el ajuste del sistema. */
+  esquema: 'light' | 'dark';
+  colores: Palette;
+  setAspecto: (valor: Aspecto) => void;
+};
+
+const TemaContext = createContext<Tema | null>(null);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const sistema = useColorScheme();
+  const [aspecto, setEstado] = useState<Aspecto>('system');
+  const [listo, setListo] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    void AsyncStorage.getItem(CLAVE)
+      .then((guardado) => {
+        if (!vivo) return;
+        if (guardado === 'light' || guardado === 'dark' || guardado === 'system') {
+          setEstado(guardado);
+        }
+        setListo(true);
+      })
+      // Si el almacenamiento falla —modo incógnito, permisos—, se sigue con
+      // el ajuste del sistema. Quedarse en blanco sería mucho peor.
+      .catch(() => {
+        if (vivo) setListo(true);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const setAspecto = useCallback((valor: Aspecto) => {
+    setEstado(valor);
+    void AsyncStorage.setItem(CLAVE, valor).catch(() => {});
+  }, []);
+
+  const valor = useMemo<Tema>(() => {
+    const esquema = aspecto === 'system' ? (sistema === 'dark' ? 'dark' : 'light') : aspecto;
+    return { aspecto, esquema, colores: esquema === 'dark' ? OSCURO : CLARO, setAspecto };
+  }, [aspecto, sistema, setAspecto]);
+
+  // Nada se pinta hasta saber qué aspecto toca: arrancar en claro y saltar a
+  // oscuro medio segundo después se ve como un fogonazo. La lectura tarda unos
+  // milisegundos, mucho menos que cargar las tipografías.
+  if (!listo) return null;
+
+  return <TemaContext value={valor}>{children}</TemaContext>;
+}
+
+export function useAspecto(): Tema {
+  const valor = use(TemaContext);
+  if (!valor) throw new Error('useAspecto se ha usado fuera de <ThemeProvider>');
+  return valor;
+}
+
+/** La paleta que toca ahora mismo. */
 export function useTheme(): Palette {
-  return useColorScheme() === 'dark' ? OSCURO : CLARO;
+  return useAspecto().colores;
 }
 
 /** Para sitios sin hook: el resumen diario, un script. Siempre la clara. */
@@ -122,6 +202,14 @@ export const radius = { sm: 8, md: 12, lg: 14, pill: 999 } as const;
 
 /** Mínimo de accesibilidad para cualquier cosa pulsable. */
 export const touchTarget = 44;
+
+/**
+ * Lo que hay que dejar libre al final de una lista para que la barra de
+ * pestañas no tape la última fila. La barra flota sobre el contenido —es lo
+ * que permite verlo correr por debajo— y eso significa que ya no reserva su
+ * propio espacio.
+ */
+export const tabBarClearance = 96;
 
 /**
  * Sombra única del sistema: muy suave. La jerarquía la dan el color y el

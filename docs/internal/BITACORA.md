@@ -815,3 +815,17 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   convirtieron en tokens, y dos de ellos —`expiryLine` y `brandInk`— hicieron falta
   crearlos. El borde de las tarjetas de caducidad no llegaba a 3:1 y se calculó el valor
   que sí llega en vez de bajar el listón.
+
+### 2026-09-21 (sesión 13) · Hojas modales, cristal y selector de aspecto
+
+- **Alta y detalle pasan a `formSheet` nativa**, con tirador y arrastre para cerrar. Dentro
+  de una hoja el área segura superior sobra, así que esas dos pantallas solo respetan el
+  borde inferior; si no, salía un hueco grande arriba.
+- **Barra de pestañas translúcida**, flotando sobre el contenido. Desenfoque real en iOS
+  con el material del sistema; en Android, color casi opaco a propósito. Como la barra ya
+  no reserva su espacio, las listas necesitan un hueco al final: de ahí `tabBarClearance`.
+- **Selector de aspecto en Ajustes**: Automático, Claro y Oscuro. Se guarda en el
+  dispositivo y no en la cuenta, porque es una preferencia del aparato, funciona sin
+  conexión y no necesita migración.
+- El proveedor no pinta nada hasta saber qué aspecto toca, y si el almacenamiento falla
+  cae al ajuste del sistema en lugar de quedarse en blanco.

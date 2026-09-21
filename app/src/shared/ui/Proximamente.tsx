@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ReactNode } from 'react';
-import { fonts,makeStyles, radius, space, useType } from '@/shared/theme/tokens';
+import { tabBarClearance,fonts,makeStyles, radius, space, useType } from '@/shared/theme/tokens';
 
 type Props = {
   icon: ReactNode;
@@ -42,7 +42,14 @@ export function Proximamente({ icon, title, phase, what, ready }: Props) {
 
 const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
-  content: { flex: 1, padding: space.xl, gap: space.md, justifyContent: 'center', alignItems: 'flex-start' },
+  content: {
+    flex: 1,
+    padding: space.xl,
+    paddingBottom: tabBarClearance,
+    gap: space.md,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
   iconBox: {
     width: 58,
     height: 58,

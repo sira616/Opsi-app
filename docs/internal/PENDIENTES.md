@@ -159,8 +159,8 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
 | 🟠 | D5 · Development build con EAS | `eas.json` ya está; falta `eas init` (necesita cuenta de Expo). Ver [`NATIVA.md`](../NATIVA.md) |
 | 🟠 | **Sin icono ni pantalla de carga** | `app/assets` está vacío. El prompt para generar el logo está en [`DISENO.md`](../DISENO.md) |
-| 🟡 | Alta y detalle no son hojas modales | Se apilan como pantallas normales. Es el paso 5 de `DISENO.md`, el único que queda |
-| 🟡 | Sin translucidez en las barras | La decisión de `DISENO.md` era cristal suave solo en las barras. Ahora son opacas |
+| ⚪ | El desenfoque de la barra solo en iOS | En Android va un color casi opaco a propósito: el desenfoque en tiempo real cuesta fotogramas en gama media |
+| ⚪ | Las hojas modales no se han visto en un móvil | `formSheet` con tirador y arrastre está declarado y compila, pero en la versión web se comporta como una pantalla normal |
 | 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
 | ✅ | ~~Sin confirmación al tirar ni al terminar~~ | Resuelto: confirmación en línea, con el nombre del alimento en la pregunta. En línea y no `Alert.alert` porque este último no hace nada en la versión web |
 | 🟡 | Sin selector de fecha nativo | Ahora se teclean ocho dígitos y las barras salen solas, más tres atajos. Es rápido para copiar de un envase, pero un calendario debería existir como alternativa |

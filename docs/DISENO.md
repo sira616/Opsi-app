@@ -3,8 +3,8 @@
 Propuesta de identidad e interfaz. Qué aspecto tiene la app, con qué recursos se
 construye y por qué cada decisión.
 
-> **Estado:** implementado. La paleta, las tipografías y los iconos están en la app, con
-> modo claro y oscuro automáticos. Falta el logo y las hojas modales (paso 9).
+> **Estado:** implementado, salvo el logo. Paleta, tipografías, iconos, modo oscuro,
+> hojas modales y barra translúcida están en la app.
 
 ---
 
@@ -44,6 +44,11 @@ tentador copiarlo entero, pero hay que saber lo que ha pasado desde entonces:
 
 La regla que zanja las dudas: **si el cristal reduce el contraste de un texto, no hay
 cristal.** El contraste no es negociable, el efecto sí.
+
+**Cómo ha quedado.** La barra de pestañas flota sobre el contenido con desenfoque real
+en iOS (`expo-blur`, material del sistema). En Android va un color casi opaco: el
+desenfoque en tiempo real es caro y se nota en gama media, y la barra se ve igual de bien
+sin costar fotogramas. El desenfoque queda **detrás de los iconos**, nunca sobre texto.
 
 ## 3. Colorimetría
 
@@ -191,6 +196,20 @@ nunca lo sustituye.
 Las reglas viven en `app/src/shared/lib/iconos-comida.tsx`, y ampliarlas es añadir una
 línea.
 
+## 5 bis · El aspecto lo elige el usuario
+
+Tres opciones en Ajustes: **Automático · Claro · Oscuro**. Automático sigue el ajuste del
+teléfono; las otras dos lo fijan.
+
+La preferencia se guarda **en el dispositivo**, no en la cuenta. Es deliberado: el
+aspecto es una preferencia del aparato —un móvil en oscuro y una tablet en claro es
+razonable—, funciona sin conexión y se aplica al instante. Guardarla en `user_settings`
+habría obligado a una migración para algo que no necesita viajar entre dispositivos.
+
+Nada se pinta hasta saber qué aspecto toca: arrancar en claro y saltar a oscuro medio
+segundo después se ve como un fogonazo. Y si el almacenamiento falla, se sigue con el
+ajuste del sistema en lugar de quedarse en blanco.
+
 ## 6. Layout
 
 | | |
@@ -286,7 +305,7 @@ la marca centrada sobre `bg`. Se declaran en `app/app.json`.
 | 2 · Cargar las tipografías | ✅ En `_layout.tsx`, con la pantalla de carga esperando a que estén |
 | 3 · Phosphor en vez de `@expo/vector-icons` | ✅ Y un icono de comida por alimento |
 | 4 · Pestañas con `fill` en la activa | ✅ |
-| 5 · Alta y detalle como hoja modal | ⬜ Pendiente |
+| 5 · Alta y detalle como hoja modal | ✅ `formSheet` nativa, con tirador y arrastre para cerrar |
 | 6 · El contraste en la CI | ✅ `npm run check:contrast`, y **lee los colores de `tokens.ts`** |
 
 Sobre el paso 6: la primera versión del validador tenía su propia copia de la paleta, y

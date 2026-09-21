@@ -14,12 +14,11 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/shared/lib/query';
 import { SessionProvider } from '@/shared/lib/session';
-import { useTheme } from '@/shared/theme/tokens';
+import { ThemeProvider, useAspecto } from '@/shared/theme/tokens';
 
 // La pantalla de carga se queda hasta que las fuentes están listas. Sin esto
 // la app aparece con la tipografía del sistema y salta a la suya medio segundo
@@ -27,9 +26,6 @@ import { useTheme } from '@/shared/theme/tokens';
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const c = useTheme();
-  const dark = useColorScheme() === 'dark';
-
   const [fontsLoaded, fontError] = useFonts({
     BricolageGrotesque_600SemiBold,
     BricolageGrotesque_700Bold,
@@ -50,17 +46,58 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider>
-          <StatusBar style={dark ? 'light' : 'dark'} />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: c.ground },
-            }}
-          />
-        </SessionProvider>
-      </QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider>
+            <Navegacion />
+          </SessionProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
+  );
+}
+
+/**
+ * La navegación va en su propio componente porque necesita el tema, y el tema
+ * lo sirve un proveedor que está por encima: un hook no se puede llamar desde
+ * el mismo componente que monta su proveedor.
+ *
+ * El alta y el detalle se presentan como HOJA MODAL: suben desde abajo, dejan
+ * ver el inventario detrás y se cierran arrastrando. Son cosas que se abren y
+ * se cierran, no sitios donde estar, y esa diferencia se nota al usarlas.
+ */
+function Navegacion() {
+  const { colores: c, esquema } = useAspecto();
+
+  return (
+    <>
+      <StatusBar style={esquema === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: c.ground },
+        }}
+      >
+        <Stack.Screen name="(app)/(tabs)" />
+        <Stack.Screen
+          name="(app)/alta"
+          options={{
+            presentation: 'formSheet',
+            sheetGrabberVisible: true,
+            sheetAllowedDetents: [0.92],
+            sheetCornerRadius: 24,
+          }}
+        />
+        <Stack.Screen
+          name="(app)/elemento/[id]"
+          options={{
+            presentation: 'formSheet',
+            sheetGrabberVisible: true,
+            sheetAllowedDetents: [0.92],
+            sheetCornerRadius: 24,
+          }}
+        />
+      </Stack>
+    </>
   );
 }

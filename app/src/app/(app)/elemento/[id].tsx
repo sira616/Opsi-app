@@ -92,7 +92,7 @@ export default function Detalle() {
 
   if (item.isPending) {
     return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
+      <SafeAreaView edges={['bottom']} style={[styles.safe, styles.center]}>
         <ActivityIndicator color={c.brand} />
       </SafeAreaView>
     );
@@ -101,7 +101,7 @@ export default function Detalle() {
   const data = item.data;
   if (!data) {
     return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
+      <SafeAreaView edges={['bottom']} style={[styles.safe, styles.center]}>
         <Text style={t.body}>Ese elemento ya no está.</Text>
         <Pressable onPress={() => router.back()} style={styles.backLink}>
           <Text style={styles.backText}>Volver</Text>
@@ -135,7 +135,7 @@ export default function Detalle() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['bottom']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable
           accessibilityRole="button"

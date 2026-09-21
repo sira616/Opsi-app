@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const TOKENS = join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'src', 'shared', 'theme', 'tokens.ts');
+const TOKENS = join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'src', 'shared', 'theme', 'tokens.tsx');
 
 /** Saca `const NOMBRE: Palette = { … }` del fichero de tokens. */
 function leerPaleta(fuente, nombre) {

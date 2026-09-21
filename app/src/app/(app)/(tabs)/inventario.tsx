@@ -10,7 +10,7 @@ import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
 import { BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
-import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
+import { tabBarClearance,makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
  * El orden de los grupos NO es alfabético ni casual: es el orden en que hay
@@ -162,7 +162,7 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
   },
   addIcon: { color: c.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
-  content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
+  content: { paddingHorizontal: space.xl, paddingBottom: tabBarClearance, gap: space.lg },
   loader: { marginTop: space.xl },
   allGood: {
     flexDirection: 'row',
