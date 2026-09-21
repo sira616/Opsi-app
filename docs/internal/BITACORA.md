@@ -914,3 +914,17 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   sin `auth.uid()`, así que la función devolvía `null` pasara lo que pasara. Ahora corre
   como Ana y con correo sintético de verdad. Una aserción que pasa sin ejercitar lo que
   cree ejercitar es peor que no tenerla.
+
+### 2026-09-21 (sesión 16) · El script que se comía la configuración
+
+- **`npm run up` reescribía `EXPO_PUBLIC_SUPABASE_URL` con `127.0.0.1` siempre.** Quien
+  prueba en el móvil tiene que poner ahí la IP del ordenador, así que cada actualización
+  del backend le rompía la app. Estaba *documentado* como una advertencia en MOVIL.md, que
+  es la forma de convertir un fallo en una tradición. Ahora, si la URL no es de loopback,
+  se respeta; y si lo es, el script imprime la IP detectada y la línea lista para pegar.
+- **El mensaje de red no decía contra qué URL fallaba.** «¿Está levantado Supabase?» es
+  la pregunta equivocada cuando el problema es que la app apunta al propio móvil. Ahora
+  lo escribe `shared/lib/conexion.ts`, nombra la URL y cambia según sea local o de red.
+  Lo usan los dos traductores de errores, que antes tenían cada uno su versión.
+- Lección repetida: un error de conexión tiene que decir **a dónde** no llegó. Sin ese
+  dato, todas las causas posibles se parecen entre sí.

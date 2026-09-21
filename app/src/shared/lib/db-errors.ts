@@ -10,6 +10,8 @@
  * Cada rama de aquí dice QUÉ HACER, no solo qué pasó.
  */
 
+import { esFalloDeRed, mensajeSinConexion } from './conexion';
+
 type SupabaseLikeError = {
   message?: string;
   code?: string;
@@ -66,17 +68,7 @@ export function describeDbError(error: unknown): string {
   }
 
   // ── Red ────────────────────────────────────────────────────────────────
-  if (
-    lower.includes('network request failed') ||
-    lower.includes('failed to fetch') ||
-    lower.includes('fetch failed')
-  ) {
-    return (
-      'No se puede conectar con el servidor.\n\n' +
-      '· ¿Está levantado?  npm run up\n' +
-      '· Desde el móvil, EXPO_PUBLIC_SUPABASE_URL tiene que ser la IP de tu ordenador, no 127.0.0.1'
-    );
-  }
+  if (esFalloDeRed(message)) return mensajeSinConexion();
 
   return message;
 }

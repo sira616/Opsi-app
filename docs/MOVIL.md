@@ -130,9 +130,12 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...     ← esta no se toca
 
 Guarda el fichero.
 
-> [!WARNING]
-> Si vuelves a ejecutar `npm run up`, esa línea se reescribe con `127.0.0.1` y habrá que
-> cambiarla otra vez. Es el precio de que el fichero se rellene solo.
+> [!NOTE]
+> `npm run up` **ya no toca esta línea** si le has puesto una IP de red: solo reescribe la
+> URL cuando sigue apuntando a `127.0.0.1`. La anon key sí se actualiza siempre.
+>
+> Antes sí la machacaba, y el síntoma era desconcertante: la app dejaba de conectar justo
+> después de actualizar, y solo en el móvil.
 
 ---
 

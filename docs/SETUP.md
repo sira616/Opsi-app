@@ -231,6 +231,7 @@ realinea las dependencias con las que recomienda el SDK.
 | `failed to connect to docker API` | Docker no está arrancado | Abrir Docker Desktop y reintentar |
 | `db:start` se queda colgado | Descargando imágenes la primera vez | Esperar; la segunda vez tarda segundos |
 | Puerto 54322 ocupado | Otro proyecto Supabase levantado | `npx supabase stop --project-id <otro>` |
-| El móvil no conecta con la API | `127.0.0.1` es el propio móvil | Poner la IP local del ordenador en `.env` |
+| El móvil no conecta con la API | `127.0.0.1` es el propio móvil | Poner la IP local del ordenador en `app/.env`. `npm run up` la imprime al terminar |
+| «No llego a http://127.0.0.1:54321» al entrar, y antes funcionaba | Un `npm run up` anterior a 2026-09-21 machacaba la URL que habías puesto a mano | Volver a poner la IP. Desde esta versión ya se respeta |
 | No llega el correo de confirmación | En local no sale a internet | Mirar en Mailpit: <http://127.0.0.1:54324> |
 | `syreta` no entra | Los seeds no se han aplicado | `npm run db:reset` |

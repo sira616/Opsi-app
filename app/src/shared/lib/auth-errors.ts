@@ -7,6 +7,8 @@
  * son 10 caracteres, fijados en supabase/config.toml— y no un "password is
  * too weak" que no dice cuánto.
  */
+import { esFalloDeRed, mensajeSinConexion } from './conexion';
+
 export function describeAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const lower = message.toLowerCase();
@@ -43,8 +45,9 @@ export function describeAuthError(error: unknown): string {
   if (lower.includes('for security purposes') || lower.includes('rate limit')) {
     return 'Has probado demasiadas veces seguidas. Espera un minuto.';
   }
-  if (lower.includes('network') || lower.includes('fetch')) {
-    return 'No se ha podido conectar. ¿Está levantado Supabase?';
-  }
+  // El mensaje de red lo escribe conexion.ts, que sabe contra qué URL se
+  // estaba intentando conectar. Sin ese dato el aviso no sirve de nada.
+  if (esFalloDeRed(message)) return mensajeSinConexion();
+
   return message;
 }
