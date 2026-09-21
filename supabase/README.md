@@ -16,7 +16,8 @@ La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 │   ├── opsi-chat/          fase 5 · asistente con tool use
 │   └── parse-receipt/      fase 6 · OCR de tickets con visión
 ├── tests/          pgTAP: RLS con dos usuarios, RPC, vista de prioridad
-└── seed/           Datos de desarrollo (productos de ejemplo)
+├── seed/           Datos de desarrollo (catálogo de productos)
+└── demo/           Scripts a ejecutar a mano en el Studio, no con db:reset
 ```
 
 ## El esquema

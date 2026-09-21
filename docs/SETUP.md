@@ -171,6 +171,21 @@ Necesita el backend levantado y `app/.env` relleno.
 
 En el navegador no hace falta nada de esto: `127.0.0.1` funciona tal cual.
 
+### No hay usuario de prueba
+
+El seed carga el catálogo de productos, no usuarios. **Créate la cuenta desde la app**:
+cualquier correo inventado sirve —no se envía nada— y la contraseña necesita 10
+caracteres. Registrarte es justamente lo que dispara el trigger que crea tu hogar.
+
+### Llenar el inventario para tener algo que mirar
+
+Una vez tengas cuenta, abre el Studio (<http://127.0.0.1:54323>) → **SQL Editor**, pega
+[`supabase/demo/inventario-de-ejemplo.sql`](../supabase/demo/inventario-de-ejemplo.sql)
+y ejecútalo. Mete nueve alimentos elegidos para que se vea cada grupo de prioridad, y
+te imprime la tabla resultante.
+
+Se puede ejecutar las veces que quieras: limpia antes lo que creó él mismo.
+
 Si al actualizar Expo algo deja de cuadrar, `npx expo install --fix` desde `app/`
 realinea las dependencias con las que recomienda el SDK.
 
