@@ -1,0 +1,138 @@
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { colors, radius, space, touchTarget } from '@/shared/theme/tokens';
+
+type Props = {
+  label: string;
+  /** Lo que se lee al confirmar: «Sí, tirarlo». Explícito, nunca «Aceptar». */
+  confirmLabel: string;
+  question: string;
+  onConfirm: () => void;
+  busy?: boolean;
+  danger?: boolean;
+};
+
+/**
+ * Acción que pide confirmación antes de hacerse.
+ *
+ * Para lo irreversible: tirar y terminar cierran el elemento, y a partir de
+ * ahí el servidor rechaza cualquier acción sobre él. Un toque despistado
+ * mientras miras la nevera borraba un alimento sin preguntar.
+ *
+ * La confirmación es EN LÍNEA y no un diálogo del sistema por una razón
+ * práctica: `Alert.alert` de React Native no hace nada en la versión web, y la
+ * app se mira también en el navegador. Un componente que solo funciona en la
+ * mitad de los sitios donde corre la app no vale.
+ *
+ * Se descarta sola a los 6 segundos: dejar un «¿seguro?» colgado en pantalla
+ * invita a confirmarlo sin leerlo cuando vuelves.
+ */
+export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, danger }: Props) {
+  const [asking, setAsking] = useState(false);
+
+  useEffect(() => {
+    if (!asking) return;
+    const timer = setTimeout(() => setAsking(false), 6000);
+    return () => clearTimeout(timer);
+  }, [asking]);
+
+  if (!asking) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={() => setAsking(true)}
+        style={({ pressed }) => [
+          styles.button,
+          danger && styles.buttonDanger,
+          pressed && styles.pressed,
+          busy && styles.busy,
+        ]}
+      >
+        <Text style={[styles.label, danger && styles.labelDanger]}>{label}</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.confirmBox}>
+      <Text style={styles.question}>{question}</Text>
+      <View style={styles.row}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => {
+            setAsking(false);
+            onConfirm();
+          }}
+          style={({ pressed }) => [
+            styles.confirmButton,
+            danger && styles.confirmButtonDanger,
+            pressed && styles.pressed,
+            busy && styles.busy,
+          ]}
+        >
+          <Text style={styles.confirmText}>{confirmLabel}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAsking(false)}
+          style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.cancelText}>Cancelar</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  button: {
+    minHeight: touchTarget + 6,
+    justifyContent: 'center',
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  buttonDanger: { borderColor: '#E0BDB6' },
+  label: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  labelDanger: { color: colors.expiry },
+
+  confirmBox: {
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.expiry,
+    backgroundColor: colors.expirySoft,
+  },
+  question: { fontSize: 14.5, fontWeight: '600', color: '#6B4038' },
+  row: { flexDirection: 'row', gap: space.sm },
+  confirmButton: {
+    flex: 1,
+    minHeight: touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm + 2,
+    backgroundColor: colors.ink,
+  },
+  confirmButtonDanger: { backgroundColor: colors.expiry },
+  confirmText: { fontSize: 14.5, fontWeight: '600', color: colors.ground },
+  cancelButton: {
+    minHeight: touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: space.lg,
+    borderRadius: radius.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  cancelText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+
+  pressed: { opacity: 0.85 },
+  busy: { opacity: 0.5 },
+});

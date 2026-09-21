@@ -746,3 +746,17 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - Escrita [`docs/MOVIL.md`](../MOVIL.md): guía de instalación en el móvil paso a paso,
   con el paso de la IP local destacado porque es el que todo el mundo se salta.
 - Verificado: typecheck, lint y `expo export` pasan.
+
+### 2026-09-21 (sesión 9) · Zona horaria y confirmaciones
+
+- **Q9 cerrada.** `today_for_user()` lee `user_settings.timezone` y la vista la usa en
+  lugar de `current_date`. Antes, entre medianoche y las dos de la mañana la app vivía en
+  el día anterior, y la fase 3 manda un resumen diario: un aviso calculado en el día
+  equivocado llega tarde. El test lo comprueba con `Pacific/Kiritimati`, que a UTC+14
+  devuelve otro día.
+- **Confirmación en tirar y terminar.** En línea y no con `Alert.alert`, porque ese no
+  hace nada en la versión web y la app también se mira en el navegador. Se descarta sola
+  a los 6 segundos: un «¿seguro?» colgado en pantalla invita a confirmarlo sin leerlo.
+- **La fase 0 queda verificada en un dispositivo real.** El usuario describió la pantalla
+  vieja corriendo en su iPhone con su hogar y su recuento de alimentos, lo que demuestra
+  sesión, trigger de alta y RLS funcionando contra Supabase de verdad.

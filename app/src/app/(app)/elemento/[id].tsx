@@ -14,6 +14,7 @@ import {
 import { describeDateSource, describeDaysLeft } from '@/shared/lib/dates';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity, toBase } from '@/shared/lib/units';
+import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
 import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
@@ -169,10 +170,12 @@ export default function Detalle() {
                   onPress={() => run('descongelarlo', () => actions.thaw(data.id))}
                   busy={act.isPending}
                 />
-                <Action
+                <ConfirmAction
                   label="Tirar"
+                  confirmLabel="Sí, tirarlo"
+                  question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
-                  onPress={() => run('tirarlo', () => actions.discard(data.id))}
+                  onConfirm={() => run('tirarlo', () => actions.discard(detail.id))}
                   busy={act.isPending}
                 />
               </>
@@ -217,16 +220,20 @@ export default function Detalle() {
                   busy={act.isPending}
                 />
 
-                <Action
+                <ConfirmAction
                   label="Terminar"
-                  onPress={() => run('marcarlo como terminado', () => actions.finish(data.id))}
+                  confirmLabel="Sí, se ha terminado"
+                  question={`¿Dar ${data.name} por terminado? Sale del inventario y no se puede deshacer.`}
+                  onConfirm={() => run('marcarlo como terminado', () => actions.finish(detail.id))}
                   busy={act.isPending}
                 />
 
-                <Action
+                <ConfirmAction
                   label="Tirar"
+                  confirmLabel="Sí, tirarlo"
+                  question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
-                  onPress={() => run('tirarlo', () => actions.discard(data.id))}
+                  onConfirm={() => run('tirarlo', () => actions.discard(detail.id))}
                   busy={act.isPending}
                 />
               </>

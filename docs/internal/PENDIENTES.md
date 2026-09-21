@@ -103,14 +103,14 @@ Hoy lo valida solo la aplicación, que todavía no existe. Un trigger lo resolve
 
 ## 3. Decisiones a medio cerrar 🟠
 
-### 🟠 Q9 · «Hoy» se calcula en UTC
+### ✅ ~~Q9 · «Hoy» se calcula en UTC~~ · resuelto 2026-09-21
 
-La vista usa `current_date`, que es la fecha del servidor. Para un usuario español eso
-baila una o dos horas en los bordes del día: algo que caduca «hoy» puede aparecer como
-«mañana» a las 23:30.
+Nueva función `today_for_user()`, que lee `user_settings.timezone` y cae a
+`Europe/Madrid` cuando no hay sesión —el caso del resumen diario, que corre con
+`service_role`—. La vista de prioridad la usa en lugar de `current_date`.
 
-`user_settings.timezone` ya existe y tiene `Europe/Madrid` por defecto. **Hay que decidir
-antes de la fase 3**, porque el resumen diario depende de la hora local por definición.
+Hay un test que lo comprueba de verdad: con el ajuste en `Pacific/Kiritimati` (UTC+14) la
+función devuelve un día distinto que con Madrid, así que no es una tautología.
 
 ### 🟠 Q3 · El campo de conservación de Open Food Facts sin confirmar
 
@@ -160,7 +160,7 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | D5 · Development build con EAS | `eas.json` ya está; falta `eas init` (necesita cuenta de Expo). Ver [`NATIVA.md`](../NATIVA.md) |
 | 🟠 | **Sin icono ni pantalla de carga** | `app/assets` está vacío: cualquier build nativa saldrá con el icono genérico de Expo. Hacen falta `icon.png` 1024×1024 y `splash.png` |
 | 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
-| 🟠 | **Sin confirmación al tirar ni al terminar** | Se ejecutan al primer toque y no hay forma de deshacerlas. Un dedo torpe borra un alimento del inventario sin preguntar |
+| ✅ | ~~Sin confirmación al tirar ni al terminar~~ | Resuelto: confirmación en línea, con el nombre del alimento en la pregunta. En línea y no `Alert.alert` porque este último no hace nada en la versión web |
 | 🟡 | La fecha se teclea, no se elige | `31/12/2026` a mano. Rápido para copiar de un envase, pero un selector nativo debería existir como alternativa |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
 | 🟠 | **La app habla con Supabase sin tipos** | `src/api/inventory.ts` afirma los tipos a mano con `as unknown as`. Si una columna cambia de nombre, compila y revienta en ejecución. Lo arregla `npm run types` + quitar los casts |
@@ -202,9 +202,7 @@ tú.
    crear una cuenta desde Expo Go. Si la pantalla pinta tu hogar, la fase 0 funciona de
    punta a punta y se cierra casi toda la sección 1.
 2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
-3. **Confirmación antes de tirar y de terminar.** Es la pega más real de la fase 1: son
-   irreversibles y se disparan al primer toque.
-4. **Q9** (la vista calcula «hoy» en UTC). Es lo único que queda en el documento que
-   ensucia datos cuanto más se tarde.
-5. Con la fase 1 cerrada, **la fase 2**: escáner de códigos de barras. Ahí sí hace falta
-   la development build de EAS.
+3. **Icono y pantalla de carga.** `app/assets` está vacío y cualquier build nativa sale
+   con el icono genérico de Expo.
+4. **La fase 2**: escáner de códigos de barras y la Edge Function `lookup-barcode`. Ahí
+   sí hace falta la development build de EAS.

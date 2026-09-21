@@ -325,6 +325,28 @@ select throws_ok(
   'la cantidad tiene que ser mayor que cero'
 );
 
+-- ── «Hoy» se calcula donde esta el usuario, no el servidor (Q9) ───────────
+
+select is(
+  public.today_for_user(),
+  (now() at time zone 'Europe/Madrid')::date,
+  'por defecto, hoy es hoy en Madrid'
+);
+
+update public.user_settings
+   set timezone = 'Pacific/Kiritimati'
+ where user_id = current_setting('opsi.diego')::uuid;
+
+select is(
+  public.today_for_user(),
+  (now() at time zone 'Pacific/Kiritimati')::date,
+  'y sigue al ajuste del usuario, no al reloj del servidor'
+);
+
+update public.user_settings
+   set timezone = 'Europe/Madrid'
+ where user_id = current_setting('opsi.diego')::uuid;
+
 -- ── La vista respeta la RLS ───────────────────────────────────────────────
 
 reset role;
