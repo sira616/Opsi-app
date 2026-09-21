@@ -42,7 +42,7 @@ hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
 | CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
 | Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
 | App Expo | D1–D4 más **alta manual y «Consumir primero»**. Estructura alineada con psique ([D-18](#d-18--convenciones-de-psique-no-su-código--2026-09-21)) |
-| Fase 1 | Backend completo + las dos primeras pantallas. Falta el detalle con acciones |
+| Fase 1 | **Completa**: backend, alta manual, «Consumir primero» y detalle con las seis acciones |
 
 ### Verificado vs. no verificado
 
@@ -731,3 +731,18 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - Reestructurado a `src/shared/ui`, `src/shared/lib`, `src/api`; añadido TanStack Query.
 - Verificado: typecheck, lint y `expo export --platform web` pasan. 124 comprobaciones de
   esquema en verde. **Sigue sin haberse ejecutado contra un backend real.**
+
+### 2026-09-21 (sesión 8) · Detalle con acciones · fase 1 cerrada
+
+- **Pantalla de detalle**: las seis acciones, el historial de eventos y —lo que justifica
+  que la pantalla exista— la **explicación** de la fecha límite. Que un brick abierto
+  venza antes de lo que pone el envase parece un error hasta que se dice por qué.
+- Las acciones se filtran por estado: lo congelado solo se descongela o se tira, y lo ya
+  abierto no ofrece «abrir». Congelar algo descongelado avisa de que no se recongela sin
+  cocinar antes, siguiendo a la FSA.
+- Cada acción invalida **también** la lista, no solo el detalle: cualquiera de ellas
+  cambia la fecha límite efectiva y por tanto el sitio del elemento en «Consumir
+  primero». Olvidarlo es el bug clásico de estas pantallas.
+- Escrita [`docs/MOVIL.md`](../MOVIL.md): guía de instalación en el móvil paso a paso,
+  con el paso de la IP local destacado porque es el que todo el mundo se salta.
+- Verificado: typecheck, lint y `expo export` pasan.

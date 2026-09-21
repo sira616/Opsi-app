@@ -158,10 +158,10 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟡 | Soporte web añadido para poder mirarla | `react-native-web`. Es una comodidad de desarrollo, **no un objetivo del producto**: el roadmap dice app móvil. Ojo con acabar diseñando para el navegador |
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
 | 🟠 | D5 · Development build con EAS | Solo hace falta para el escáner (fase 2) y las push (fase 3) |
-| 🟠 | La pantalla de aterrizaje es provisional | Lee el hogar y cuenta el inventario para comprobar la cadena entera. «Consumir primero» es fase 1 |
+| 🟠 | **Sin confirmación al tirar ni al terminar** | Se ejecutan al primer toque y no hay forma de deshacerlas. Un dedo torpe borra un alimento del inventario sin preguntar |
+| 🟡 | La fecha se teclea, no se elige | `31/12/2026` a mano. Rápido para copiar de un envase, pero un selector nativo debería existir como alternativa |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
 | 🟠 | **La app habla con Supabase sin tipos** | `src/api/inventory.ts` afirma los tipos a mano con `as unknown as`. Si una columna cambia de nombre, compila y revienta en ejecución. Lo arregla `npm run types` + quitar los casts |
-| 🟡 | Sin pantalla de detalle | Las seis acciones existen en el backend y en `src/api/inventory.ts`, pero ninguna pantalla las llama todavía |
 | 🟡 | Sin pruebas de interfaz | Ni una. El typecheck y el linter son toda la red de seguridad del cliente |
 | ⚪ | En Windows, `npm run types` depende del shell | El script redirige con `>`. npm usa `cmd.exe`, donde funciona; si alguien configura `script-shell` a PowerShell, el fichero saldría en UTF-16 y roto |
 | ⚪ | `eslint-config-expo` no va con ESLint 10 | Su `eslint-plugin-react` usa una API que la 10 eliminó. ESLint queda fijado en `^9.39.5`; revisar cuando publiquen soporte |
@@ -200,7 +200,9 @@ tú.
    crear una cuenta desde Expo Go. Si la pantalla pinta tu hogar, la fase 0 funciona de
    punta a punta y se cierra casi toda la sección 1.
 2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
-3. **Las tres pantallas de la fase 1**: alta manual, detalle con acciones y «Consumir
-   primero». El backend que las alimenta ya está hecho y probado.
-4. Por el camino, decidir **Q9** (zona horaria) y el hueco del **evento `created`**: son
-   los dos únicos de este documento que ensucian datos cuanto más se tarde.
+3. **Confirmación antes de tirar y de terminar.** Es la pega más real de la fase 1: son
+   irreversibles y se disparan al primer toque.
+4. **Q9** (la vista calcula «hoy» en UTC). Es lo único que queda en el documento que
+   ensucia datos cuanto más se tarde.
+5. Con la fase 1 cerrada, **la fase 2**: escáner de códigos de barras. Ahí sí hace falta
+   la development build de EAS.

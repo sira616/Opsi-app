@@ -212,11 +212,11 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] App Expo: alta y login con contraseña, sesión persistida, rutas protegidas
 - [ ] Development build de EAS (solo hace falta para el escáner y los avisos)
 
-**Fase 1 · el backend ya está**
+**Fase 1 · completa**
 
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
 - [x] Vista `inventory_with_priority` con la fecha límite efectiva
-- [ ] Las tres pantallas: alta manual, detalle y «Consumir primero»
+- [x] Las tres pantallas: alta manual, «Consumir primero» y detalle con acciones
 
 El esquema pasa 117 comprobaciones con `npm run db:check`, que corre sin Docker.
 
@@ -228,6 +228,7 @@ Detalles en [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Documentación
 
+- [`docs/MOVIL.md`](docs/MOVIL.md) — **verla en el móvil**, paso a paso desde cero
 - [`docs/SETUP.md`](docs/SETUP.md) — levantar el entorno local y desplegar
 - [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) — decisiones técnicas en detalle
 - [`docs/GLOSARIO.md`](docs/GLOSARIO.md) — estados, tipos de fecha y vocabulario del dominio

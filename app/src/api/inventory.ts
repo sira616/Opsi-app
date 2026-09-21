@@ -53,6 +53,29 @@ export type PriorityItem = {
   days_left: number | null;
 };
 
+/** Lo del detalle: todo lo de la lista más las fechas candidatas. */
+export type ItemDetail = PriorityItem & {
+  opened_at: string | null;
+  frozen_at: string | null;
+  frozen_days: number;
+  thawed_at: string | null;
+  limit_date: string | null;
+  date_kind: DateKind | null;
+  date_source: DateSource | null;
+  /** Las tres candidatas, para poder EXPLICAR de dónde sale la fecha límite. */
+  date_from_label: string | null;
+  date_from_opening: string | null;
+  date_from_thaw: string | null;
+};
+
+export type InventoryEvent = {
+  id: number;
+  type: string;
+  quantity_used: number | null;
+  created_at: string;
+  payload: Record<string, unknown>;
+};
+
 const PRIORITY_FIELDS =
   'id, name, state, location, unit_family, display_unit, initial_quantity, ' +
   'remaining_quantity, priority, effective_limit_date, effective_date_reason, ' +
@@ -75,6 +98,36 @@ export async function fetchPriorityList(): Promise<PriorityItem[]> {
 
   if (error) throw error;
   return (data ?? []) as unknown as PriorityItem[];
+}
+
+/**
+ * Un elemento con todo lo que hace falta para explicar su fecha.
+ *
+ * `select('*')` a propósito: el detalle enseña el cálculo entero, y listar
+ * dieciocho columnas a mano solo sirve para que se quede una fuera.
+ */
+export async function fetchItem(id: string): Promise<ItemDetail | null> {
+  const { data, error } = await supabase
+    .from('inventory_with_priority')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as unknown as ItemDetail | null;
+}
+
+/** El historial. Inmutable: solo se lee. */
+export async function fetchItemEvents(id: string): Promise<InventoryEvent[]> {
+  const { data, error } = await supabase
+    .from('inventory_events')
+    .select('id, type, quantity_used, created_at, payload')
+    .eq('item_id', id)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error) throw error;
+  return (data ?? []) as unknown as InventoryEvent[];
 }
 
 export type NewItem = {

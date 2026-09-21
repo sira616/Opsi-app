@@ -1,0 +1,463 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  actions,
+  fetchItem,
+  fetchItemEvents,
+  type InventoryEvent,
+  type ItemDetail,
+} from '@/api/inventory';
+import { describeDateSource, describeDaysLeft } from '@/shared/lib/dates';
+import { queryKeys } from '@/shared/lib/query';
+import { formatQuantity, toBase } from '@/shared/lib/units';
+import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { TextField } from '@/shared/ui/TextField';
+import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+
+const STATE_LABEL: Record<ItemDetail['state'], string> = {
+  closed: 'Cerrado',
+  open: 'Abierto',
+  partially_consumed: 'Abierto',
+  frozen: 'Congelado',
+  thawed: 'Descongelado',
+  finished: 'Agotado',
+  discarded: 'Tirado',
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  created: 'Añadido',
+  opened: 'Abierto',
+  quantity_used: 'Usado',
+  frozen: 'Congelado',
+  thawed: 'Descongelado',
+  finished: 'Terminado',
+  discarded: 'Tirado',
+  updated: 'Modificado',
+};
+
+export default function Detalle() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const [error, setError] = useState<string | null>(null);
+  const [usePanel, setUsePanel] = useState(false);
+  const [amount, setAmount] = useState('');
+
+  const item = useQuery({
+    queryKey: queryKeys.item(id),
+    queryFn: () => fetchItem(id),
+    enabled: Boolean(id),
+  });
+
+  const events = useQuery({
+    queryKey: queryKeys.itemEvents(id),
+    queryFn: () => fetchItemEvents(id),
+    enabled: Boolean(id),
+  });
+
+  /**
+   * Una sola mutación para las seis acciones.
+   *
+   * Lo importante está en onSuccess: se invalida TAMBIÉN la lista, porque
+   * cualquier acción cambia la fecha límite efectiva y por tanto el sitio del
+   * elemento en «Consumir primero». Olvidarlo deja la lista mintiendo hasta la
+   * siguiente recarga, que es el bug clásico de estas pantallas.
+   */
+  const act = useMutation({
+    mutationFn: (run: () => Promise<void>) => run(),
+    async onSuccess() {
+      setError(null);
+      setUsePanel(false);
+      setAmount('');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.item(id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.itemEvents(id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList }),
+      ]);
+    },
+    onError(caught: Error) {
+      setError(caught.message);
+    },
+  });
+
+  if (item.isPending) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <ActivityIndicator color={colors.brand} />
+      </SafeAreaView>
+    );
+  }
+
+  const data = item.data;
+  if (!data) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <Text style={font.body}>Ese elemento ya no está.</Text>
+        <Pressable onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backText}>Volver</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  // Un alias ya estrechado: dentro de las funciones de abajo TypeScript no
+  // arrastra el `if (!data) return` de arriba, porque están izadas.
+  const detail: ItemDetail = data;
+
+  const closedOut = data.state === 'finished' || data.state === 'discarded';
+  const percent =
+    data.initial_quantity > 0
+      ? Math.max(0, Math.min(1, data.remaining_quantity / data.initial_quantity))
+      : 0;
+
+  function run(label: string, fn: () => Promise<void>) {
+    setError(null);
+    act.mutate(fn, { onError: () => setError(`No se pudo ${label}.`) });
+  }
+
+  function onUse() {
+    const value = Number(amount.replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Pon una cantidad mayor que cero.');
+      return;
+    }
+    run('usar esa cantidad', () => actions.use(detail.id, toBase(value, detail.display_unit)));
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <Text style={styles.backText}>‹ Inventario</Text>
+        </Pressable>
+
+        <View style={styles.titleBlock}>
+          <Text style={font.title}>{data.name}</Text>
+          <View style={styles.chips}>
+            <Text style={styles.stateChip}>{STATE_LABEL[data.state]}</Text>
+            <Text style={font.bodySmall}>{formatQuantity(data.remaining_quantity, data.display_unit)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.bar}>
+          <View style={[styles.barFill, { width: `${percent * 100}%` }]} />
+        </View>
+
+        <FechaLimite item={data} />
+
+        <ErrorNote message={error} />
+
+        {!closedOut ? (
+          <View style={styles.actions}>
+            <Text style={styles.sectionTitle}>Qué hago con esto</Text>
+
+            {data.state === 'frozen' ? (
+              <>
+                <Action
+                  label="Descongelar"
+                  hint="A partir de ahí, 24 horas para consumirlo."
+                  onPress={() => run('descongelarlo', () => actions.thaw(data.id))}
+                  busy={act.isPending}
+                />
+                <Action
+                  label="Tirar"
+                  danger
+                  onPress={() => run('tirarlo', () => actions.discard(data.id))}
+                  busy={act.isPending}
+                />
+              </>
+            ) : (
+              <>
+                {data.opened_at === null ? (
+                  <Action
+                    label="Abrir"
+                    onPress={() => run('abrirlo', () => actions.open(data.id))}
+                    busy={act.isPending}
+                  />
+                ) : null}
+
+                <Action
+                  label="Usar cantidad"
+                  onPress={() => setUsePanel((v) => !v)}
+                  busy={act.isPending}
+                />
+
+                {usePanel ? (
+                  <View style={styles.usePanel}>
+                    <TextField
+                      label={`Cuánto has usado (en ${data.display_unit === 'unit' ? 'unidades' : data.display_unit})`}
+                      value={amount}
+                      onChangeText={setAmount}
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
+                      autoFocus
+                    />
+                    <Action label="Descontar" onPress={onUse} busy={act.isPending} primary />
+                  </View>
+                ) : null}
+
+                <Action
+                  label="Congelar"
+                  hint={
+                    data.state === 'thawed'
+                      ? 'Ya se descongeló una vez: no vuelvas a congelarlo sin cocinarlo antes.'
+                      : 'La cuenta atrás se para mientras esté congelado.'
+                  }
+                  onPress={() => run('congelarlo', () => actions.freeze(data.id))}
+                  busy={act.isPending}
+                />
+
+                <Action
+                  label="Terminar"
+                  onPress={() => run('marcarlo como terminado', () => actions.finish(data.id))}
+                  busy={act.isPending}
+                />
+
+                <Action
+                  label="Tirar"
+                  danger
+                  onPress={() => run('tirarlo', () => actions.discard(data.id))}
+                  busy={act.isPending}
+                />
+              </>
+            )}
+          </View>
+        ) : (
+          <View style={styles.closedNote}>
+            <Text style={font.bodySmall}>
+              Este elemento está {STATE_LABEL[data.state].toLowerCase()} y ya no admite acciones.
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.history}>
+          <Text style={styles.sectionTitle}>Historial</Text>
+          {(events.data ?? []).length === 0 ? (
+            <Text style={font.bodySmall}>Todavía no hay nada registrado.</Text>
+          ) : (
+            (events.data ?? []).map((event: InventoryEvent) => (
+              <View key={event.id} style={styles.eventRow}>
+                <Text style={styles.eventDate}>
+                  {new Date(event.created_at).toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                </Text>
+                <Text style={font.body}>
+                  {EVENT_LABEL[event.type] ?? event.type}
+                  {event.quantity_used
+                    ? ` · ${formatQuantity(event.quantity_used, data.display_unit)}`
+                    : ''}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * La parte que justifica que esta pantalla exista.
+ *
+ * Enseña la fecha límite efectiva Y de dónde sale. Que un brick abierto venza
+ * antes de lo que pone el envase parece un error hasta que se explica, y un
+ * número sin explicación es justo lo que el proyecto no quiere dar.
+ */
+function FechaLimite({ item }: { item: ItemDetail }) {
+  const urgent = item.priority === 'high';
+
+  const explanation =
+    item.effective_date_reason === 'after_thawing'
+      ? 'Se descongeló, y lo descongelado se consume en 24 horas: eso manda sobre la fecha del envase.'
+      : item.effective_date_reason === 'after_opening'
+        ? 'Está abierto, y la conservación tras abrir llega antes que la fecha del envase.'
+        : item.frozen_days > 0
+          ? `La fecha del envase, retrasada los ${item.frozen_days} días que pasó congelado.`
+          : 'La fecha que trae el envase.';
+
+  if (item.state === 'frozen') {
+    return (
+      <View style={styles.dateCard}>
+        <Text style={styles.dateLabel}>Congelado</Text>
+        <Text style={styles.dateValue}>Sin cuenta atrás</Text>
+        <Text style={styles.dateExplain}>
+          Mientras esté en el congelador no vence. Al descongelarlo, la cuenta se reanuda
+          {item.frozen_days > 0 ? ` (lleva ${item.frozen_days} días acumulados)` : ''}.
+        </Text>
+      </View>
+    );
+  }
+
+  if (item.effective_limit_date === null) {
+    return (
+      <View style={[styles.dateCard, styles.dateCardNeutral]}>
+        <Text style={styles.dateLabel}>Sin fecha</Text>
+        <Text style={styles.dateValue}>No sabemos cuándo vence</Text>
+        <Text style={styles.dateExplain}>
+          No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.dateCard, urgent ? styles.dateCardUrgent : styles.dateCardNeutral]}>
+      <Text style={[styles.dateLabel, urgent && styles.dateLabelUrgent]}>
+        Fecha límite · {describeDateSource(item.effective_date_source)}
+      </Text>
+      <Text style={[styles.dateValue, urgent && styles.dateValueUrgent]}>
+        {describeDaysLeft(item.days_left)}
+      </Text>
+      <Text style={[styles.dateExplain, urgent && styles.dateExplainUrgent]}>{explanation}</Text>
+    </View>
+  );
+}
+
+function Action({
+  label,
+  hint,
+  onPress,
+  busy,
+  danger,
+  primary,
+}: {
+  label: string;
+  hint?: string;
+  onPress: () => void;
+  busy?: boolean;
+  danger?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <View style={styles.actionWrapper}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.action,
+          danger && styles.actionDanger,
+          primary && styles.actionPrimary,
+          pressed && styles.actionPressed,
+          busy && styles.actionBusy,
+        ]}
+      >
+        <Text
+          style={[
+            styles.actionText,
+            danger && styles.actionTextDanger,
+            primary && styles.actionTextPrimary,
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+      {hint ? <Text style={styles.actionHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ground },
+  center: { alignItems: 'center', justifyContent: 'center', gap: space.md },
+  content: { padding: space.xl, gap: space.xl, paddingBottom: space.xxl * 2 },
+
+  back: { minHeight: touchTarget, justifyContent: 'center', marginLeft: -2, alignSelf: 'flex-start' },
+  backLink: { minHeight: touchTarget, justifyContent: 'center' },
+  backText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+
+  titleBlock: { gap: space.sm },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  stateChip: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.brand,
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.sm - 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    overflow: 'hidden',
+  },
+
+  bar: { height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: colors.brand },
+
+  dateCard: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.xs + 2 },
+  dateCardNeutral: { backgroundColor: colors.surface, borderColor: colors.border },
+  dateCardUrgent: { backgroundColor: colors.expirySoft, borderColor: '#F0CFC8' },
+  dateLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    color: colors.inkMuted,
+  },
+  dateLabelUrgent: { color: colors.expiry },
+  dateValue: { fontSize: 22, fontWeight: '600', color: colors.ink },
+  dateValueUrgent: { color: colors.expiry },
+  dateExplain: { fontSize: 12.5, lineHeight: 18, color: colors.inkMuted },
+  dateExplainUrgent: { color: '#6B4038' },
+
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.inkMuted,
+    marginBottom: space.xs,
+  },
+
+  actions: { gap: space.sm },
+  actionWrapper: { gap: 3 },
+  action: {
+    minHeight: touchTarget + 6,
+    justifyContent: 'center',
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+  },
+  actionPrimary: { backgroundColor: colors.brand, borderColor: colors.brand },
+  actionDanger: { borderColor: '#E0BDB6' },
+  actionPressed: { opacity: 0.85 },
+  actionBusy: { opacity: 0.5 },
+  actionText: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  actionTextPrimary: { color: colors.ground },
+  actionTextDanger: { color: colors.expiry },
+  actionHint: { fontSize: 11.5, lineHeight: 16, color: colors.inkFaint, paddingHorizontal: 2 },
+
+  usePanel: {
+    gap: space.md,
+    padding: space.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+  },
+
+  closedNote: {
+    padding: space.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+  },
+
+  history: { gap: space.sm },
+  eventRow: { flexDirection: 'row', gap: space.md, alignItems: 'baseline' },
+  eventDate: { fontSize: 12, color: colors.inkFaint, minWidth: 58 },
+});

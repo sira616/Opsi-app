@@ -71,7 +71,7 @@ correo — por eso se puede probar la app entera hoy sin montar nada.
 
 - [x] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, alta y login
       con correo y contraseña, rutas protegidas. Falta la development build (D5)
-- [ ] **Fase 1** — Alta manual, detalle del elemento con acciones, «Consumir primero»
+- [x] **Fase 1** — Alta manual, «Consumir primero» y detalle con las seis acciones
 - [ ] **Fase 2** — Pantalla de cámara EAN-13/EAN-8/UPC, confirmación precargada, fallback manual
 - [ ] **Fase 3** — Permiso y registro del token push, pantalla de ajustes de aviso
 - [ ] **Fase 4** — Lista de la compra, marcar comprado, paso a inventario

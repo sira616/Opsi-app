@@ -7,6 +7,8 @@ import { QueryClient } from '@tanstack/react-query';
  */
 export const queryKeys = {
   priorityList: ['inventory', 'priority'] as const,
+  item: (id: string) => ['inventory', 'item', id] as const,
+  itemEvents: (id: string) => ['inventory', 'item', id, 'events'] as const,
   household: ['household'] as const,
 };
 

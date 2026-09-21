@@ -159,6 +159,9 @@ Necesita el backend levantado y `app/.env` relleno.
 
 ### En el móvil, con Expo Go
 
+> Guía completa paso a paso, con capturas de los errores frecuentes:
+> [`docs/MOVIL.md`](MOVIL.md).
+
 1. Instala **Expo Go** ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) ·
    [iOS](https://apps.apple.com/app/expo-go/id982107779)).
 2. El móvil y el ordenador, **en la misma Wi-Fi**.

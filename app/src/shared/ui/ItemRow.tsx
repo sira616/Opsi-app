@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PriorityItem } from '@/api/inventory';
 import { describeDateSource, describeDaysLeft, describeReason } from '@/shared/lib/dates';
@@ -42,7 +43,16 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   const footnote = [reason, source].filter(Boolean).join(' · ');
 
   return (
-    <View style={[styles.card, item.effective_limit_date === null && styles.cardUndated]}>
+    <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${describeDaysLeft(item.days_left).toLowerCase()}`}
+        style={({ pressed }) => [
+          styles.card,
+          item.effective_limit_date === null && styles.cardUndated,
+          pressed && styles.cardPressed,
+        ]}
+      >
       <View style={styles.main}>
         <Text style={styles.name} numberOfLines={1}>
           {item.name}
@@ -65,7 +75,8 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           {describeDaysLeft(item.days_left)}
         </Text>
       </View>
-    </View>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -82,6 +93,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   cardUndated: { borderStyle: 'dashed', borderColor: '#DCD3C4' },
+  cardPressed: { opacity: 0.7 },
   main: { flex: 1, gap: 3 },
   name: { fontSize: 15.5, fontWeight: '600', color: colors.ink },
   meta: { fontSize: 12.5, color: colors.inkMuted },
