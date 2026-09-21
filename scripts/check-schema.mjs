@@ -218,7 +218,48 @@ async function runPgtapFiles() {
     } catch (error) {
       check(`${file} se ejecuta entero`, false, `${error.message}`);
     }
-    await db.close();
+    // ── Lo que la app pide existe de verdad ─────────────────────────────────
+  //
+  // src/api/inventory.ts afirma sus tipos con `as unknown as` porque
+  // database.types.ts necesita Docker para generarse. Eso deja un agujero: si
+  // una columna se renombra, TypeScript compila igual y la app revienta en
+  // ejecución con «column does not exist». Esto lo cierra leyendo la lista de
+  // columnas del propio fichero y comprobándola contra la vista.
+  console.log(`\n\x1b[1mLa capa de datos cuadra con el esquema\x1b[0m`);
+  try {
+    const apiSrc = await readFile(join(ROOT, 'app', 'src', 'api', 'inventory.ts'), 'utf8');
+    const bloque = apiSrc.match(/const PRIORITY_FIELDS =([\s\S]*?);/)?.[1] ?? '';
+    const pedidas = bloque
+      .replace(/['"+\n\r]/g, ' ')
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    check('se han encontrado las columnas que pide la lista', pedidas.length > 0);
+
+    const existentes = new Set(
+      (
+        await db.query(
+          `select column_name from information_schema.columns
+            where table_schema = 'public' and table_name = 'inventory_with_priority'`,
+        )
+      ).rows.map((r) => r.column_name),
+    );
+
+    const ausentes = pedidas.filter((col) => !existentes.has(col));
+    check(
+      'todas existen en inventory_with_priority',
+      ausentes.length === 0,
+      ausentes.length ? `no existen: ${ausentes.join(', ')}` : '',
+    );
+  } catch (error) {
+    check('la capa de datos cuadra con el esquema', false, error.message);
+  }
+
+  // ══ Segunda fase: ejecutar los ficheros pgTAP ═══════════════════════════
+  // Base nueva, para que los datos de las comprobaciones de arriba no choquen
+
+  await db.close();
   }
 }
 
@@ -425,8 +466,6 @@ async function main() {
 
   await db.close();
 
-  // ══ Segunda fase: ejecutar los ficheros pgTAP ═══════════════════════════
-  // Base nueva, para que los datos de las comprobaciones de arriba no choquen
   // con los usuarios que crean los tests.
   await runPgtapFiles();
 

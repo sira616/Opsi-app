@@ -50,13 +50,18 @@ export type PriorityItem = {
   effective_limit_date: string | null;
   effective_date_reason: 'label' | 'after_opening' | 'after_thawing' | null;
   effective_date_source: DateSource | null;
+  /** Caducidad o consumo preferente. La lista los pinta distinto: uno es
+   *  seguridad y el otro calidad, y confundirlos es el error que este
+   *  proyecto no se permite. */
+  date_kind: DateKind | null;
   days_left: number | null;
+  /** Cuándo empezó la congelación en curso. La lista cuenta desde aquí. */
+  frozen_at: string | null;
 };
 
 /** Lo del detalle: todo lo de la lista más las fechas candidatas. */
 export type ItemDetail = PriorityItem & {
   opened_at: string | null;
-  frozen_at: string | null;
   frozen_days: number;
   thawed_at: string | null;
   limit_date: string | null;
@@ -79,7 +84,7 @@ export type InventoryEvent = {
 const PRIORITY_FIELDS =
   'id, name, state, location, unit_family, display_unit, initial_quantity, ' +
   'remaining_quantity, priority, effective_limit_date, effective_date_reason, ' +
-  'effective_date_source, days_left';
+  'effective_date_source, date_kind, days_left, frozen_at';
 
 /**
  * Lo que alimenta «Consumir primero».

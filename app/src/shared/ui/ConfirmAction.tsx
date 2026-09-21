@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { makeStyles, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 type Props = {
   label: string;
+  /** El icono de la acción. Se pinta a la izquierda de la etiqueta. */
+  icon?: ReactNode;
   /** Lo que se lee al confirmar: «Sí, tirarlo». Explícito, nunca «Aceptar». */
   confirmLabel: string;
   question: string;
@@ -27,7 +29,15 @@ type Props = {
  * Se descarta sola a los 6 segundos: dejar un «¿seguro?» colgado en pantalla
  * invita a confirmarlo sin leerlo cuando vuelves.
  */
-export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, danger }: Props) {
+export function ConfirmAction({
+  label,
+  icon,
+  confirmLabel,
+  question,
+  onConfirm,
+  busy,
+  danger,
+}: Props) {
   const styles = useStyles();
   const [asking, setAsking] = useState(false);
 
@@ -50,6 +60,7 @@ export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, 
           busy && styles.busy,
         ]}
       >
+        {icon}
         <Text style={[styles.label, danger && styles.labelDanger]}>{label}</Text>
       </Pressable>
     );
@@ -90,7 +101,9 @@ export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, 
 const useStyles = makeStyles((c) => ({
   button: {
     minHeight: touchTarget + 6,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md - 2,
     paddingHorizontal: space.lg,
     borderRadius: radius.md,
     borderWidth: 1,

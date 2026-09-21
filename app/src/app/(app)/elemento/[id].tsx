@@ -5,20 +5,30 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  CheckCircle,
+  Drop,
+  ForkKnife,
+  Minus,
+  Package,
+  Snowflake,
+  Trash,
+} from 'phosphor-react-native';
+
+import {
   actions,
   fetchItem,
   fetchItemEvents,
   type InventoryEvent,
   type ItemDetail,
 } from '@/api/inventory';
-import { describeDateSource, describeDaysLeft } from '@/shared/lib/dates';
+import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity, toBase } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
-import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, tabular, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 const STATE_LABEL: Record<ItemDetail['state'], string> = {
   closed: 'Cerrado',
@@ -170,12 +180,14 @@ export default function Detalle() {
               <>
                 <Action
                   label="Descongelar"
+                  icon={<Drop size={20} color={c.frost} weight="duotone" />}
                   hint="A partir de ahí, 24 horas para consumirlo."
                   onPress={() => run('descongelarlo', () => actions.thaw(data.id))}
                   busy={act.isPending}
                 />
                 <ConfirmAction
                   label="Tirar"
+                  icon={<Trash size={20} color={c.expiry} weight="duotone" />}
                   confirmLabel="Sí, tirarlo"
                   question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
@@ -188,6 +200,8 @@ export default function Detalle() {
                 {data.opened_at === null ? (
                   <Action
                     label="Abrir"
+                    icon={<Package size={20} color={c.brand} weight="duotone" />}
+                    hint="Desde que se abre, muchos alimentos duran menos de lo que pone el envase."
                     onPress={() => run('abrirlo', () => actions.open(data.id))}
                     busy={act.isPending}
                   />
@@ -195,6 +209,7 @@ export default function Detalle() {
 
                 <Action
                   label="Usar cantidad"
+                  icon={<ForkKnife size={20} color={c.brand} weight="duotone" />}
                   onPress={() => setUsePanel((v) => !v)}
                   busy={act.isPending}
                 />
@@ -209,12 +224,19 @@ export default function Detalle() {
                       inputMode="decimal"
                       autoFocus
                     />
-                    <Action label="Descontar" onPress={onUse} busy={act.isPending} primary />
+                    <Action
+                      label="Descontar"
+                      icon={<Minus size={20} color={c.onBrand} weight="bold" />}
+                      onPress={onUse}
+                      busy={act.isPending}
+                      primary
+                    />
                   </View>
                 ) : null}
 
                 <Action
                   label="Congelar"
+                  icon={<Snowflake size={20} color={c.frost} weight="duotone" />}
                   hint={
                     data.state === 'thawed'
                       ? 'Ya se descongeló una vez: no vuelvas a congelarlo sin cocinarlo antes.'
@@ -226,6 +248,7 @@ export default function Detalle() {
 
                 <ConfirmAction
                   label="Terminar"
+                  icon={<CheckCircle size={20} color={c.brand} weight="duotone" />}
                   confirmLabel="Sí, se ha terminado"
                   question={`¿Dar ${data.name} por terminado? Sale del inventario y no se puede deshacer.`}
                   onConfirm={() => run('marcarlo como terminado', () => actions.finish(detail.id))}
@@ -234,6 +257,7 @@ export default function Detalle() {
 
                 <ConfirmAction
                   label="Tirar"
+                  icon={<Trash size={20} color={c.expiry} weight="duotone" />}
                   confirmLabel="Sí, tirarlo"
                   question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
@@ -288,6 +312,7 @@ export default function Detalle() {
  */
 function FechaLimite({ item }: { item: ItemDetail }) {
   const styles = useStyles();
+  const c = useTheme();
   const urgent = item.priority === 'high';
 
   const explanation =
@@ -300,13 +325,38 @@ function FechaLimite({ item }: { item: ItemDetail }) {
           : 'La fecha que trae el envase.';
 
   if (item.state === 'frozen') {
+    // Dos cuentas distintas, y confundirlas sería mentir: `dentro` son los días
+    // del tramo EN CURSO, y frozen_days los de tramos anteriores ya cerrados.
+    const dentro = diasDesde(item.frozen_at);
+    const desde = describeDesde(item.frozen_at);
+
     return (
-      <View style={styles.dateCard}>
-        <Text style={styles.dateLabel}>Congelado</Text>
-        <Text style={styles.dateValue}>Sin cuenta atrás</Text>
+      <View style={[styles.dateCard, styles.dateCardFrozen]}>
+        <View style={styles.frozenHead}>
+          <Snowflake size={15} color={c.frost} weight="fill" />
+          <Text style={[styles.dateLabel, styles.dateLabelFrozen]}>En el congelador</Text>
+        </View>
+
+        <Text style={styles.dateValue}>
+          {dentro === null
+            ? 'Sin cuenta atrás'
+            : dentro === 0
+              ? 'Desde hoy'
+              : `${dentro} ${dentro === 1 ? 'día' : 'días'}`}
+        </Text>
+
+        {desde && dentro !== null && dentro > 0 ? (
+          <Text style={styles.frozenSince}>Lo congelaste {desde}.</Text>
+        ) : null}
+
         <Text style={styles.dateExplain}>
-          Mientras esté en el congelador no vence. Al descongelarlo, la cuenta se reanuda
-          {item.frozen_days > 0 ? ` (lleva ${item.frozen_days} días acumulados)` : ''}.
+          Mientras esté ahí no vence: la cuenta atrás está parada y se reanuda donde se quedó
+          al sacarlo.
+          {item.frozen_days > 0
+            ? ` De veces anteriores lleva ${item.frozen_days} ${
+                item.frozen_days === 1 ? 'día' : 'días'
+              } ya sumados a su fecha.`
+            : ''}
         </Text>
       </View>
     );
@@ -339,6 +389,7 @@ function FechaLimite({ item }: { item: ItemDetail }) {
 
 function Action({
   label,
+  icon,
   hint,
   onPress,
   busy,
@@ -346,6 +397,8 @@ function Action({
   primary,
 }: {
   label: string;
+  /** El icono de la acción: congelar es un copo, tirar una papelera. */
+  icon?: React.ReactNode;
   hint?: string;
   onPress: () => void;
   busy?: boolean;
@@ -368,6 +421,7 @@ function Action({
           busy && styles.actionBusy,
         ]}
       >
+        {icon}
         <Text
           style={[
             styles.actionText,
@@ -410,6 +464,7 @@ const useStyles = makeStyles((c) => ({
 
   dateCard: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.xs + 2 },
   dateCardNeutral: { backgroundColor: c.surface, borderColor: c.border },
+  dateCardFrozen: { backgroundColor: c.frostSoft, borderColor: c.frost },
   dateCardUrgent: { backgroundColor: c.expirySoft, borderColor: c.expiryLine },
   dateLabel: {
     fontSize: 10,
@@ -419,8 +474,11 @@ const useStyles = makeStyles((c) => ({
     color: c.inkMuted,
   },
   dateLabelUrgent: { color: c.expiry },
-  dateValue: { fontSize: 22, fontWeight: '600', color: c.ink },
+  dateLabelFrozen: { color: c.frostInk },
+  dateValue: { ...tabular, fontSize: 22, fontWeight: '600', color: c.ink },
   dateValueUrgent: { color: c.expiry },
+  frozenHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
+  frozenSince: { fontSize: 13, fontWeight: '600', color: c.frostInk },
   dateExplain: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
   dateExplainUrgent: { color: c.expiryInk },
 
@@ -437,7 +495,9 @@ const useStyles = makeStyles((c) => ({
   actionWrapper: { gap: 3 },
   action: {
     minHeight: touchTarget + 6,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md - 2,
     paddingHorizontal: space.lg,
     borderRadius: radius.md,
     borderWidth: 1,

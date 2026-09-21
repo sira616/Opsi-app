@@ -928,3 +928,37 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   Lo usan los dos traductores de errores, que antes tenían cada uno su versión.
 - Lección repetida: un error de conexión tiene que decir **a dónde** no llegó. Sin ese
   dato, todas las causas posibles se parecen entre sí.
+
+### 2026-09-21 (sesión 17) · Lo que se ve al usarla
+
+Tres cosas que solo salen usando la app con datos de verdad, no mirando capturas:
+
+- **La columna de la derecha bailaba.** Cada fila medía lo que midiera su frase —«Venció
+  hace 12 días» al lado de «Hoy»—, así que a partir del tercer elemento la lista se veía
+  torcida en un móvil. Ahora la etiqueta, la cifra y la unidad van separadas, en una
+  columna de ancho fijo: la cifra cae siempre en el mismo sitio. `diasRestantes()` devuelve
+  las tres piezas; `describeDaysLeft()` se queda para los lectores de pantalla, donde la
+  frase entera sí es lo correcto.
+- **Congelado no es «sin fecha».** La vista pone `days_left` a null mientras algo está
+  congelado —la cuenta atrás está parada—, y la fila lo enseñaba como «Sin fecha», que es
+  otra cosa completamente distinta. Ahora dice desde cuándo lleva dentro, contando desde
+  `frozen_at`. La tarjeta del detalle también: antes solo enseñaba `frozen_days`, que son
+  los tramos **anteriores** y vale 0 la primera vez que congelas algo. O sea, que quien
+  congelaba un alimento no veía ningún número.
+- **Los botones de acción eran siete rectángulos con texto**, indistinguibles de un
+  formulario de ajustes. Llevan icono en `duotone`: `Package` abrir, `ForkKnife` usar,
+  `Snowflake` congelar, `Drop` descongelar, `CheckCircle` terminar, `Trash` tirar.
+
+Y una promesa incumplida que salió al mirar: el comentario de `ItemRow` decía que
+caducidad y consumo preferente **no se pintan igual**, pero la fila ponía «Preferente»
+para las dos porque nunca llegó a pedir `date_kind`. Ahora lo pide y distingue «Caduca»
+de «Preferente», que es justo la diferencia entre seguridad y calidad.
+
+**Una comprobación nueva que cierra un agujero real.** `src/api/inventory.ts` afirma sus
+tipos con `as unknown as` porque `database.types.ts` necesita Docker. Si una columna se
+renombrara, TypeScript compilaría y la app reventaría en ejecución. `check-schema` lee
+ahora la lista de columnas del propio fichero y la comprueba contra la vista. Probada en
+negativo: con una columna inventada, falla.
+
+**`frostInk`.** Azul sobre el fondo azul suave se quedaba en 3.91:1 en modo claro. Se
+añade el token que faltaba, igual que ya existían `brandInk` y `expiryInk`.

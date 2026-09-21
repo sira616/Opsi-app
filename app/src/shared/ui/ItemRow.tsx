@@ -1,11 +1,19 @@
 import { Link } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
+import { Snowflake } from 'phosphor-react-native';
+
 import type { PriorityItem } from '@/api/inventory';
 import { IconoComida } from '@/shared/lib/iconos-comida';
-import { describeDateSource, describeDaysLeft, describeReason } from '@/shared/lib/dates';
+import {
+  describeDateSource,
+  describeDaysLeft,
+  describeReason,
+  diasDesde,
+  diasRestantes,
+} from '@/shared/lib/dates';
 import { formatQuantity } from '@/shared/lib/units';
-import { makeStyles, radius, space, useTheme } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, tabular, useTheme } from '@/shared/theme/tokens';
 
 const STATE_LABEL: Record<PriorityItem['state'], string> = {
   closed: 'Cerrado',
@@ -39,7 +47,6 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   const styles = useStyles();
   const c = useTheme();
   const urgent = item.priority === 'high';
-  const isExpiry = item.effective_date_source === 'package' && item.effective_date_reason === 'label';
 
   const reason = describeReason(item.effective_date_reason);
   const source = describeDateSource(item.effective_date_source);
@@ -47,20 +54,30 @@ export function ItemRow({ item }: { item: PriorityItem }) {
 
   // El icono sale del nombre: nadie lo elige. Es lo que convierte una lista de
   // texto en algo que apetece mirar, sin pedirle nada al usuario.
-  const tono = urgent ? c.expiry : item.state === 'frozen' ? c.frost : c.brand;
+  const congelado = item.state === 'frozen';
+  const tono = urgent ? c.expiry : congelado ? c.frost : c.brand;
 
   return (
     <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}, ${describeDaysLeft(item.days_left).toLowerCase()}`}
+        accessibilityLabel={`${item.name}, ${
+          congelado
+            ? `congelado ${describeCongelado(item.frozen_at)}`
+            : describeDaysLeft(item.days_left).toLowerCase()
+        }`}
         style={({ pressed }) => [
           styles.card,
-          item.effective_limit_date === null && styles.cardUndated,
+          item.effective_limit_date === null && !congelado && styles.cardUndated,
           pressed && styles.cardPressed,
         ]}
       >
-      <View style={[styles.avatar, { backgroundColor: urgent ? c.expirySoft : c.brandSoft }]}>
+      <View
+        style={[
+          styles.avatar,
+          { backgroundColor: urgent ? c.expirySoft : congelado ? c.frostSoft : c.brandSoft },
+        ]}
+      >
         <IconoComida nombre={item.name} size={22} color={tono} weight="duotone" />
       </View>
 
@@ -78,18 +95,107 @@ export function ItemRow({ item }: { item: PriorityItem }) {
         {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
       </View>
 
-      <View style={styles.dateBlock}>
-        <Text style={[styles.dateLabel, urgent && isExpiry && styles.dateLabelUrgent]}>
-          {isExpiry ? 'Preferente' : reason ? 'Límite' : 'Preferente'}
-        </Text>
-        <Text style={[styles.dateValue, urgent && styles.dateValueUrgent]}>
-          {describeDaysLeft(item.days_left)}
-        </Text>
-      </View>
+      <Contador item={item} urgent={urgent} />
       </Pressable>
     </Link>
   );
 }
+
+/**
+ * La columna de la derecha.
+ *
+ * Tiene ANCHO FIJO, y eso es lo único que importa aquí: con la frase entera
+ * («Venció hace 12 días» al lado de «Hoy») cada fila medía distinto y a partir
+ * del tercer elemento la lista se veía torcida en un móvil. El número va
+ * separado de su unidad para que la cifra caiga siempre en el mismo sitio.
+ */
+function Contador({ item, urgent }: { item: PriorityItem; urgent: boolean }) {
+  const styles = useStyles();
+  const c = useTheme();
+
+  // Congelado no es «sin fecha»: es la cuenta atrás parada. Decir desde cuándo
+  // lo lleva es lo que convierte ese estado en información útil.
+  if (item.state === 'frozen') {
+    const dias = diasDesde(item.frozen_at);
+    return (
+      <View style={styles.dateBlock}>
+        <View style={styles.frozenLabel}>
+          <Snowflake size={11} color={c.frost} weight="fill" />
+          <Text style={[styles.dateLabel, styles.dateLabelFrozen]} numberOfLines={1}>
+            Parado
+          </Text>
+        </View>
+        {dias === null ? (
+          <Text style={[styles.dateValue, styles.dateValueFrozen]} numberOfLines={1}>
+            —
+          </Text>
+        ) : (
+          <>
+            <Text style={[styles.dateValue, styles.dateValueFrozen]} numberOfLines={1}>
+              {dias === 0 ? 'Hoy' : `${dias}`}
+            </Text>
+            <Text style={styles.dateUnit} numberOfLines={1}>
+              {dias === 0 ? 'lo congelaste' : dias === 1 ? 'día dentro' : 'días dentro'}
+            </Text>
+          </>
+        )}
+      </View>
+    );
+  }
+
+  const { etiqueta, valor, unidad, vencido } = diasRestantes(item.days_left, etiquetaFecha(item));
+  const rojo = vencido || urgent;
+
+  return (
+    <View style={styles.dateBlock}>
+      <Text style={[styles.dateLabel, rojo && styles.dateLabelUrgent]} numberOfLines={1}>
+        {etiqueta}
+      </Text>
+      <Text style={[styles.dateValue, rojo && styles.dateValueUrgent]} numberOfLines={1}>
+        {valor}
+      </Text>
+      {unidad ? (
+        <Text style={[styles.dateUnit, rojo && styles.dateUnitUrgent]} numberOfLines={1}>
+          {unidad}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Qué clase de fecha se está enseñando.
+ *
+ * «Caduca» y «Preferente» NO son sinónimos: la primera es seguridad
+ * alimentaria y pasarse es un riesgo; la segunda es calidad y pasarse es, como
+ * mucho, peor sabor. La fila lo decía siempre igual, y era justo la distinción
+ * que este proyecto se comprometió a no borrar.
+ *
+ * «Límite» es para las fechas que calculamos nosotros —tras abrir, tras
+ * descongelar—, que no vienen del envase. De cuál se trata lo dice la nota que
+ * va bajo el nombre.
+ */
+function etiquetaFecha(item: PriorityItem): string {
+  if (item.effective_date_reason !== 'label') return 'Límite';
+  return item.date_kind === 'expiry' ? 'Caduca' : 'Preferente';
+}
+
+function describeCongelado(frozenAt: string | null): string {
+  const dias = diasDesde(frozenAt);
+  if (dias === null) return 'sin fecha';
+  if (dias === 0) return 'hoy';
+  if (dias === 1) return 'desde ayer';
+  return `desde hace ${dias} días`;
+}
+
+/**
+ * El ancho de la columna de la derecha.
+ *
+ * Cabe «PREFERENTE» en versalitas y «Mañana», que son las dos cadenas más
+ * largas que puede haber ahí. Es `minWidth` y no `width` para que siga
+ * funcionando si el sistema agranda la letra.
+ */
+const ANCHO_CONTADOR = 74;
 
 const useStyles = makeStyles((c) => ({
   card: {
@@ -113,19 +219,34 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
     marginTop: 1,
   },
-  main: { flex: 1, gap: 3 },
+  // minWidth: 0 deja que el bloque central SE ENCOJA. Sin esto, un nombre
+  // largo empuja la columna de la derecha fuera de la tarjeta en vez de
+  // recortarse, que es el fallo clásico de flex en React Native.
+  main: { flex: 1, minWidth: 0, gap: 3 },
   name: { fontSize: 15.5, fontWeight: '600', color: c.ink },
   meta: { fontSize: 12.5, color: c.inkMuted },
   footnote: { fontSize: 11, color: c.inkFaint },
-  dateBlock: { alignItems: 'flex-end', gap: 1 },
+
+  dateBlock: {
+    minWidth: ANCHO_CONTADOR,
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    gap: 1,
+  },
   dateLabel: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.7,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
     color: c.inkMuted,
   },
   dateLabelUrgent: { color: c.expiry },
-  dateValue: { fontSize: 15.5, fontWeight: '600', color: c.ink },
+  dateLabelFrozen: { color: c.frost },
+  dateValue: { ...tabular, fontSize: 17, fontWeight: '700', color: c.ink, lineHeight: 21 },
   dateValueUrgent: { color: c.expiry },
+  dateValueFrozen: { color: c.frost },
+  dateUnit: { fontSize: 10.5, color: c.inkFaint },
+  dateUnitUrgent: { color: c.expiry },
+
+  frozenLabel: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 }));

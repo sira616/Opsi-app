@@ -75,6 +75,8 @@ elementos de interfaz a 3:1. Los números de las tablas son reales, no aspiracio
 | `expirySoft` | `#FBE8E4` | Su fondo suave | — |
 | `warn` | `#A46718` | Prioridad media | 4.63:1 |
 | `frost` | `#2A7BB8` | Congelado | 4.54:1 |
+| `frostSoft` | `#E2F0FA` | Su fondo suave | — |
+| `frostInk` | `#1D5580` | Texto sobre `frostSoft` (`frost` ahí se queda en 3.9:1) | 6.79:1 |
 
 ### Modo oscuro
 
@@ -96,6 +98,7 @@ porque los colores oscuros desaparecen sobre fondo oscuro.
 | **`expiry`** | **`#FF8A75`** | 7.28:1 |
 | `warn` | `#F2B65A` | 9.25:1 |
 | `frost` | `#7CC4F2` | 8.79:1 |
+| `frostInk` | `#B4DCF7` | 10.72:1 sobre `frostSoft` |
 
 ### El código de color, que es lo importante
 
@@ -129,7 +132,7 @@ Dos familias, las dos de Google Fonts con licencia **OFL 1.1** (libre, también 
 | Secundario | 13 / 400 | Jakarta |
 | Nota | 11.5 / 400 | Jakarta |
 | Etiqueta de sección | 11 / 700, VERSALITAS, tracking 0.1em | Jakarta |
-| Dato grande (días) | 17 / 600, cifras tabulares | Jakarta |
+| Dato grande (días) | 17 / 700, cifras tabulares | Jakarta |
 
 > **Cifras tabulares** en cantidades y fechas: sin ellas, una lista de números baila al
 > actualizarse porque el `1` es más estrecho que el `8`.
@@ -166,17 +169,23 @@ npx expo install phosphor-react-native react-native-svg
 | Pestaña Opsi | `ChatCircleDots` | ídem |
 | Pestaña Ajustes | `GearSix` | ídem |
 | Añadir | `Plus` | `bold` |
-| Abrir | `LockSimpleOpen` | `regular` |
-| Usar cantidad | `Scales` | `regular` |
-| Congelar | `Snowflake` | `regular` |
-| Descongelar | `Drop` | `regular` |
-| Terminar | `Check` | `bold` |
-| Tirar | `Trash` | `regular` |
-| Caducidad | `Warning` | `fill` |
+| Abrir | `Package` | `duotone` |
+| Usar cantidad | `ForkKnife` | `duotone` |
+| Descontar | `Minus` | `bold` |
+| Congelar | `Snowflake` | `duotone` |
+| Descongelar | `Drop` | `duotone` |
+| Terminar | `CheckCircle` | `duotone` |
+| Tirar | `Trash` | `duotone` |
+| Cuenta atrás parada | `Snowflake` | `fill`, 11px, en la fila |
 | Escáner | `Barcode` | `regular` |
 
 > Los iconos **nunca van solos** en una acción destructiva. Un cubo de basura sin la
-> palabra «Tirar» al lado se confunde con «vaciar» o «borrar todo».
+> palabra «Tirar» al lado se confunde con «vaciar» o «borrar todo». Por eso todos los
+> botones de la pantalla de detalle llevan icono **y** texto, alineados a la izquierda:
+> el icono da el reconocimiento de un vistazo, la palabra quita la ambigüedad.
+>
+> `duotone` y no `regular`: con una sola línea, siete botones apilados se leen como una
+> lista de ajustes. El relleno tenue del duotone les da peso de acción sin gritar.
 
 ### Un icono por alimento
 

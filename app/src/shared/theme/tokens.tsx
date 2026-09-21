@@ -54,6 +54,8 @@ export type Palette = {
   /** Congelado: la cuenta atrás está parada. */
   frost: string;
   frostSoft: string;
+  /** Texto sobre `frostSoft`. `frost` ahí se queda en 3.9:1. */
+  frostInk: string;
 };
 
 const CLARO: Palette = {
@@ -78,6 +80,7 @@ const CLARO: Palette = {
   warningSoft: '#FBF0DC',
   frost: '#2A7BB8',
   frostSoft: '#E2F0FA',
+  frostInk: '#1D5580',
 };
 
 const OSCURO: Palette = {
@@ -102,6 +105,7 @@ const OSCURO: Palette = {
   warningSoft: '#312716',
   frost: '#7CC4F2',
   frostSoft: '#17262F',
+  frostInk: '#B4DCF7',
 };
 
 // ── Preferencia de aspecto ────────────────────────────────────────────────
@@ -226,8 +230,13 @@ export function elevation(dark: boolean) {
   } as const;
 }
 
-/** Cifras que no bailan al actualizarse. Para cantidades y fechas. */
-export const tabular = { fontVariant: ['tabular-nums'] } as const;
+/**
+ * Cifras que no bailan al actualizarse. Para cantidades y fechas.
+ *
+ * Tipado como TextStyle y sin `as const`: con el literal de solo lectura no se
+ * podía usar dentro de makeStyles, que es el único sitio donde hace falta.
+ */
+export const tabular: TextStyle = { fontVariant: ['tabular-nums'] };
 
 type Styles = Record<string, ViewStyle | TextStyle | ImageStyle>;
 

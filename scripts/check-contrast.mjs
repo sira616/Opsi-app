@@ -67,6 +67,10 @@ function casos(p) {
     ['texto sobre el fondo de aviso', p.inkMuted, p.warningSoft, 4.5],
     ['icono de aviso sobre su fondo', p.warning, p.warningSoft, 3.0],
     ['congelado sobre tarjeta', p.frost, p.surface, 4.5],
+    ['texto de congelado sobre su fondo', p.frostInk, p.frostSoft, 4.5],
+    ['icono de congelado sobre su fondo', p.frost, p.frostSoft, 3.0],
+    ['texto sobre el fondo de congelado', p.ink, p.frostSoft, 4.5],
+    ['nota sobre el fondo de congelado', p.inkMuted, p.frostSoft, 4.5],
     ['borde de control sobre tarjeta', p.borderStrong, p.surface, 3.0],
   ];
 }
