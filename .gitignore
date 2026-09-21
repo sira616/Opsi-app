@@ -27,9 +27,6 @@ app/android/
 *.mobileprovision
 *.orig.*
 
-# Tipos generados desde el esquema (ver docs/internal/BITACORA.md, D-05)
-app/src/lib/database.types.ts
-
 # Sistema
 .DS_Store
 *.log

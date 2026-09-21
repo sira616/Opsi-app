@@ -42,6 +42,11 @@ create table public.products (
 
   image_url             text,
 
+  -- Categorías de Open Food Facts, p. ej. {'en:dairies','en:yogurts'}. Sirven
+  -- para buscar la conservación tras apertura por categoría cuando el producto
+  -- no trae la suya (ver open_shelf_life_reference).
+  categories_tags       text[],
+
   data_source           text not null default 'user'
                         check (data_source in ('user', 'openfoodfacts')),
 
@@ -78,6 +83,10 @@ create index products_household_id_idx
 
 -- Búsqueda por nombre sin distinguir mayúsculas ni acentos, para el alta manual.
 create index products_name_idx on public.products (lower(name));
+
+-- Para el "¿alguna de mis categorías está en la tabla de referencia?" de la
+-- vista de prioridad, que es una búsqueda por pertenencia en un array.
+create index products_categories_idx on public.products using gin (categories_tags);
 
 create trigger products_touch_updated_at
   before update on public.products

@@ -54,6 +54,13 @@ const AUTH_DOUBLE = `
   create function auth.uid() returns uuid language sql stable as $fn$
     select nullif(current_setting('request.jwt.claims', true)::json ->> 'sub', '')::uuid;
   $fn$;
+
+  -- Supabase concede esto en su instalación, y sin ello cualquier función que
+  -- llame a auth.uid() como el usuario falla con "permission denied for schema
+  -- auth". Omitirlo hacía que este doble fuera MÁS restrictivo que el Supabase
+  -- real y produjera fallos que allí no existen.
+  grant usage on schema auth to anon, authenticated, service_role;
+  grant execute on function auth.uid() to anon, authenticated, service_role;
 `;
 
 let passed = 0;

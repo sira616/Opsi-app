@@ -30,10 +30,32 @@ La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 | `inventory_events` | Registro **inmutable**: sin UPDATE ni DELETE, por diseño | select, insert |
 | `shopping_list_items` | La lista de la compra | las cuatro |
 | `user_settings` | Zona horaria, hora del aviso, token push. **No cuelga del hogar** | select, insert, update |
+| `open_shelf_life_reference` | Días orientativos tras abrir, por categoría. Solo lectura | select |
+| `inventory_with_priority` | *Vista*: fecha límite efectiva, su motivo y la prioridad | select |
 
 Todas las políticas se apoyan en una sola función, `is_household_member()`, que es
 `SECURITY DEFINER` por necesidad: sin eso, usarla dentro de la política de
 `household_members` provocaría recursión infinita.
+
+## Las acciones
+
+Seis funciones RPC, una por acción. Cada una actualiza el elemento y escribe su evento
+**en la misma transacción**, y son `SECURITY INVOKER`, así que la RLS decide a qué
+elementos llegan:
+
+```sql
+select public.open_item(id);
+select public.use_quantity(id, 400);     -- en unidad base: g, ml o piezas
+select public.freeze_item(id);
+select public.thaw_item(id);
+select public.finish_item(id);
+select public.discard_item(id, 'se puso malo');
+```
+
+> [!WARNING]
+> `inventory_with_priority` lleva `with (security_invoker = true)`, y **no es opcional**.
+> Una vista normal se ejecuta con los permisos de su propietario y atraviesa la RLS: sin
+> esa línea devolvería el inventario de todos los hogares. Hay un test que lo comprueba.
 
 ## Reglas de esta mitad
 

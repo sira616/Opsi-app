@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-19** (sesión 4)
+> Última actualización: **2026-09-21** (sesión 5)
 
 ---
 
@@ -27,39 +27,40 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
-**2026-09-19 (sesión 3)** — Bloques B y C terminados: el esquema completo, la RLS y el
-trigger de alta, con tests. **Sigue sin haber app.**
+**2026-09-21 (sesión 5)** — Fase 0 cerrada salvo la app, y **el backend de la fase 1 está
+hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
 
 | Área | Qué hay hoy |
 |---|---|
-| Repositorio | Monorepo en `main`: `app/` + `supabase/` + `docs/` + `scripts/` |
-| Supabase | CLI 2.117.0 fijada, `config.toml` ajustado a Opsi |
-| Esquema | **7 migraciones**, 7 tablas, 8 tipos enumerados, RLS en todas |
-| Seguridad | `is_household_member()` + 20 políticas + trigger de hogar personal |
-| Auth | Correo y contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)); sin dependencia de correo para entrar |
-| Tests | 2 ficheros pgTAP (43 aserciones) + `npm run db:check` (81 comprobaciones) |
-| Datos | Seed con 10 productos ficticios de catálogo global |
+| Esquema | **10 migraciones**, 8 tablas, 10 tipos enumerados, RLS en todas |
+| Seguridad | `is_household_member()` + 21 políticas + trigger de hogar personal |
+| Auth | Correo y contraseña; sin dependencia de correo para entrar |
+| Fase 1 | 6 acciones RPC + vista `inventory_with_priority` con el tope de 24 h |
+| CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
+| Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
 | App Expo | **Nada.** Sigue siendo la tarea D1 |
 
 ### Verificado vs. no verificado
 
 | | |
 |---|---|
-| ✅ **Verificado aquí** | Las 7 migraciones aplican en orden sobre Postgres 18 · el aislamiento entre dos cuentas funciona · el registro de eventos es inmutable · las restricciones rechazan lo que deben · **los dos ficheros pgTAP se ejecutan enteros** |
-| ⚠️ **Sin verificar** | Nada se ha ejecutado contra Supabase real: **este contenedor no tiene daemon de Docker**. Falta `db:start`, `db:reset` y `db:test` |
+| ✅ **Verificado aquí** | Las 10 migraciones aplican · el aislamiento entre hogares funciona, **también a través de la vista** · el tope de 24 h gana a la fecha reanudada · las 6 acciones dejan su evento · los 3 ficheros pgTAP se ejecutan enteros |
+| ⚠️ **Sin verificar** | Nada contra Supabase real (**sin daemon de Docker aquí**) · la CI nunca ha corrido · el campo de conservación de Open Food Facts (ver [D-15](#d-15--conservación-tras-apertura-producto--categoría--nada--2026-09-21-cierra-q3)) |
 
-**Cómo se verificó sin Docker:** `scripts/check-schema.mjs` levanta un Postgres real
-compilado a WebAssembly ([PGlite](https://pglite.dev)), aplica las migraciones y corre
-las aserciones. Los ficheros de `supabase/tests/` también se ejecutan ahí, con dobles de
-las funciones de pgTAP, así que se validan de verdad y no solo «parecen correctos».
+### Tres fallos que cazó `db:check` esta sesión
 
-Diferencias asumidas frente al Supabase real, que es lo que queda por comprobar:
+Vale la pena tenerlos presentes, porque los tres se habrían ido a producción:
 
-- El esquema `auth` es un doble mínimo (`users` + `uid()`), no GoTrue. **El riesgo real
-  está aquí**: si `auth.users` tiene columnas NOT NULL que los tests no rellenan, los
-  INSERT de los ficheros pgTAP fallarán. Es un arreglo de una línea, pero hay que verlo.
-- PGlite trae Postgres 18; `config.toml` fija la 17.
-- No hay pgTAP real, ni Storage, ni Realtime, ni Edge Functions.
+1. **`require_item` revocada de más.** Las acciones son SECURITY INVOKER, así que corren
+   como el usuario; si él no puede ejecutar la función auxiliar, no puede ejecutar ninguna
+   acción. Fallaba todo el bloque de acciones.
+2. **`CASE` devolviendo `text` en una columna enum.** En `use_quantity`, los literales
+   `'finished'` / `'partially_consumed'` se resolvían como `text` y Postgres rechazaba el
+   UPDATE entero. Hacía falta castear a `public.item_state`.
+3. **Mi doble de `auth` era más restrictivo que Supabase.** Le faltaba
+   `grant usage on schema auth to authenticated`, que Supabase sí concede. Producía un
+   fallo que en el Supabase real no existe — el tipo de divergencia que obliga a seguir
+   ejecutando `db:test` de verdad.
 
 ## 2. Decisiones tomadas
 
@@ -264,6 +265,96 @@ sin verificar** mientras `enable_confirmations` siga desactivado.
 **Q7 no desaparece, baja de prioridad.** Sigue haciendo falta un SMTP real antes de
 publicar, para la recuperación de contraseña y para verificar los correos. Pero ya no
 bloquea el desarrollo.
+
+### D-14 · Tope de 24 h tras descongelar · 2026-09-21 *(corrige D-12, cierra Q8)*
+
+La fecha límite efectiva de algo descongelado es **la menor** entre la fecha reanudada y
+`descongelado + 24 h`. En la práctica gana casi siempre el tope.
+
+**Lo que dicen las fuentes, que no coinciden:**
+
+| Fuente | Qué dice |
+|---|---|
+| [FSA (Reino Unido)](https://www.food.gov.uk/safety-hygiene/how-to-chill-freeze-and-defrost-food-safely) | Consumir **en 24 h** tras descongelar del todo. No recongelar salvo que se cocine antes |
+| [AESAN / agencias españolas](https://www.aesan.gob.es/AECOSAN/web/noticias_y_actualizaciones/noticias/2025/alimentos_refrigerados.htm) | Descongelar en nevera y consumir en **24–48 h**, cuanto antes mejor |
+| [USDA FSIS (EE. UU.)](https://ask.fsis.usda.gov/article/How-long-can-meat-and-poultry-remain-in-the-refrigerator-once-thawed) | Más permisivo y **por categoría**: carne picada 1–2 días, piezas de vacuno/cerdo/cordero 3–5 días. Permite recongelar si se descongeló en nevera |
+
+**Por qué 24 h y no la tabla del USDA.** Tres razones, en orden:
+
+1. Opsi es una app española y AESAN es la autoridad que aplica. Coincide con la FSA.
+2. Los plazos del USDA son **por categoría de alimento**, y Opsi no sabe con fiabilidad la
+   categoría de un elemento dado de alta a mano. Aplicar «3–5 días» a algo que resulta ser
+   pescado sería justo el error que este proyecto no quiere cometer.
+3. El principio «seguridad antes que desperdicio» rompe los empates hacia el plazo corto.
+
+**Dónde vive:** en la vista `inventory_with_priority`, como una de las tres candidatas.
+El número está en un solo sitio (`thawed_at::date + 1`), así que afinarlo por categoría
+el día que haya categorías fiables es un cambio localizado.
+
+> **Lo que este tope NO hace:** no distingue tipos de alimento. Un pan descongelado y una
+> merluza descongelada reciben el mismo plazo. Es conservador para el pan y correcto para
+> la merluza, y ese desequilibrio es deliberado.
+
+### D-15 · Conservación tras apertura: producto → categoría → nada · 2026-09-21 *(cierra Q3)*
+
+Tres sitios, en orden, y el primero que conteste gana:
+
+1. `products.open_shelf_life_days` — lo que el catálogo diga **para ese producto**.
+2. `open_shelf_life_reference`, por categoría de Open Food Facts. Si encajan varias, gana
+   **la más corta**.
+3. Nada. Y «sin fecha» es una respuesta legítima.
+
+Todo lo que salga de 1 o 2 se muestra como `date_source = 'reference'`, es decir
+**orientativo**. Lo que diga el envase manda siempre.
+
+> **Un aviso sobre la premisa de Q3.** La respuesta fue «se busca en la base de datos de
+> los catálogos la estimación de días abierto por producto». **No he podido confirmar que
+> Open Food Facts tenga ese dato de forma estructurada y fiable.** Busqué el campo
+> `conservation_conditions` en su taxonomía de categorías y en el esquema de producto de su
+> API y no aparece; el proxy de red del entorno me impidió consultar la API en vivo para
+> salir de dudas.
+>
+> Lo que sí sé: OFF tiene un campo de texto libre de condiciones de conservación, en el
+> idioma del envase, escrito por voluntarios y **muy disperso**. De ahí no sale un número
+> fiable sin parsear frases.
+>
+> Por eso el paso 2 existe: es el plan B que hace que el sistema funcione aunque el
+> catálogo no traiga nada. **Queda por verificar contra la API en vivo** cuando se haga la
+> fase 2, y ahí se decidirá si merece la pena parsear ese texto.
+
+Los valores sembrados en `open_shelf_life_reference` son **conservadores y provisionales**:
+recogen práctica común de conservación en frigorífico, no una fuente autorizada. Están
+marcados como tales en la columna `source` y pendientes de revisión.
+
+### D-16 · Los tipos generados se versionan · 2026-09-21 *(cierra Q2)*
+
+`app/src/lib/database.types.ts` sale de `.gitignore` y se commitea. La CI ejecuta
+`npm run types` y falla si el fichero cambia.
+
+**Por qué así y no regenerándolos en cada trabajo:** el trabajo de typecheck de la app no
+necesita entonces ni Docker ni base de datos, con lo que tarda segundos en vez de minutos.
+Y quien clona el repositorio tiene tipos válidos sin levantar nada. El riesgo de esta
+opción —olvidarse de regenerarlos tras cambiar el esquema— es exactamente lo que caza la
+comprobación de la CI.
+
+**Pendiente:** el fichero **todavía no existe**, porque generarlo exige Docker. La
+comprobación de la CI está condicionada a que exista `app/package.json`, así que no pone
+nada en rojo mientras no haya app. El primer `npm run types` en una máquina con Docker lo
+crea, y ahí hay que commitearlo.
+
+### D-17 · Ollama en desarrollo; el modelo de producción sin decidir · 2026-09-21 *(aplaza Q4)*
+
+Las pruebas de la fase 5 se harán contra Ollama en local. No se cierra nada sobre el
+modelo de producción.
+
+**Consecuencia para el diseño, y es la razón de anotarlo ahora:** la Edge Function
+`opsi-chat` tendrá que hablar con el modelo **detrás de una costura**, no llamando a un
+SDK concreto desde su lógica. El bucle de *tool use* y la ejecución de herramientas son
+nuestros; el cliente del modelo, intercambiable por variable de entorno.
+
+Ojo con lo que esto no resuelve: el *tool use* de Ollama y el de la API de Claude no son
+idénticos en formato ni en fiabilidad. Que funcione en Ollama no demostrará que funciona
+en producción, y viceversa. Sirve para desarrollar sin gastar, no para validar.
 
 ## 3. Convenciones
 
@@ -497,9 +588,9 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 | # | Pregunta | Por qué importa | Cuándo hay que decidirlo |
 |:--:|---|---|---|
 | ~~Q1~~ | ~~¿Magic link o contraseña?~~ | **Cerrada: magic link** ([D-06](#d-06--magic-link-como-única-entrada--2026-09-19-cierra-q1)) | ✅ |
-| Q2 | ¿Se versionan los tipos generados? | Ya no afecta al día a día (monorepo), pero sí a la CI: regenerarlos es lento y no versionarlos hace que se olviden | Fase 0 (E4) |
-| Q3 | ¿De dónde salen las fechas de conservación tras apertura? | Es el riesgo #1 del roadmap. Sin fuente, todo es `estimacion` | Fase 1 |
-| Q4 | ¿Qué modelo de Claude para chat y cuál para tickets? | Coste. El roadmap dice «modelo pequeño para parseo» | Fase 5 / 6 |
+| ~~Q2~~ | ~~¿Se versionan los tipos generados?~~ | **Cerrada: sí, con comprobación en CI** ([D-16](#d-16--los-tipos-generados-se-versionan--2026-09-21-cierra-q2)) | ✅ |
+| ~~Q3~~ | ~~¿De dónde salen las fechas de conservación tras apertura?~~ | **Cerrada: producto → categoría → nada** ([D-15](#d-15--conservación-tras-apertura-producto--categoría--nada--2026-09-21-cierra-q3)). Queda verificar el campo de Open Food Facts en la fase 2 | ⚠️ |
+| Q4 | ¿Qué modelo en producción? | **Aplazada**: en desarrollo se usa Ollama ([D-17](#d-17--ollama-en-desarrollo-el-modelo-de-producción-sin-decidir--2026-09-21-aplaza-q4)). La costura tiene que estar puesta desde el principio | Fase 5 |
 | ~~Q5~~ | ~~¿Cuántas unidades permite el MVP?~~ | **Cerrada: masa, volumen y unidades** ([D-07](#d-07--masa-volumen-y-unidades--2026-09-19-cierra-q5)) | ✅ |
 | ~~Q6~~ | ~~¿Qué pasa con un elemento congelado?~~ | **Cerrada: se reanuda** ([D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6)) | ✅ |
 | Q7 | ¿Qué SMTP en producción? | Ya no bloquea: se entra con contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)). Sigue haciendo falta para recuperar contraseña y verificar correos | Antes de publicar |
@@ -553,3 +644,14 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   sin ningún correo configurado, y probar el login en Expo Go sin development build.
 - 8 comprobaciones nuevas sobre congelado y descongelado. **81 en total, todas en verde.**
 - Sigue sin ejecutarse nada contra Supabase real.
+
+### 2026-09-21 (sesión 5) · Fase 1 del backend y cierre de preguntas
+
+- **Q8 → [D-14](#d-14--tope-de-24-h-tras-descongelar--2026-09-21-corrige-d-12-cierra-q8)**: tope de 24 h tras descongelar, con las fuentes contrastadas y la
+  divergencia del USDA documentada. Corrige el comportamiento inseguro de D-12 a secas.
+- **Q3 → [D-15](#d-15--conservación-tras-apertura-producto--categoría--nada--2026-09-21-cierra-q3)**, **Q2 → [D-16](#d-16--los-tipos-generados-se-versionan--2026-09-21-cierra-q2)**, **Q4 → [D-17](#d-17--ollama-en-desarrollo-el-modelo-de-producción-sin-decidir--2026-09-21-aplaza-q4)** (aplazada).
+- **Fase 1 del backend hecha**: vista `inventory_with_priority` con `security_invoker`, y
+  seis acciones RPC que actualizan el elemento y escriben su evento en una transacción.
+- **CI escrita**: tres trabajos. El rápido sin Docker da señal en segundos.
+- 32 comprobaciones nuevas. **117 en total, todas en verde.**
+- Abierta **Q9**: la vista calcula «hoy» en UTC.

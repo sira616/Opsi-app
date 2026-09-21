@@ -63,6 +63,8 @@ y el mismo brick abierto hace tres días en la nevera. Son el mismo *producto*, 
    **siempre guarda su origen**: envase, usuario, fabricante, referencia o estimación.
 3. **Cambia de estado con el uso.** Abrir, usar cantidad, congelar, descongelar, terminar,
    tirar. Cada acción recalcula la fecha límite efectiva y **registra un evento**.
+   Congelar **para** la cuenta atrás y descongelar la reanuda — pero lo descongelado tiene
+   un tope de **24 h**, porque ahí manda la seguridad y no el aprovechamiento.
 4. **La vista «Consumir primero»** ordena todo por esa fecha límite efectiva, agrupado en
    prioridad alta / media / sin urgencia / sin fecha.
 5. **Un único aviso diario** (a la hora que elija el usuario) resume lo prioritario. Si no
@@ -131,6 +133,7 @@ Ocho piezas, todas colgando de `household_id`:
 | `inventory_events` | Registro inmutable de cada acción (abrir, usar, tirar…) |
 | `shopping_list_items` | La lista de la compra |
 | `user_settings` | Zona horaria, hora del aviso, token de push, preferencias |
+| `open_shelf_life_reference` | Días orientativos de conservación tras abrir, por categoría |
 | `inventory_with_priority` | *Vista*: fecha límite efectiva + prioridad calculada |
 
 > [!IMPORTANT]
@@ -205,11 +208,17 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] Esquema inicial: 7 tablas, con RLS en todas
 - [x] Trigger de hogar personal al registrarse
 - [x] Tests de aislamiento entre dos cuentas y de restricciones del dominio
-- [ ] Ejecutarlos contra Supabase real (`npm run db:test`, necesita Docker)
+- [x] CI con tres trabajos
+- [ ] Ejecutarlo todo contra Supabase real (`npm run db:test`, necesita Docker)
 - [ ] App Expo y pantalla de login
-- [ ] CI
 
-El esquema pasa 73 comprobaciones con `npm run db:check`, que corre sin Docker.
+**Fase 1 · el backend ya está**
+
+- [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
+- [x] Vista `inventory_with_priority` con la fecha límite efectiva
+- [ ] Las tres pantallas: alta manual, detalle y «Consumir primero»
+
+El esquema pasa 117 comprobaciones con `npm run db:check`, que corre sin Docker.
 
 Empezar por [`docs/SETUP.md`](docs/SETUP.md).
 

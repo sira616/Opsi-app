@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo cancela la ejecución anterior de la misma rama: no tiene
+# sentido gastar minutos validando un commit ya superado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Rápido y sin Docker: da señal en segundos ───────────────────────────
+  esquema:
+    name: Esquema (sin Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Aplicar migraciones y comprobar aislamiento
+        run: npm run db:check
+
+  # ── El veredicto de verdad: Supabase real en Docker ─────────────────────
+  base-de-datos:
+    name: Base de datos (Supabase real)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # La CLI viene fijada en package.json: la CI usa exactamente la misma
+      # versión que se usa en local.
+      - name: Levantar Supabase
+        run: npm run db:start
+
+      - name: Aplicar migraciones y seed
+        run: npm run db:reset
+
+      - name: Tests pgTAP
+        run: npm run db:test
+
+      # Q2: los tipos se versionan y aquí se comprueba que siguen al día. Es
+      # más rápido que regenerarlos en cada trabajo, y caza el despiste de
+      # cambiar el esquema sin regenerarlos.
+      - name: Los tipos generados siguen al día
+        run: |
+          if [ ! -f app/package.json ]; then
+            echo "::notice::Todavía no hay app Expo: no hay tipos que comprobar."
+            exit 0
+          fi
+          npm run types
+          if [ -n "$(git status --porcelain app/src/lib/database.types.ts)" ]; then
+            echo "::error::El esquema cambió y los tipos no. Ejecuta 'npm run types' y haz commit del resultado."
+            git diff -- app/src/lib/database.types.ts | head -60
+            exit 1
+          fi
+
+      - name: Parar Supabase
+        if: always()
+        run: npm run db:stop
+
+  # ── La app, cuando exista ───────────────────────────────────────────────
+  app:
+    name: App (typecheck y lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck y lint
+        run: |
+          if [ ! -f app/package.json ]; then
+            echo "::notice::Todavía no hay app Expo (tarea D1). Nada que comprobar."
+            exit 0
+          fi
+          npm run --workspace app typecheck
+          npm run --workspace app lint
