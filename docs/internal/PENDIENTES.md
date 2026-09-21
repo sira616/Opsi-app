@@ -158,13 +158,15 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 
 | | Qué falta | Notas |
 |:--:|---|---|
-| 🔴 | **Nadie ha ejecutado la app** | No hay Docker aquí, así que no se ha arrancado ni una vez. `tsc` y ESLint pasan, pero eso no prueba que arranque en un móvil |
+| 🟠 | **Nadie ha ejecutado la app contra un backend real** | El bundle web **sí compila** (`expo export --platform web` pasa), así que el código es correcto. Lo que nadie ha visto es la app hablando con Supabase de verdad |
+| 🟡 | Soporte web añadido para poder mirarla | `react-native-web`. Es una comodidad de desarrollo, **no un objetivo del producto**: el roadmap dice app móvil. Ojo con acabar diseñando para el navegador |
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
 | 🟠 | D5 · Development build con EAS | Solo hace falta para el escáner (fase 2) y las push (fase 3) |
 | 🟠 | La pantalla de aterrizaje es provisional | Lee el hogar y cuenta el inventario para comprobar la cadena entera. «Consumir primero» es fase 1 |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
 | 🟡 | Sin TanStack Query | Las consultas se hacen a mano con `useEffect`. En cuanto haya varias pantallas leyendo lo mismo, hará falta caché y revalidación |
 | 🟡 | Sin pruebas de interfaz | Ni una. El typecheck y el linter son toda la red de seguridad del cliente |
+| ⚪ | En Windows, `npm run types` depende del shell | El script redirige con `>`. npm usa `cmd.exe`, donde funciona; si alguien configura `script-shell` a PowerShell, el fichero saldría en UTF-16 y roto |
 | ⚪ | `eslint-config-expo` no va con ESLint 10 | Su `eslint-plugin-react` usa una API que la 10 eliminó. ESLint queda fijado en `^9.39.5`; revisar cuando publiquen soporte |
 | ⚪ | Traducir el prototipo a React Native | El [prototipo](https://claude.ai/artifact/GN9eqEFUn1vvBwVQBkgNpv) es HTML: referencia visual, no código |
 

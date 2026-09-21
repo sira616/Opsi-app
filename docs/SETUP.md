@@ -142,12 +142,34 @@ GitHub → Settings → Secrets and variables → Actions. Nunca en un fichero v
 
 ## 3. App Expo
 
+Dos formas de verla, ambas desde la raíz del repositorio:
+
 ```bash
-npm run --workspace app start
+npm run app:web    # se abre en el navegador. Lo más rápido
+npm run app        # QR para Expo Go en el móvil
 ```
 
-Escanea el QR con Expo Go y crea una cuenta. Necesita el backend levantado y
-`app/.env` relleno. Detalles en [`app/README.md`](../app/README.md).
+Necesita el backend levantado y `app/.env` relleno.
+
+### En el móvil, con Expo Go
+
+1. Instala **Expo Go** ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) ·
+   [iOS](https://apps.apple.com/app/expo-go/id982107779)).
+2. El móvil y el ordenador, **en la misma Wi-Fi**.
+3. `npm run app` y escanea el QR (en iOS, con la cámara; en Android, desde Expo Go).
+
+> [!IMPORTANT]
+> Desde el móvil, `127.0.0.1` es el propio móvil, no tu ordenador. Hay que poner la IP
+> local de tu ordenador en `app/.env`:
+>
+> ```
+> EXPO_PUBLIC_SUPABASE_URL=http://192.168.1.42:54321
+> ```
+>
+> La IP sale de `ipconfig` (Windows) o `ifconfig | grep inet` (macOS y Linux). Si aun así
+> no conecta, suele ser el cortafuegos bloqueando el puerto 54321.
+
+En el navegador no hace falta nada de esto: `127.0.0.1` funciona tal cual.
 
 Si al actualizar Expo algo deja de cuadrar, `npx expo install --fix` desde `app/`
 realinea las dependencias con las que recomienda el SDK.

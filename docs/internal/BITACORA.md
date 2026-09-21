@@ -677,3 +677,12 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - La pantalla de aterrizaje lee el hogar y cuenta el inventario a propósito: comprueba de
   una vez la sesión, el trigger de alta y la RLS.
 - **Nadie ha arrancado la app todavía.** `tsc` y ESLint pasan; eso no es lo mismo.
+
+### 2026-09-21 (sesión 6b) · Soporte web y atajos
+
+- Añadido `react-native-web` para poder mirar la app en el navegador sin móvil ni
+  emulador. **Es una comodidad de desarrollo, no un objetivo**: el producto es móvil.
+- **Verificado que la app compila**: `expo export --platform web` genera el bundle sin
+  errores. Es más que un typecheck, aunque sigue sin ser haberla ejecutado.
+- Atajos desde la raíz: `npm run app` (Expo Go) y `npm run app:web` (navegador).
+- El «Missing script: dev» del primer intento era un clon sin actualizar, no un fallo.

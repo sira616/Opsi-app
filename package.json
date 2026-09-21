@@ -11,6 +11,8 @@
   },
   "scripts": {
     "dev": "supabase start && supabase db reset && supabase status",
+    "app": "npm run --workspace app start",
+    "app:web": "npm run --workspace app web",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

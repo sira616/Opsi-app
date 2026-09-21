@@ -39,14 +39,17 @@ El **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
 
 ## Puesta en marcha
 
+Desde la raíz del repositorio, con el backend ya levantado (`npm run dev`):
+
 ```bash
-npm install                 # desde la raíz del repositorio: es un workspace
+npm install
 cp app/.env.example app/.env   # y pega la anon key de `npm run db:status`
-npm run --workspace app start  # o: cd app && npx expo start
+
+npm run app:web    # en el navegador. Lo más rápido para mirarla
+npm run app        # QR para Expo Go en el móvil
 ```
 
-Escanea el QR con Expo Go y ya puedes crear una cuenta. El backend tiene que estar
-levantado (`npm run dev` desde la raíz).
+En Windows, `copy app\.env.example app\.env`.
 
 > [!IMPORTANT]
 > El `.env` va en **`app/.env`**, no en la raíz: Expo lee el suyo desde su propia raíz de
