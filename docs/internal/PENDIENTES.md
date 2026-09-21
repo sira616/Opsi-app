@@ -1,0 +1,201 @@
+# Pendientes de Opsi
+
+> **Documento interno de trabajo. No publicar.**
+> Todo lo que se ha quedado sin pulir, sin verificar o decidido a medias. La
+> [bitácora](BITACORA.md) cuenta **qué se decidió y por qué**; esto cuenta **qué falta**.
+>
+> Última revisión: **2026-09-21**
+
+## Cómo leerlo
+
+| Marca | Significa |
+|:--:|---|
+| 🔴 | **Bloquea.** Nada avanza de verdad hasta resolverlo |
+| 🟠 | Deuda real: funciona, pero está mal o incompleto y se va a notar |
+| 🟡 | Mejora conocida. Ni urgente ni olvidada |
+| ⚪ | Anotado para no perderlo. Puede quedarse así mucho tiempo |
+
+---
+
+## 1. Sin verificar 🔴
+
+Lo más importante del documento. **Nada de lo construido se ha ejecutado nunca contra un
+Supabase real**, porque el contenedor donde trabajo no tiene daemon de Docker.
+
+| | Qué está sin verificar | Riesgo concreto |
+|:--:|---|---|
+| 🔴 | `db:start`, `db:reset`, `db:test` | Las 10 migraciones solo se han aplicado sobre PGlite (Postgres 18 en WebAssembly). El proyecto fija la 17 |
+| 🔴 | **pgTAP real** | Los 3 ficheros de `supabase/tests/` se han ejecutado con *dobles* de las funciones de pgTAP, no con pgTAP |
+| 🔴 | Los `insert into auth.users` de los tests | Mi `auth.users` es un doble mínimo. Si el real tiene columnas NOT NULL que los tests no rellenan, **fallarán los tres ficheros**. Arreglo de una línea, pero hay que verlo |
+| 🟠 | La CI | `.github/workflows/ci.yml` no ha corrido nunca. El primer push dirá si el YAML y los pasos son correctos |
+| 🟠 | `npm run types` | Nunca ejecutado: necesita Docker. **`app/src/lib/database.types.ts` no existe todavía** |
+
+**Cómo se cierra esto**, y es un solo rato delante del ordenador:
+
+```bash
+npm run dev          # levanta Supabase y aplica migraciones + seed
+npm run db:test      # el veredicto de verdad
+npm run types        # crea los tipos; hay que hacer commit del fichero
+```
+
+---
+
+## 2. Huecos del backend 🟠
+
+Cosas que faltan o que están decididas a medias, encontradas al repasar el código.
+
+### 🟠 Nadie emite el evento `created`
+
+El enum `inventory_event_type` tiene el valor `'created'` y **ninguna función lo escribe**.
+El alta de un elemento se hace con un `INSERT` directo desde la app, así que el primer
+evento de un alimento no queda registrado.
+
+Eso rompe la promesa del registro: el historial de un elemento empieza en su primera
+acción, no en su alta. Y los patrones de consumo posteriores al MVP se apoyan en ese
+historial.
+
+**Arreglo:** o una función `create_item(...)` que inserte y registre —coherente con las
+otras seis acciones—, o un trigger `after insert` sobre `inventory_items`. El trigger es
+más difícil de olvidar; la función deja el alta más explícita. **Sin decidir.**
+
+### 🟠 Las acciones cambian la ubicación por su cuenta
+
+`freeze_item` pone `location = 'freezer'` y `thaw_item` pone `location = 'fridge'`.
+
+Lo primero es casi seguro correcto. Lo segundo es **una suposición mía**: descongelas algo
+y Opsi decide que está en la nevera, cuando podrías haberlo sacado para cocinarlo ya. Nadie
+lo ha pedido y no está discutido.
+
+**Arreglo:** o quitarlo y que la ubicación la cambie solo el usuario, o dejarlo pero decirlo
+en la interfaz. Lo que no vale es que la app mueva cosas de sitio sin avisar.
+
+### 🟠 No se puede deshacer nada
+
+Si marcas «tirado» por error, no hay vuelta atrás: `require_item` rechaza cualquier acción
+sobre algo ya cerrado, y no existe una acción de reabrir. El usuario tendría que editar la
+fila a mano, que desde la app no puede.
+
+**Arreglo:** una acción `reopen_item` que devuelva el elemento a su estado anterior y deje
+su propio evento. Nunca borrando el evento original: el registro es inmutable a propósito.
+
+### 🟡 `open_shelf_life_reference` sin trigger de `updated_at`
+
+Todas las demás tablas lo tienen. Esta se quedó sin él por despiste. La columna existe y
+nunca se refresca.
+
+### 🟡 La vista expone columnas internas
+
+`inventory_with_priority` devuelve `date_from_label`, `date_from_opening` y
+`date_from_thaw` además de las columnas útiles. Vienen bien para depurar y para los tests,
+pero son ruido en la API pública y aparecerán en los tipos generados.
+
+**Decidir:** dejarlas (útiles para explicar el cálculo en la pantalla de detalle) o
+esconderlas en una vista interna aparte.
+
+### ⚪ `products_source_ck` es rígido
+
+Obliga a que todo producto del catálogo global declare `data_source = 'openfoodfacts'`. Si
+algún día entra otra fuente, hay que tocar la restricción. Hoy es correcto y evita basura.
+
+### ⚪ `user_settings.timezone` no se valida
+
+Un `CHECK` no admite subconsultas, así que no se contrasta contra `pg_timezone_names`.
+Hoy lo valida solo la aplicación, que todavía no existe. Un trigger lo resolvería.
+
+---
+
+## 3. Decisiones a medio cerrar 🟠
+
+### 🟠 Q9 · «Hoy» se calcula en UTC
+
+La vista usa `current_date`, que es la fecha del servidor. Para un usuario español eso
+baila una o dos horas en los bordes del día: algo que caduca «hoy» puede aparecer como
+«mañana» a las 23:30.
+
+`user_settings.timezone` ya existe y tiene `Europe/Madrid` por defecto. **Hay que decidir
+antes de la fase 3**, porque el resumen diario depende de la hora local por definición.
+
+### 🟠 Q3 · El campo de conservación de Open Food Facts sin confirmar
+
+No pude comprobar que OFF tenga el dato de días tras apertura de forma estructurada: no
+aparece en su taxonomía ni en el esquema de producto, y el proxy de red me impidió
+consultar la API en vivo.
+
+El plan B (tabla por categoría) ya está puesto y hace que el sistema funcione igual.
+**Verificar en la fase 2**, al escribir `lookup-barcode`, y decidir entonces si merece la
+pena parsear su campo de texto libre.
+
+### 🟠 Los valores de `open_shelf_life_reference` no tienen fuente autorizada
+
+Las 10 filas sembradas recogen práctica común de conservación en frigorífico. Están del
+lado corto a propósito y marcadas como orientativas en su columna `source`, pero **no
+salen de ninguna guía oficial**.
+
+Es el riesgo número uno del roadmap original y sigue abierto: mientras no haya fuente, todo
+lo que derive de aquí es una estimación con buena intención.
+
+### 🟡 D-14 · El tope de 24 h no distingue alimentos
+
+Un pan descongelado y una merluza descongelada reciben el mismo plazo. Es conservador para
+el pan y correcto para la merluza, y el desequilibrio es deliberado. El número está en un
+solo sitio de la vista, así que afinarlo por categoría el día que haya categorías fiables
+es un cambio localizado.
+
+### 🟡 Los tests usan `no_plan()` en vez de `plan(N)`
+
+A propósito: un plan mal contado falla por una razón que no tiene nada que ver con lo que
+se quiere probar, y pgTAP real nunca los ha ejecutado. **Cuando pasen en verde de verdad,
+cambiar a `plan(N)`** para detectar además los tests que no llegan a correr.
+
+---
+
+## 4. La app 🔴
+
+**No existe una sola línea.** Es la mitad que falta de la fase 0.
+
+| | Tarea | Notas |
+|:--:|---|---|
+| 🔴 | D1 · Proyecto Expo con TypeScript y Expo Router | `npx create-expo-app` |
+| 🔴 | D2 · Cliente de Supabase con la `anon key` desde `.env` | |
+| 🔴 | D3 · Alta y login con correo y contraseña | Funciona en Expo Go: no necesita deep links |
+| 🔴 | D4 · Rutas protegidas y sesión persistida | |
+| 🟠 | D5 · Development build con EAS | **Solo** hace falta para el escáner (fase 2) y las push (fase 3) |
+| 🟡 | Traducir el prototipo a React Native | El [prototipo](https://claude.ai/artifact/GN9eqEFUn1vvBwVQBkgNpv) es HTML: sirve de referencia visual, no de código |
+
+---
+
+## 5. Repositorio y proceso 🟡
+
+| | Qué | Detalle |
+|:--:|---|---|
+| 🟠 | Borrar las ramas `backend` y `frontend` | Fusionadas en `main` y vacías de contenido propio. El borrado remoto me da 403 desde aquí: `git push origin --delete backend frontend` |
+| 🟡 | No hay `CLAUDE.md` | Las convenciones están en la bitácora, que es interna. Un `CLAUDE.md` en la raíz las haría efectivas en cada sesión |
+| 🟡 | No hay plantilla de PR ni `CONTRIBUTING.md` | |
+| 🟡 | README sin material visual | Es lo que separa el README «correcto» del «bonito». El GIF de demo no se puede grabar hasta la fase 2. Esqueleto y lista de material en la [bitácora, sección 5](BITACORA.md#5-plantilla-del-readme-final) |
+| ⚪ | Los códigos de barras del seed son ficticios con formato EAN-13 válido | Empiezan por `84000000000xx`. Podrían chocar con un producto real algún día |
+
+---
+
+## 6. Antes de publicar 🟠
+
+Nada de esto corre prisa hoy, y todo es obligatorio antes de que lo use alguien que no seas
+tú.
+
+| | Qué | Por qué |
+|:--:|---|---|
+| 🟠 | SMTP real y `enable_confirmations = true` | Ahora mismo puede haber cuentas con el correo sin verificar. Ver Q7 |
+| 🟠 | **Borrado de cuenta y de datos** | No existe ninguna vía para que un usuario borre su hogar y su historial. Con datos personales en Europa, esto no es opcional. Tampoco hay política de retención |
+| 🟠 | Proyecto de Supabase en **región EU** | Decidido, pero el proyecto aún no está creado |
+| 🟠 | Límites de uso de la IA por usuario | Fase 5. El roadmap ya lo pide; sin ello, la factura es imprevisible |
+| 🟡 | Revisar los términos de uso de Open Food Facts | Piden identificarse con un `User-Agent` con contacto. `OFF_USER_AGENT` está en `.env.example` con un valor de ejemplo que hay que cambiar |
+
+---
+
+## 7. Lo siguiente, en orden
+
+1. **`npm run dev` y `npm run db:test`** en una máquina con Docker. Cierra toda la sección 1.
+2. **D1–D4**: la app Expo con alta y login. Cierra la fase 0.
+3. Con la app en pie, **las tres pantallas de la fase 1**: alta manual, detalle con
+   acciones y «Consumir primero». El backend que las alimenta ya está.
+4. Por el camino, decidir **Q9** (zona horaria) y el hueco del **evento `created`**, que
+   son los dos únicos de este documento que ensucian datos cuanto más se tarde.

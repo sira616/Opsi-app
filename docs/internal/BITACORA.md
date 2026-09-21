@@ -9,6 +9,9 @@
 
 ---
 
+> Los cabos sueltos viven en **[PENDIENTES.md](PENDIENTES.md)**: lo que falta, lo que está
+> sin verificar y lo que quedó a medias. Este documento es el porqué; aquél, el qué falta.
+
 ## 0. Cómo se usa este documento
 
 | Sección | Para qué | Cuándo se toca |

@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "supabase start && supabase db reset && supabase status",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

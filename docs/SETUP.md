@@ -23,8 +23,11 @@ de Supabase en la nube.
 git clone https://github.com/sira616/Opsi-app.git
 cd Opsi-app
 npm install          # instala la CLI de Supabase fijada en package.json
-npm run db:start     # levanta Postgres, Auth, Storage y Studio en Docker
+npm run dev          # levanta todo, aplica migraciones y seed, e imprime las claves
 ```
+
+`npm run dev` es el atajo de `db:start` + `db:reset` + `db:status`. Si prefieres los pasos
+sueltos, están todos en la tabla de abajo.
 
 La primera vez tarda unos minutos: descarga las imágenes. Al terminar imprime las URLs
 y las claves locales:
@@ -52,6 +55,7 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 
 | Comando | Qué hace |
 |---|---|
+| `npm run dev` | **El atajo**: arranca, aplica migraciones y seed, e imprime las claves |
 | `npm run db:start` / `db:stop` | Arranca o para los contenedores |
 | `npm run db:status` | URLs y claves locales |
 | `npm run db:reset` | **Borra la base y la reconstruye** desde `supabase/migrations/` + `supabase/seed/` |
