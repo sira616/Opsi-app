@@ -37,10 +37,20 @@ const KIND_OPTIONS: ChipOption<DateKind>[] = [
   { value: 'expiry', label: 'Caducidad', danger: true },
 ];
 
+/**
+ * De dónde sale la fecha, y solo lo que el usuario puede saber.
+ *
+ * Había una tercera opción, «A ojo», que era lo mismo que «La pongo yo»: en
+ * las dos la fecha la escribe la persona. Elegir entre ellas no cambiaba nada
+ * en la app, así que solo servía para hacer dudar.
+ *
+ * `estimate` sigue existiendo en el esquema, pero es lo que dice su comentario
+ * en la migración: «calculada por la app». La pondrá el catálogo o la
+ * asistente, nunca este formulario.
+ */
 const SOURCE_OPTIONS: ChipOption<DateSource>[] = [
-  { value: 'package', label: 'Del envase' },
+  { value: 'package', label: 'Viene en el envase' },
   { value: 'user', label: 'La pongo yo' },
-  { value: 'estimate', label: 'A ojo' },
 ];
 
 export default function AltaManual() {
@@ -150,8 +160,11 @@ export default function AltaManual() {
                 {hasDate ? <Text style={styles.check}>✓</Text> : null}
               </View>
               <View style={styles.toggleText}>
-                <Text style={styles.toggleTitle}>Tiene fecha en el envase</Text>
-                <Text style={t.caption}>Si no la tiene, déjalo sin marcar. No pasa nada.</Text>
+                <Text style={styles.toggleTitle}>Ponerle fecha</Text>
+                <Text style={t.caption}>
+                  Si no la lleva o no la sabes, déjalo sin marcar: «sin fecha» es una
+                  respuesta válida y tiene su propio grupo en la lista.
+                </Text>
               </View>
             </Pressable>
 
@@ -200,7 +213,7 @@ export default function AltaManual() {
                   options={SOURCE_OPTIONS}
                   value={source}
                   onChange={setSource}
-                  hint="Se guarda y se muestra siempre. Una fecha sin procedencia no vale."
+                  hint="Se guarda y se muestra siempre: una fecha sin procedencia no vale."
                 />
               </View>
             ) : null}

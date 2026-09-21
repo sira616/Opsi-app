@@ -962,3 +962,21 @@ negativo: con una columna inventada, falla.
 
 **`frostInk`.** Azul sobre el fondo azul suave se quedaba en 3.91:1 en modo claro. Se
 añade el token que faltaba, igual que ya existían `brandInk` y `expiryInk`.
+
+### 2026-09-21 (sesión 18) · Dos correcciones de las de usar la app
+
+- **Me pasé arreglando la columna.** Al darle ancho fijo cambié también el tamaño de
+  letra y la partí en tres líneas, y eso bajó la primera línea respecto al título. El ancho
+  fijo era la solución; el resto era yo rediseñando algo que ya estaba bien. Vuelta a las
+  dos líneas y a la tipografía de siempre: lo único que se acorta es el TEXTO —«Venció ·
+  12 días» en vez de la frase entera—, no el estilo.
+- **«A ojo» y «La pongo yo» eran la misma opción.** En las dos la fecha la escribe la
+  persona, y elegir entre ellas no cambiaba nada en la app: solo servía para hacer dudar.
+  Fuera. Y `estimate` no se pierde: el comentario de su propia migración ya decía
+  «calculada por la app», así que lo que estaba mal era ofrecerla en un formulario.
+- De paso, la casilla decía **«Tiene fecha en el envase»** cuando justo debajo se podía
+  responder que la fecha no venía del envase. Ahora dice «Ponerle fecha», que es lo que
+  realmente pregunta.
+
+La lección de las tres: el formulario y la fila llevaban semanas pidiendo al usuario que
+resolviera contradicciones nuestras. Ninguna se ve leyendo el código; se ven usándolo.

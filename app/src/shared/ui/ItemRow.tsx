@@ -102,12 +102,17 @@ export function ItemRow({ item }: { item: PriorityItem }) {
 }
 
 /**
- * La columna de la derecha.
+ * La columna de la derecha: dos líneas, etiqueta y dato.
  *
- * Tiene ANCHO FIJO, y eso es lo único que importa aquí: con la frase entera
- * («Venció hace 12 días» al lado de «Hoy») cada fila medía distinto y a partir
- * del tercer elemento la lista se veía torcida en un móvil. El número va
- * separado de su unidad para que la cifra caiga siempre en el mismo sitio.
+ * Lo que la arregla es el ANCHO FIJO. Antes el bloque medía lo que midiera su
+ * frase —«Venció hace 12 días» al lado de «Hoy»—, así que su borde izquierdo
+ * cambiaba de fila en fila y a partir del tercer elemento la lista se veía
+ * torcida en un móvil.
+ *
+ * El tamaño de letra y el número de líneas son los de siempre a propósito: la
+ * primera línea tiene que seguir cayendo a la altura del título, y cualquier
+ * cambio ahí la desalinea. Lo único que se acorta es el TEXTO, no el estilo:
+ * «Venció · 12 días» en vez de la frase entera.
  */
 function Contador({ item, urgent }: { item: PriorityItem; urgent: boolean }) {
   const styles = useStyles();
@@ -120,25 +125,14 @@ function Contador({ item, urgent }: { item: PriorityItem; urgent: boolean }) {
     return (
       <View style={styles.dateBlock}>
         <View style={styles.frozenLabel}>
-          <Snowflake size={11} color={c.frost} weight="fill" />
+          <Snowflake size={10} color={c.frost} weight="fill" />
           <Text style={[styles.dateLabel, styles.dateLabelFrozen]} numberOfLines={1}>
             Parado
           </Text>
         </View>
-        {dias === null ? (
-          <Text style={[styles.dateValue, styles.dateValueFrozen]} numberOfLines={1}>
-            —
-          </Text>
-        ) : (
-          <>
-            <Text style={[styles.dateValue, styles.dateValueFrozen]} numberOfLines={1}>
-              {dias === 0 ? 'Hoy' : `${dias}`}
-            </Text>
-            <Text style={styles.dateUnit} numberOfLines={1}>
-              {dias === 0 ? 'lo congelaste' : dias === 1 ? 'día dentro' : 'días dentro'}
-            </Text>
-          </>
-        )}
+        <Text style={[styles.dateValue, styles.dateValueFrozen]} numberOfLines={1}>
+          {dias === null ? '—' : dias === 0 ? 'Hoy' : `${dias} ${dias === 1 ? 'día' : 'días'}`}
+        </Text>
       </View>
     );
   }
@@ -152,13 +146,8 @@ function Contador({ item, urgent }: { item: PriorityItem; urgent: boolean }) {
         {etiqueta}
       </Text>
       <Text style={[styles.dateValue, rojo && styles.dateValueUrgent]} numberOfLines={1}>
-        {valor}
+        {unidad ? `${valor} ${unidad}` : valor}
       </Text>
-      {unidad ? (
-        <Text style={[styles.dateUnit, rojo && styles.dateUnitUrgent]} numberOfLines={1}>
-          {unidad}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -191,11 +180,11 @@ function describeCongelado(frozenAt: string | null): string {
 /**
  * El ancho de la columna de la derecha.
  *
- * Cabe «PREFERENTE» en versalitas y «Mañana», que son las dos cadenas más
- * largas que puede haber ahí. Es `minWidth` y no `width` para que siga
+ * Cabe «PREFERENTE» en versalitas y «24 meses», que son las dos cadenas más
+ * largas que pueden salir ahí. Es `minWidth` y no `width` para que siga
  * funcionando si el sistema agranda la letra.
  */
-const ANCHO_CONTADOR = 74;
+const ANCHO_CONTADOR = 76;
 
 const useStyles = makeStyles((c) => ({
   card: {
@@ -234,19 +223,17 @@ const useStyles = makeStyles((c) => ({
     gap: 1,
   },
   dateLabel: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
     color: c.inkMuted,
   },
   dateLabelUrgent: { color: c.expiry },
   dateLabelFrozen: { color: c.frost },
-  dateValue: { ...tabular, fontSize: 17, fontWeight: '700', color: c.ink, lineHeight: 21 },
+  dateValue: { ...tabular, fontSize: 15.5, fontWeight: '600', color: c.ink },
   dateValueUrgent: { color: c.expiry },
   dateValueFrozen: { color: c.frost },
-  dateUnit: { fontSize: 10.5, color: c.inkFaint },
-  dateUnitUrgent: { color: c.expiry },
 
   frozenLabel: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 }));
