@@ -1,6 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 
-import { useSession } from '@/lib/session';
+import { useSession } from '@/shared/lib/session';
 
 /**
  * La protección de verdad no está aquí: está en la RLS de la base de datos.

@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-21** (sesión 6)
+> Última actualización: **2026-09-21** (sesión 7)
 
 ---
 
@@ -41,7 +41,8 @@ hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
 | Fase 1 | 6 acciones RPC + vista `inventory_with_priority` con el tope de 24 h |
 | CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
 | Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
-| App Expo | **D1–D4 hechos**: Expo SDK 57, Router, cliente de Supabase, alta y login, rutas protegidas. `typecheck` y `lint` limpios |
+| App Expo | D1–D4 más **alta manual y «Consumir primero»**. Estructura alineada con psique ([D-18](#d-18--convenciones-de-psique-no-su-código--2026-09-21)) |
+| Fase 1 | Backend completo + las dos primeras pantallas. Falta el detalle con acciones |
 
 ### Verificado vs. no verificado
 
@@ -358,6 +359,34 @@ nuestros; el cliente del modelo, intercambiable por variable de entorno.
 Ojo con lo que esto no resuelve: el *tool use* de Ollama y el de la API de Claude no son
 idénticos en formato ni en fiabilidad. Que funcione en Ollama no demostrará que funciona
 en producción, y viceversa. Sirve para desarrollar sin gastar, no para validar.
+
+### D-18 · Convenciones de psique, no su código · 2026-09-21
+
+Se revisaron `psique-frontend`, `morfeo` y `back-sira-platano` para reaprovechar trabajo.
+**No hay código portable**, y conviene que quede escrito para no volver a mirarlo:
+
+| Proyecto | Qué es | Por qué no se puede copiar |
+|---|---|---|
+| `psique-frontend` | React **web**: Vite, Tailwind, React Router, TanStack Query, Zustand | Opsi es React Native. Ahí no existen `div`, `className` ni Tailwind: sus componentes no compilan |
+| `morfeo` | Backend **Python/FastAPI** con Alembic | Opsi es SQL sobre Supabase |
+
+Lo que sí se ha traído, que es lo que de verdad valía:
+
+1. **La estructura de carpetas.** `src/shared/ui`, `src/shared/lib`, `src/api/<dominio>.ts`.
+   Opsi tenía `src/components` y `src/lib`; ahora las dos bases se leen igual.
+2. **El patrón de los módulos de API.** En psique, `src/api/stories.ts` son funciones
+   planas, sin hooks, una por operación. Opsi copia la forma en `src/api/inventory.ts`:
+   los hooks de TanStack Query viven en las pantallas, no en la capa de datos.
+3. **TanStack Query**, que psique ya usa y estaba anotado como deuda en PENDIENTES.
+4. **De morfeo, una idea, no código**: *«el LLM no calcula»*. Allí los minutos los pone
+   una función pura del dominio y el modelo solo entrevista y explica. Es exactamente la
+   postura que necesita la fase 5 de Opsi: la fecha límite la calcula la vista en SQL, y
+   la asistente la cuenta. Queda apuntado para cuando llegue.
+
+**Lo que NO se ha traído:** Zustand. Psique lo usa para su store de auth; Opsi usa un
+contexto de React, que ya funciona y es lo idiomático con los layouts de Expo Router.
+Cambiarlo sería churn sin ganancia. Si algún día hay estado compartido de verdad —más
+allá de la sesión— se reconsidera.
 
 ## 3. Convenciones
 
@@ -686,3 +715,19 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   errores. Es más que un typecheck, aunque sigue sin ser haberla ejecutado.
 - Atajos desde la raíz: `npm run app` (Expo Go) y `npm run app:web` (navegador).
 - El «Missing script: dev» del primer intento era un clon sin actualizar, no un fallo.
+
+### 2026-09-21 (sesión 7) · Alta manual y «Consumir primero»
+
+- Revisados `psique-frontend` y `morfeo`: **nada de código es portable** (web React y
+  Python contra React Native y SQL), pero sí sus convenciones → [D-18](#d-18--convenciones-de-psique-no-su-código--2026-09-21).
+- **Cerrado el hueco del evento `created`**, que estaba en PENDIENTES desde la sesión 5:
+  nueva RPC `create_item` que inserta y registra el evento en la misma transacción. Se
+  eligió función y no trigger por coherencia con las otras seis acciones.
+- **Pantalla de alta manual**: la fecha es opcional y, si se pone, obliga a decir de qué
+  tipo es y de dónde sale. La familia de unidades sale de la unidad elegida, así que es
+  imposible pedir «2 kg» de algo medido en volumen.
+- **Pantalla «Consumir primero»**: agrupada por prioridad, con el origen de cada fecha
+  siempre visible y el motivo cuando no es la etiqueta.
+- Reestructurado a `src/shared/ui`, `src/shared/lib`, `src/api`; añadido TanStack Query.
+- Verificado: typecheck, lint y `expo export --platform web` pasan. 124 comprobaciones de
+  esquema en verde. **Sigue sin haberse ejecutado contra un backend real.**

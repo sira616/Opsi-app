@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, space } from '@/theme/tokens';
+import { colors, radius, space } from '@/shared/theme/tokens';
 
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;

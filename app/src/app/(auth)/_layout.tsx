@@ -1,6 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 
-import { useSession } from '@/lib/session';
+import { useSession } from '@/shared/lib/session';
 
 /** Con sesión no se ve el login: te lleva al inventario. */
 export default function AuthLayout() {

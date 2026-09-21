@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/Button';
-import { ErrorNote } from '@/components/ErrorNote';
-import { TextField } from '@/components/TextField';
-import { describeAuthError } from '@/lib/auth-errors';
-import { useSession } from '@/lib/session';
-import { colors, font, space } from '@/theme/tokens';
+import { Button } from '@/shared/ui/Button';
+import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { TextField } from '@/shared/ui/TextField';
+import { describeAuthError } from '@/shared/lib/auth-errors';
+import { useSession } from '@/shared/lib/session';
+import { colors, font, space } from '@/shared/theme/tokens';
 
 export default function Entrar() {
   const { signIn } = useSession();

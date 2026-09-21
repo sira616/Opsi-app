@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, radius, touchTarget } from '@/theme/tokens';
+import { colors, radius, touchTarget } from '@/shared/theme/tokens';
 
 type Props = {
   label: string;

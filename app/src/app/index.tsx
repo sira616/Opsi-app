@@ -1,8 +1,8 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { useSession } from '@/lib/session';
-import { colors } from '@/theme/tokens';
+import { useSession } from '@/shared/lib/session';
+import { colors } from '@/shared/theme/tokens';
 
 /**
  * La puerta de entrada: decide adónde va el usuario según tenga sesión o no.

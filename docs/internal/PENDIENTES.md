@@ -4,7 +4,7 @@
 > Todo lo que se ha quedado sin pulir, sin verificar o decidido a medias. La
 > [bitácora](BITACORA.md) cuenta **qué se decidió y por qué**; esto cuenta **qué falta**.
 >
-> Última revisión: **2026-09-21** (tras D1–D4)
+> Última revisión: **2026-09-21** (tras el alta manual y «Consumir primero»)
 
 ## Cómo leerlo
 
@@ -45,19 +45,15 @@ npm run types        # crea los tipos; hay que hacer commit del fichero
 
 Cosas que faltan o que están decididas a medias, encontradas al repasar el código.
 
-### 🟠 Nadie emite el evento `created`
+### ✅ ~~Nadie emite el evento `created`~~ · resuelto 2026-09-21
 
-El enum `inventory_event_type` tiene el valor `'created'` y **ninguna función lo escribe**.
-El alta de un elemento se hace con un `INSERT` directo desde la app, así que el primer
-evento de un alimento no queda registrado.
+Se añadió la RPC `create_item`, que inserta el elemento y registra su evento en la misma
+transacción. Se eligió función y no trigger por coherencia: las otras seis acciones ya
+son RPC, y así el alta no es un caso aparte.
 
-Eso rompe la promesa del registro: el historial de un elemento empieza en su primera
-acción, no en su alta. Y los patrones de consumo posteriores al MVP se apoyan en ese
-historial.
-
-**Arreglo:** o una función `create_item(...)` que inserte y registre —coherente con las
-otras seis acciones—, o un trigger `after insert` sobre `inventory_items`. El trigger es
-más difícil de olvidar; la función deja el alta más explícita. **Sin decidir.**
+Queda un flanco: **un `INSERT` directo sobre `inventory_items` sigue siendo posible** y
+no registraría nada. La app ya no lo hace, pero la política RLS lo permite. Si se quiere
+cerrar del todo, habría que quitar el INSERT de la política y dejar solo la RPC.
 
 ### 🟠 Las acciones cambian la ubicación por su cuenta
 
@@ -164,7 +160,8 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | D5 · Development build con EAS | Solo hace falta para el escáner (fase 2) y las push (fase 3) |
 | 🟠 | La pantalla de aterrizaje es provisional | Lee el hogar y cuenta el inventario para comprobar la cadena entera. «Consumir primero» es fase 1 |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
-| 🟡 | Sin TanStack Query | Las consultas se hacen a mano con `useEffect`. En cuanto haya varias pantallas leyendo lo mismo, hará falta caché y revalidación |
+| 🟠 | **La app habla con Supabase sin tipos** | `src/api/inventory.ts` afirma los tipos a mano con `as unknown as`. Si una columna cambia de nombre, compila y revienta en ejecución. Lo arregla `npm run types` + quitar los casts |
+| 🟡 | Sin pantalla de detalle | Las seis acciones existen en el backend y en `src/api/inventory.ts`, pero ninguna pantalla las llama todavía |
 | 🟡 | Sin pruebas de interfaz | Ni una. El typecheck y el linter son toda la red de seguridad del cliente |
 | ⚪ | En Windows, `npm run types` depende del shell | El script redirige con `>`. npm usa `cmd.exe`, donde funciona; si alguien configura `script-shell` a PowerShell, el fichero saldría en UTF-16 y roto |
 | ⚪ | `eslint-config-expo` no va con ESLint 10 | Su `eslint-plugin-react` usa una API que la 10 eliminó. ESLint queda fijado en `^9.39.5`; revisar cuando publiquen soporte |

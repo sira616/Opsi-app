@@ -283,6 +283,48 @@ select is(
   'lo tirado sale de la lista de urgencias'
 );
 
+-- ── El alta registra su evento ────────────────────────────────────────────
+
+select lives_ok(
+  $$select public.create_item('Lentejas', 'mass', 'kg', 1000, 'pantry')$$,
+  'dar de alta un elemento funciona'
+);
+
+select is(
+  (select count(*) from public.inventory_events e
+    join public.inventory_items i on i.id = e.item_id
+   where i.name = 'Lentejas' and e.type = 'created'),
+  1::bigint,
+  'y deja su evento created, que antes no emitia nadie'
+);
+
+select is(
+  (select remaining_quantity from public.inventory_items where name = 'Lentejas'),
+  1000::numeric,
+  'nace con la cantidad completa'
+);
+
+select throws_ok(
+  $$select public.create_item('Malo', 'volume', 'kg', 100)$$,
+  '23514',
+  null,
+  'el alta respeta la regla de familia y unidad (D-07)'
+);
+
+select throws_ok(
+  $$select public.create_item('Malo', 'mass', 'g', 100, 'pantry', current_date + 3)$$,
+  '22023',
+  null,
+  'una fecha sin tipo ni origen se rechaza con un mensaje legible'
+);
+
+select throws_ok(
+  $$select public.create_item('Malo', 'mass', 'g', 0)$$,
+  '22023',
+  null,
+  'la cantidad tiene que ser mayor que cero'
+);
+
 -- ── La vista respeta la RLS ───────────────────────────────────────────────
 
 reset role;

@@ -1,154 +1,163 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useRouter } from 'expo-router';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/Button';
-import { ErrorNote } from '@/components/ErrorNote';
-import { useSession } from '@/lib/session';
-import { supabase } from '@/lib/supabase';
-import { colors, font, radius, space } from '@/theme/tokens';
-
-type Household = { id: string; name: string };
+import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
+import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { ItemRow } from '@/shared/ui/ItemRow';
+import { queryKeys } from '@/shared/lib/query';
+import { useSession } from '@/shared/lib/session';
+import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 /**
- * Pantalla de aterrizaje provisional.
- *
- * Todavía no es «Consumir primero» (eso es la fase 1), pero no es un cartel
- * vacío a propósito: lee de verdad de la base de datos, y con eso comprueba de
- * una vez toda la cadena — que la sesión llega, que el trigger creó el hogar
- * al registrarse, y que la RLS deja ver lo tuyo. Si esto pinta un hogar con tu
- * nombre, la fase 0 funciona de punta a punta.
+ * El orden de los grupos NO es alfabético ni casual: es el orden en que hay
+ * que mirar la despensa. Y «sin fecha» va antes que «congelado» a propósito:
+ * no saber cuándo vence algo es una pregunta abierta, no una tranquilidad.
  */
-export default function Inventario() {
-  const { session, signOut } = useSession();
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [itemCount, setItemCount] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+const GROUPS: { key: PriorityGroup; title: string; dot: string; tone?: 'danger' | 'warn' }[] = [
+  { key: 'high', title: 'Prioridad alta', dot: colors.expiry, tone: 'danger' },
+  { key: 'medium', title: 'Prioridad media', dot: '#C67A1E', tone: 'warn' },
+  { key: 'low', title: 'Sin urgencia', dot: '#B9B1A3' },
+  { key: 'undated', title: 'Sin fecha', dot: 'transparent' },
+  { key: 'frozen', title: 'En el congelador', dot: '#8FB9D9' },
+];
 
-  // Un contador en vez de llamar a una función: cambiarlo vuelve a disparar el
-  // efecto, y así todas las escrituras de estado ocurren DESPUÉS de un await.
-  // Hacerlas antes provoca renders en cascada, que es justo lo que avisa la
-  // regla react-hooks/set-state-in-effect.
-  const [reloadToken, setReloadToken] = useState(0);
+export default function ConsumirPrimero() {
+  const { signOut } = useSession();
+  const router = useRouter();
 
-  useEffect(() => {
-    let active = true;
+  const { data, error, isPending, isFetching, refetch } = useQuery({
+    queryKey: queryKeys.priorityList,
+    queryFn: fetchPriorityList,
+  });
 
-    void (async () => {
-      // Sin filtrar por hogar: la RLS ya limita la consulta a lo tuyo. Repetir
-      // aquí un .eq('household_id', ...) sería poner la regla en un segundo
-      // sitio donde puede quedar desactualizada.
-      const { data, error: queryError } = await supabase
-        .from('households')
-        .select('id, name')
-        .limit(1)
-        .maybeSingle();
-
-      if (!active) return;
-      if (queryError) {
-        setError(queryError.message);
-        setLoading(false);
-        return;
-      }
-      setHousehold(data);
-
-      const { count, error: countError } = await supabase
-        .from('inventory_with_priority')
-        .select('id', { count: 'exact', head: true });
-
-      if (!active) return;
-      if (countError) {
-        setError(countError.message);
-      } else {
-        setItemCount(count ?? 0);
-        setError(null);
-      }
-      setLoading(false);
-    })();
-
-    // Si la pantalla se desmonta a mitad de la consulta, no se escribe estado
-    // en un componente que ya no está.
-    return () => {
-      active = false;
-    };
-  }, [reloadToken]);
-
-  // Esto sí puede tocar el estado de inmediato: es un manejador de evento, no
-  // el cuerpo de un efecto.
-  function reload() {
-    setError(null);
-    setLoading(true);
-    setReloadToken((n) => n + 1);
-  }
+  const items = data ?? [];
+  const urgent = items.filter((i) => i.priority === 'high').length;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
           <Text style={styles.wordmark}>Opsi</Text>
-          <Text style={font.title}>Tu casa</Text>
+          <Link href="/alta" asChild>
+            <Pressable accessibilityRole="button" accessibilityLabel="Añadir alimento" style={styles.add}>
+              <Text style={styles.addIcon}>+</Text>
+            </Pressable>
+          </Link>
         </View>
+        <Text style={font.title}>Consumir primero</Text>
+        <Text style={font.bodySmall}>
+          {items.length === 0
+            ? 'Nada guardado todavía'
+            : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
+              (urgent > 0 ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy` : '')}
+        </Text>
+      </View>
 
-        {loading ? (
-          <ActivityIndicator color={colors.brand} />
-        ) : (
-          <View style={styles.card}>
-            <Row label="Sesión" value={session?.user.email ?? '—'} />
-            <Row label="Hogar" value={household?.name ?? 'sin hogar (¿falló el trigger?)'} />
-            <Row
-              label="En el inventario"
-              value={itemCount === null ? '—' : `${itemCount} alimentos`}
-            />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={isFetching && !isPending} onRefresh={() => void refetch()} tintColor={colors.brand} />
+        }
+      >
+        {isPending ? <ActivityIndicator color={colors.brand} style={styles.loader} /> : null}
+
+        <ErrorNote message={error ? (error as Error).message : null} />
+
+        {!isPending && items.length === 0 && !error ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Tu despensa está vacía</Text>
+            <Text style={font.bodySmall}>
+              Da de alta lo primero y aparecerá aquí, ordenado por lo que conviene gastar antes.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/alta')}
+              style={styles.emptyButton}
+            >
+              <Text style={styles.emptyButtonText}>Añadir un alimento</Text>
+            </Pressable>
           </View>
-        )}
+        ) : null}
 
-        <ErrorNote message={error} />
+        {GROUPS.map((group) => {
+          const groupItems = items.filter((i: PriorityItem) => i.priority === group.key);
+          if (groupItems.length === 0) return null;
 
-        <View style={styles.note}>
-          <Text style={font.bodySmall}>
-            «Consumir primero» llega en la fase 1. El backend que la alimenta —las seis
-            acciones y la vista de prioridad— ya está listo.
-          </Text>
-        </View>
+          return (
+            <View key={group.key} style={styles.group}>
+              <View style={styles.groupHeader}>
+                <View
+                  style={[
+                    styles.dot,
+                    { backgroundColor: group.dot },
+                    group.dot === 'transparent' && styles.dotHollow,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.groupTitle,
+                    group.tone === 'danger' && { color: colors.expiry },
+                    group.tone === 'warn' && { color: colors.warning },
+                  ]}
+                >
+                  {group.title}
+                </Text>
+              </View>
+              {groupItems.map((item) => (
+                <ItemRow key={item.id} item={item} />
+              ))}
+            </View>
+          );
+        })}
 
-        <View style={styles.actions}>
-          <Button label="Recargar" onPress={reload} variant="quiet" />
-          <Button label="Cerrar sesión" onPress={() => void signOut()} variant="quiet" />
-        </View>
+        <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOut}>
+          <Text style={styles.signOutText}>Cerrar sesión</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={font.label}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
-  content: { padding: space.xl, gap: space.xl },
-  header: { gap: space.xs },
+  header: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.md, gap: space.xs },
+  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm },
   wordmark: { fontSize: 21, fontWeight: '600', color: colors.brand },
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: space.lg,
-    gap: space.md,
+  add: {
+    width: touchTarget,
+    height: touchTarget,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  row: { gap: 2 },
-  rowValue: { fontSize: 15.5, fontWeight: '600', color: colors.ink },
-  note: {
-    backgroundColor: colors.brandSoft,
+  addIcon: { color: colors.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
+  content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
+  loader: { marginTop: space.xl },
+  group: { gap: space.sm },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  dotHollow: { borderWidth: 1.5, borderColor: '#B9B1A3' },
+  groupTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.inkMuted,
+  },
+  empty: { gap: space.md, paddingVertical: space.xxl, alignItems: 'flex-start' },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.ink },
+  emptyButton: {
+    minHeight: touchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: space.xl,
     borderRadius: radius.md,
-    padding: space.md,
+    backgroundColor: colors.brand,
+    marginTop: space.xs,
   },
-  actions: { gap: space.sm },
+  emptyButtonText: { color: colors.ground, fontSize: 15, fontWeight: '600' },
+  signOut: { minHeight: touchTarget, justifyContent: 'center', alignItems: 'center', marginTop: space.lg },
+  signOutText: { fontSize: 13.5, fontWeight: '600', color: colors.inkMuted },
 });
