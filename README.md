@@ -229,6 +229,7 @@ Detalles en [`docs/SETUP.md`](docs/SETUP.md).
 ## Documentación
 
 - [`docs/MOVIL.md`](docs/MOVIL.md) — **verla en el móvil**, paso a paso desde cero
+- [`docs/NATIVA.md`](docs/NATIVA.md) — generar el `.apk` o el `.ipa` de verdad
 - [`docs/SETUP.md`](docs/SETUP.md) — levantar el entorno local y desplegar
 - [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) — decisiones técnicas en detalle
 - [`docs/GLOSARIO.md`](docs/GLOSARIO.md) — estados, tipos de fecha y vocabulario del dominio

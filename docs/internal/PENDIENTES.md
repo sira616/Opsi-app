@@ -157,7 +157,9 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | **Nadie ha ejecutado la app contra un backend real** | El bundle web **sí compila** (`expo export --platform web` pasa), así que el código es correcto. Lo que nadie ha visto es la app hablando con Supabase de verdad |
 | 🟡 | Soporte web añadido para poder mirarla | `react-native-web`. Es una comodidad de desarrollo, **no un objetivo del producto**: el roadmap dice app móvil. Ojo con acabar diseñando para el navegador |
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
-| 🟠 | D5 · Development build con EAS | Solo hace falta para el escáner (fase 2) y las push (fase 3) |
+| 🟠 | D5 · Development build con EAS | `eas.json` ya está; falta `eas init` (necesita cuenta de Expo). Ver [`NATIVA.md`](../NATIVA.md) |
+| 🟠 | **Sin icono ni pantalla de carga** | `app/assets` está vacío: cualquier build nativa saldrá con el icono genérico de Expo. Hacen falta `icon.png` 1024×1024 y `splash.png` |
+| 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
 | 🟠 | **Sin confirmación al tirar ni al terminar** | Se ejecutan al primer toque y no hay forma de deshacerlas. Un dedo torpe borra un alimento del inventario sin preguntar |
 | 🟡 | La fecha se teclea, no se elige | `31/12/2026` a mano. Rápido para copiar de un envase, pero un selector nativo debería existir como alternativa |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |

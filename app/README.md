@@ -57,11 +57,9 @@ npm run app        # QR para Expo Go en el móvil
 > Desde un **dispositivo físico**, `127.0.0.1` es el propio móvil. Hay que poner la IP de
 > tu ordenador en la red local en `EXPO_PUBLIC_SUPABASE_URL`.
 
-Para el escáner (fase 2) y las notificaciones (fase 3) hará falta una *development build*:
-
-```bash
-eas build --profile development
-```
+Para el escáner (fase 2) y las notificaciones (fase 3) hará falta una *development
+build*. Cómo generarla, y qué cuesta cada plataforma, en
+[`../docs/NATIVA.md`](../docs/NATIVA.md).
 
 El escáner de códigos y las notificaciones push **no funcionan en Expo Go**: requieren una
 *development build*. El **login sí**, porque con contraseña no hay que volver de ningún
