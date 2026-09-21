@@ -9,7 +9,8 @@ export type ChipOption<T extends string> = {
 };
 
 type Props<T extends string> = {
-  label: string;
+  /** Opcional: dentro de un bloque que ya lleva título, sobra. */
+  label?: string;
   options: readonly ChipOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -28,7 +29,7 @@ export function Chips<T extends string>({ label, options, value, onChange, hint 
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {options.map((option) => {
           const selected = option.value === value;

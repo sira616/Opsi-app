@@ -219,8 +219,9 @@ Pulsa el botón **+** de arriba a la derecha y da de alta algo:
 - **Qué es** — «Leche entera»
 - **Cuánto** — `1`, y elige **l**
 - **Dónde está** — Nevera
-- **Ponerle fecha** — márcalo, usa el atajo *En 3 días*, tipo *Consumo preferente*,
-  origen *Viene en el envase*
+- **Qué pasillo** — se adivina sola del nombre; tócala solo si no acierta
+- **Ponerle fecha** — márcalo, usa el atajo *3 días*, tipo *Consumo preferente*,
+  origen *Lo pone el envase*
 
 Guarda y aparecerá en la lista. Tócalo para abrir el detalle, donde están las seis
 acciones: abrir, usar cantidad, congelar, descongelar, terminar y tirar.

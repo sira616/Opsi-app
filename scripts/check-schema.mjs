@@ -252,6 +252,35 @@ async function runPgtapFiles() {
       ausentes.length === 0,
       ausentes.length ? `no existen: ${ausentes.join(', ')}` : '',
     );
+
+    // Las categorías están escritas dos veces: el enum de la migración y la
+    // lista de la app, que además lleva sus etiquetas y sus reglas. Que se
+    // separen no daría un error de compilación, solo un alta que falla al
+    // guardar con un valor que la base no conoce.
+    const catSrc = await readFile(join(ROOT, 'app', 'src', 'shared', 'lib', 'categorias.ts'), 'utf8');
+    const enApp = new Set(
+      [...catSrc.matchAll(/valor: '([a-z_]+)'/g)].map((m) => m[1]),
+    );
+    const enBase = new Set(
+      (
+        await db.query(
+          `select unnest(enum_range(null::public.food_category))::text as v`,
+        )
+      ).rows.map((r) => r.v),
+    );
+
+    const soloApp = [...enApp].filter((v) => !enBase.has(v));
+    const soloBase = [...enBase].filter((v) => !enApp.has(v));
+    check(
+      'las categorías de la app y las del enum son las mismas',
+      soloApp.length === 0 && soloBase.length === 0 && enApp.size > 0,
+      [
+        soloApp.length ? `solo en la app: ${soloApp.join(', ')}` : '',
+        soloBase.length ? `solo en la base: ${soloBase.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
   } catch (error) {
     check('la capa de datos cuadra con el esquema', false, error.message);
   }

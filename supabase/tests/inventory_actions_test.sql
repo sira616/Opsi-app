@@ -325,6 +325,32 @@ select throws_ok(
   'la cantidad tiene que ser mayor que cero'
 );
 
+-- ── La categoria ──────────────────────────────────────────────────────────
+
+select is(
+  (select category::text from public.inventory_items where name = 'Lentejas'),
+  'otros',
+  'sin categoria, el alta cae en otros'
+);
+
+select lives_ok(
+  $$select public.create_item('Merluza', 'mass', 'g', 500, 'fridge',
+      null, null, null, null, null, 'pescado')$$,
+  'el alta acepta una categoria'
+);
+
+select is(
+  (select category::text from public.inventory_items where name = 'Merluza'),
+  'pescado',
+  'y la guarda tal cual'
+);
+
+select is(
+  (select category::text from public.inventory_with_priority where name = 'Merluza'),
+  'pescado',
+  'y la vista la deja ver, que es de donde la lee la lista'
+);
+
 -- ── «Hoy» se calcula donde esta el usuario, no el servidor (Q9) ───────────
 
 select is(

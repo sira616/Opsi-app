@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,6 +8,13 @@ import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/
 import { describeDbError } from '@/shared/lib/db-errors';
 import type { Palette } from '@/shared/theme/tokens';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import {
+  aplicarFiltro,
+  FILTRO_VACIO,
+  FiltroInventario,
+  filtroActivo,
+  type Filtro,
+} from '@/shared/ui/FiltroInventario';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
 import { BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
@@ -40,8 +48,14 @@ export default function ConsumirPrimero() {
     queryFn: fetchPriorityList,
   });
 
-  const items = data ?? [];
+  const [filtro, setFiltro] = useState<Filtro>(FILTRO_VACIO);
+
+  const todos = data ?? [];
+  // El filtro se aplica ENCIMA del orden que trae la base de datos, no en su
+  // lugar: por defecto no quita nada y la pantalla es la de siempre.
+  const items = aplicarFiltro(todos, filtro);
   const urgent = items.filter((i) => i.priority === 'high').length;
+  const filtrando = filtroActivo(filtro);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -56,13 +70,21 @@ export default function ConsumirPrimero() {
         </View>
         <Text style={t.title}>Consumir primero</Text>
         <Text style={t.bodySmall}>
-          {items.length === 0
+          {todos.length === 0
             ? 'Nada guardado todavía'
-            : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
-              (urgent > 0
-                ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy`
-                : ' · nada urgente hoy')}
+            : filtrando
+              ? `${items.length} de ${todos.length}`
+              : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
+                (urgent > 0
+                  ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy`
+                  : ' · nada urgente hoy')}
         </Text>
+
+        {todos.length > 0 ? (
+          <View style={styles.filtro}>
+            <FiltroInventario items={todos} filtro={filtro} onChange={setFiltro} />
+          </View>
+        ) : null}
       </View>
 
       <ScrollView
@@ -75,7 +97,24 @@ export default function ConsumirPrimero() {
 
         <ErrorNote message={error ? describeDbError(error) : null} />
 
-        {!isPending && items.length === 0 && !error ? (
+        {!isPending && todos.length > 0 && items.length === 0 ? (
+          <View style={styles.sinResultados}>
+            <Text style={styles.emptyTitle}>Nada con ese filtro</Text>
+            <Text style={t.bodySmall}>
+              Tienes {todos.length} {todos.length === 1 ? 'alimento' : 'alimentos'} guardados, pero
+              ninguno encaja con lo que has pedido.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setFiltro(FILTRO_VACIO)}
+              style={styles.emptyButton}
+            >
+              <Text style={styles.emptyButtonText}>Ver todo</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {!isPending && todos.length === 0 && !error ? (
           <View style={styles.empty}>
             <View style={styles.emptyIcons}>
               <View style={[styles.emptyIcon, { backgroundColor: c.brandSoft }]}>
@@ -102,7 +141,7 @@ export default function ConsumirPrimero() {
           </View>
         ) : null}
 
-        {!isPending && items.length > 0 && urgent === 0 ? (
+        {!isPending && items.length > 0 && urgent === 0 && !filtrando ? (
           <View style={styles.allGood}>
             <Confetti size={20} color={c.brand} weight="fill" />
             <Text style={styles.allGoodText}>
@@ -162,7 +201,9 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
   },
   addIcon: { color: c.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
+  filtro: { marginTop: space.md },
   content: { paddingHorizontal: space.xl, paddingBottom: tabBarClearance, gap: space.lg },
+  sinResultados: { gap: space.md, paddingVertical: space.xxl, alignItems: 'flex-start' },
   loader: { marginTop: space.xl },
   allGood: {
     flexDirection: 'row',

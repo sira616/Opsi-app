@@ -19,6 +19,7 @@
  *     npm run types    ← y luego quitar los casts de este fichero
  */
 
+import type { Categoria } from '@/shared/lib/categorias';
 import { supabase } from '@/shared/lib/supabase';
 import type { MeasurementUnit, UnitFamily } from '@/shared/lib/units';
 
@@ -55,13 +56,16 @@ export type PriorityItem = {
    *  proyecto no se permite. */
   date_kind: DateKind | null;
   days_left: number | null;
+  /** El pasillo del supermercado. Con esto filtra la lista. */
+  category: Categoria;
+  /** Abierto o cerrado. Es la fecha, no un estado: lo abierto no se cierra. */
+  opened_at: string | null;
   /** Cuándo empezó la congelación en curso. La lista cuenta desde aquí. */
   frozen_at: string | null;
 };
 
 /** Lo del detalle: todo lo de la lista más las fechas candidatas. */
 export type ItemDetail = PriorityItem & {
-  opened_at: string | null;
   frozen_days: number;
   thawed_at: string | null;
   limit_date: string | null;
@@ -84,7 +88,7 @@ export type InventoryEvent = {
 const PRIORITY_FIELDS =
   'id, name, state, location, unit_family, display_unit, initial_quantity, ' +
   'remaining_quantity, priority, effective_limit_date, effective_date_reason, ' +
-  'effective_date_source, date_kind, days_left, frozen_at';
+  'effective_date_source, date_kind, days_left, frozen_at, category, opened_at';
 
 /**
  * Lo que alimenta «Consumir primero».
@@ -145,6 +149,7 @@ export type NewItem = {
   limitDate: string | null;
   dateKind: DateKind | null;
   dateSource: DateSource | null;
+  category: Categoria;
 };
 
 /**
@@ -168,6 +173,7 @@ export async function createItem(item: NewItem): Promise<void> {
       p_limit_date: item.limitDate,
       p_date_kind: item.dateKind,
       p_date_source: item.dateSource,
+      p_category: item.category,
     });
 
   if (error) throw error;

@@ -178,6 +178,12 @@ npx expo install phosphor-react-native react-native-svg
 | Tirar | `Trash` | `duotone` |
 | Cuenta atrás parada | `Snowflake` | `fill`, 11px, en la fila |
 | Escáner | `Barcode` | `regular` |
+| Cuánto (alta) | `Scales` | `duotone` |
+| Qué pasillo (alta) | `Tag` | `duotone` |
+| Dónde lo guardas (alta) | `MapPin` | `duotone` |
+| Hasta cuándo (alta) | `CalendarBlank` | `duotone` |
+| Categoría adivinada | `Sparkle` | `fill`, 11px |
+| Filtro | `FunnelSimple` | `duotone` |
 
 > Los iconos **nunca van solos** en una acción destructiva. Un cubo de basura sin la
 > palabra «Tirar» al lado se confunde con «vaciar» o «borrar todo». Por eso todos los
@@ -186,6 +192,15 @@ npx expo install phosphor-react-native react-native-svg
 >
 > `duotone` y no `regular`: con una sola línea, siete botones apilados se leen como una
 > lista de ajustes. El relleno tenue del duotone les da peso de acción sin gritar.
+
+### Un icono por pasillo
+
+Las diez categorías de supermercado llevan el suyo: `Carrot` fruta y verdura, `Hamburger`
+carne, `Fish` pescado, `Egg` lácteos y huevos, `Bread` panadería, `Grains` despensa,
+`Snowflake` congelados, `BeerBottle` bebidas, `Cookie` dulces y `Basket` otros.
+
+Phosphor no tiene icono de carne; `Hamburger` es lo más cercano y se lee a la primera,
+que es lo único que se le pide.
 
 ### Un icono por alimento
 

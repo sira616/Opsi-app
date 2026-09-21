@@ -437,6 +437,38 @@ Queda anotado en los pendientes.
 **Q7 sigue abierta y sube un poco de prioridad**: quien no añada un correo no tiene forma
 de recuperar la contraseña.
 
+### D-20 · Categorías de supermercado · 2026-09-21
+
+El nombre de un alimento es texto libre y tiene que seguirlo siendo —nadie busca «Leche
+semidesnatada sin lactosa» en un desplegable—, pero eso dejaba el inventario **sin ninguna
+forma de agruparlo que no fuera la urgencia**. Diez pasillos de supermercado son esa
+forma, y se elige el supermercado porque es como ya tiene la gente organizada la cabeza al
+hacer la compra.
+
+**Por qué un enum nuevo y no `products.categories_tags`:**
+
+| | |
+|---|---|
+| `categories_tags` | Viene de Open Food Facts, son decenas de etiquetas por producto y sirven para **buscar** la conservación tras apertura ([D-15](#d-15--conservación-tras-apertura-producto--categoría--nada--2026-09-21-cierra-q3)). No es una taxonomía con la que pintar una lista |
+| Un alta manual | No tiene producto de catálogo, así que no tendría ninguna etiqueta. Y el alta manual es el camino principal |
+
+**Diez valores, ni uno más.** Una fila de filtros que no cabe en un móvil no la usa nadie.
+
+**Se adivina, no se pregunta.** `adivinarCategoria()` la deduce del nombre con las mismas
+reglas que ya elegían el icono, y el usuario solo la toca si falla. Un campo obligatorio
+que casi nunca hay que rellenar es la diferencia entre un formulario corto y uno que da
+pereza. El chip propuesto se marca con una estrellita: que se note que lo ha puesto la app.
+
+**Abierto y cerrado no son estados, es una fecha.** El filtro mira `opened_at`, no una
+lista de estados. Lo abierto no se vuelve a cerrar, y por eso no existe un estado
+«cerrado» en el enum: mirar la fecha evita que «descongelado» o «medio usado» se queden
+fuera de las dos cajas.
+
+**El filtro no filtra por defecto.** «Consumir primero» ordenado por urgencia es lo que
+hay que ver al abrir la app; buscar algo concreto es la excepción. Y solo se ofrecen los
+pasillos que existen en tu inventario: enseñar «Pescado» sin tener ninguno es prometer una
+lista vacía.
+
 ## 3. Convenciones
 
 ### Ramas
@@ -980,3 +1012,29 @@ añade el token que faltaba, igual que ya existían `brandInk` y `expiryInk`.
 
 La lección de las tres: el formulario y la fila llevaban semanas pidiendo al usuario que
 resolviera contradicciones nuestras. Ninguna se ve leyendo el código; se ven usándolo.
+
+### 2026-09-21 (sesión 19) · Categorías, filtro y un formulario que no interroga
+
+- **Categorías de supermercado** ([D-20](#d-20--categorías-de-supermercado--2026-09-21)), con
+  filtro por pasillo y por abierto/sin abrir en «Consumir primero».
+- **El alta, reescrita.** Bloques con icono en vez de siete campos seguidos, el icono del
+  alimento cambiando en vivo mientras escribes el nombre, cantidad y unidad en la misma
+  línea, atajos de fecha antes del campo —quien los use no llega a teclear— y la categoría
+  ya propuesta.
+- **La fecha admite el año de dos cifras.** `31/12/26` es como viene en la mitad de los
+  envases; exigir el siglo eran dos pulsaciones a cambio de nada.
+- **Y el mensaje de error era el problema de verdad**: «Esa fecha no existe. Escribe los
+  ocho dígitos: 31122026» decía dos cosas a la vez y la segunda parecía un código que
+  había que copiar tal cual. Ahora cada caso dice lo suyo —falta el año, ese día no
+  existe, está vacía— y ninguno enseña una ristra de dígitos como ejemplo.
+
+**Lo que cazó la comprobación nueva de la sesión anterior**, y esto vale por sí solo:
+PostgreSQL guarda el `select i.*` de una vista **ya expandido en columnas** al crearla.
+Añadir `category` a la tabla no la añadía a `inventory_with_priority`, que es justo de
+donde lee la lista. Habría salido como «column category does not exist» al filtrar, en el
+móvil, después de dar todo por bueno. La comprobación que compara las columnas que pide la
+app con las que tiene la vista lo dijo en la primera pasada.
+
+Se añade otra del mismo tipo: las categorías están escritas dos veces —el enum de la
+migración y la lista de la app, con sus etiquetas y sus reglas—, y ahora se comprueba que
+son las mismas. Separarse no daría error de compilación, solo un alta que falla al guardar.
