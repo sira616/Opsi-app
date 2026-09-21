@@ -60,6 +60,12 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 > Las claves locales son **siempre las mismas** para todo el mundo: forman parte de la
 > CLI, no son secretas y no protegen nada. Las de tu proyecto en la nube sí lo son.
 
+> [!IMPORTANT]
+> **`npm run up` después de cada `git pull`.** Una base de datos por detrás del código
+> falla de formas que despistan: lo habitual es que una pantalla deje de guardar porque
+> la función que llama aún no existe. La app ya lo detecta y lo dice, pero mejor no
+> llegar ahí.
+
 ### Comandos del día a día
 
 | Comando | Qué hace |

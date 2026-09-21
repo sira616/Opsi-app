@@ -5,7 +5,8 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createItem, type DateKind, type DateSource, type StorageLocation } from '@/api/inventory';
-import { toIsoDate } from '@/shared/lib/dates';
+import { describeDbError } from '@/shared/lib/db-errors';
+import { aIso, enDias, formatearMientrasEscribe } from '@/shared/lib/fecha-input';
 import { queryKeys } from '@/shared/lib/query';
 import { familyOf, toBase, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
@@ -67,8 +68,8 @@ export default function AltaManual() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.priorityList });
       router.back();
     },
-    onError(caught: Error) {
-      setError(caught.message);
+    onError(caught: unknown) {
+      setError(describeDbError(caught));
     },
   });
 
@@ -81,8 +82,8 @@ export default function AltaManual() {
 
     let limitDate: string | null = null;
     if (hasDate) {
-      limitDate = parseSpanishDate(dateText);
-      if (!limitDate) return setError('La fecha no se entiende. Escríbela como 31/12/2026.');
+      limitDate = aIso(dateText);
+      if (!limitDate) return setError('Esa fecha no existe. Escribe los ocho dígitos: 31122026.');
     }
 
     mutation.mutate({
@@ -156,12 +157,31 @@ export default function AltaManual() {
               <View style={styles.dateFields}>
                 <TextField
                   label="Fecha"
+                  hint="Solo números: las barras se ponen solas."
                   value={dateText}
-                  onChangeText={setDateText}
+                  onChangeText={(t) => setDateText(formatearMientrasEscribe(t))}
                   placeholder="31/12/2026"
-                  keyboardType="numbers-and-punctuation"
+                  keyboardType="number-pad"
                   inputMode="numeric"
+                  maxLength={10}
                 />
+
+                <View style={styles.atajos}>
+                  {[
+                    ['En 3 días', 3],
+                    ['En 1 semana', 7],
+                    ['En 1 mes', 30],
+                  ].map(([etiqueta, dias]) => (
+                    <Pressable
+                      key={etiqueta as string}
+                      accessibilityRole="button"
+                      onPress={() => setDateText(enDias(dias as number))}
+                      style={styles.atajo}
+                    >
+                      <Text style={styles.atajoText}>{etiqueta as string}</Text>
+                    </Pressable>
+                  ))}
+                </View>
                 <Chips
                   label="De qué tipo"
                   options={KIND_OPTIONS}
@@ -198,32 +218,6 @@ export default function AltaManual() {
   );
 }
 
-/**
- * Acepta 31/12/2026 y 31-12-2026, que es como se escribe una fecha aquí.
- *
- * Hecho a mano y no con un selector nativo por una razón concreta: la fecha se
- * copia de un envase que tienes en la mano, y teclear seis números es más
- * rápido que girar tres ruedas. El selector llegará como alternativa, no como
- * sustituto.
- */
-function parseSpanishDate(text: string): string | null {
-  const match = text.trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
-  if (!match) return null;
-
-  const [, d, m, y] = match;
-  const day = Number(d);
-  const month = Number(m);
-  const year = Number(y) < 100 ? 2000 + Number(y) : Number(y);
-
-  const date = new Date(year, month - 1, day);
-  // Rebota las fechas imposibles: el 31 de febrero se convertiría solo en el
-  // 3 de marzo y se guardaría una fecha que nadie escribió.
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    return null;
-  }
-  return toIsoDate(date);
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
   flex: { flex: 1 },
@@ -256,4 +250,14 @@ const styles = StyleSheet.create({
   toggleText: { flex: 1, gap: 2 },
   toggleTitle: { fontSize: 15, fontWeight: '600', color: colors.ink },
   dateFields: { gap: space.lg, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg },
+
+  atajos: { flexDirection: 'row', gap: space.sm, marginTop: -space.sm },
+  atajo: {
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+  },
+  atajoText: { fontSize: 12.5, fontWeight: '600', color: colors.brand },
 });

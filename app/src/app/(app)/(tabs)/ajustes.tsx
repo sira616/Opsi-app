@@ -1,10 +1,12 @@
-import { Feather } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CaretDown, CaretUp, Clock } from 'phosphor-react-native';
+
 import { fetchSettings, updateSettings, type UserSettings } from '@/api/settings';
+import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { useSession } from '@/shared/lib/session';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -54,8 +56,8 @@ export default function Ajustes() {
         queryClient.invalidateQueries({ queryKey: queryKeys.priorityList }),
       ]);
     },
-    onError(caught: Error) {
-      setError(caught.message);
+    onError(caught: unknown) {
+      setError(describeDbError(caught));
     },
   });
 
@@ -73,7 +75,7 @@ export default function Ajustes() {
         <Text style={font.title}>Ajustes</Text>
 
         {settings.isPending ? <ActivityIndicator color={colors.brand} /> : null}
-        <ErrorNote message={error ?? (settings.error ? (settings.error as Error).message : null)} />
+        <ErrorNote message={error ?? (settings.error ? describeDbError(settings.error) : null)} />
 
         {data ? (
           <>
@@ -120,7 +122,7 @@ export default function Ajustes() {
               ) : null}
 
               <View style={styles.note}>
-                <Feather name="clock" size={14} color={colors.inkFaint} />
+                <Clock size={15} color={colors.inkFaint} weight="duotone" />
                 <Text style={styles.noteText}>
                   Los avisos llegan en la fase 3. Lo que elijas aquí se guarda desde ya.
                 </Text>
@@ -138,7 +140,11 @@ export default function Ajustes() {
                   <Text style={styles.zoneValue}>{data.timezone}</Text>
                   <Text style={font.caption}>Decide qué cuenta como «hoy» en tu inventario.</Text>
                 </View>
-                <Feather name={showZones ? 'chevron-up' : 'chevron-down'} size={18} color={colors.inkMuted} />
+                {showZones ? (
+                  <CaretUp size={17} color={colors.inkMuted} weight="bold" />
+                ) : (
+                  <CaretDown size={17} color={colors.inkMuted} weight="bold" />
+                )}
               </Pressable>
 
               {showZones ? (

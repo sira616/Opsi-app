@@ -4,9 +4,11 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
+import { describeDbError } from '@/shared/lib/db-errors';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
+import { BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
 import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 /**
@@ -49,7 +51,9 @@ export default function ConsumirPrimero() {
           {items.length === 0
             ? 'Nada guardado todavía'
             : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
-              (urgent > 0 ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy` : '')}
+              (urgent > 0
+                ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy`
+                : ' · nada urgente hoy')}
         </Text>
       </View>
 
@@ -61,10 +65,21 @@ export default function ConsumirPrimero() {
       >
         {isPending ? <ActivityIndicator color={colors.brand} style={styles.loader} /> : null}
 
-        <ErrorNote message={error ? (error as Error).message : null} />
+        <ErrorNote message={error ? describeDbError(error) : null} />
 
         {!isPending && items.length === 0 && !error ? (
           <View style={styles.empty}>
+            <View style={styles.emptyIcons}>
+              <View style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}>
+                <Carrot size={26} color={colors.brand} weight="duotone" />
+              </View>
+              <View style={[styles.emptyIcon, { backgroundColor: '#FBF0DC', marginLeft: -12 }]}>
+                <Egg size={26} color={colors.warning} weight="duotone" />
+              </View>
+              <View style={[styles.emptyIcon, { backgroundColor: '#E2F0FA', marginLeft: -12 }]}>
+                <BowlFood size={26} color="#2A7BB8" weight="duotone" />
+              </View>
+            </View>
             <Text style={styles.emptyTitle}>Tu despensa está vacía</Text>
             <Text style={font.bodySmall}>
               Da de alta lo primero y aparecerá aquí, ordenado por lo que conviene gastar antes.
@@ -76,6 +91,15 @@ export default function ConsumirPrimero() {
             >
               <Text style={styles.emptyButtonText}>Añadir un alimento</Text>
             </Pressable>
+          </View>
+        ) : null}
+
+        {!isPending && items.length > 0 && urgent === 0 ? (
+          <View style={styles.allGood}>
+            <Confetti size={20} color={colors.brand} weight="fill" />
+            <Text style={styles.allGoodText}>
+              Nada corre prisa hoy. Buen momento para cocinar sin agobios.
+            </Text>
           </View>
         ) : null}
 
@@ -131,6 +155,15 @@ const styles = StyleSheet.create({
   addIcon: { color: colors.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
   content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
   loader: { marginTop: space.xl },
+  allGood: {
+    flexDirection: 'row',
+    gap: space.sm,
+    alignItems: 'center',
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  allGoodText: { flex: 1, fontSize: 13, lineHeight: 18, color: '#245540' },
   group: { gap: space.sm },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },
@@ -143,6 +176,16 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
   },
   empty: { gap: space.md, paddingVertical: space.xxl, alignItems: 'flex-start' },
+  emptyIcons: { flexDirection: 'row', marginBottom: space.xs },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.ground,
+  },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.ink },
   emptyButton: {
     minHeight: touchTarget,

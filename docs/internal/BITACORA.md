@@ -777,3 +777,24 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   como «hoy» y por tanto los días que quedan. Sin eso seguiría enseñando los números
   calculados con la zona anterior.
 - Anotado que la lista de zonas está escrita a mano: seis más la del dispositivo.
+
+### 2026-09-21 (sesión 11) · Iconos de comida, fecha y errores que se entienden
+
+- **Un icono por alimento, deducido del nombre.** Es lo que más cambia la sensación de la
+  app: la misma lista con un icono de comida a la izquierda deja de parecer una hoja de
+  cálculo. Las reglas devuelven el elemento ya construido y no el componente, porque
+  guardar un componente en una variable durante el render es un patrón que React penaliza
+  —y que el linter cazó.
+- **Phosphor sustituye a `@expo/vector-icons`.** Pestaña activa en `fill`, las demás en
+  contorno: el patrón de iOS, posible solo porque Phosphor trae seis pesos del mismo
+  dibujo.
+- **Arreglado el campo de fecha.** El bug: `inputMode="numeric"` gana al `keyboardType`, y
+  en iOS eso da un teclado sin la barra «/», así que era imposible escribir la fecha.
+  Ahora se teclean ocho dígitos y las barras se ponen solas, más atajos de 3 días, 1
+  semana y 1 mes.
+- **Errores de base de datos traducidos a algo accionable.** El caso que lo motivó: una
+  base por detrás del código responde con un mensaje de PostgREST sobre la caché del
+  esquema, que en la app se veía como «no puedo añadir comida». Ahora dice qué ejecutar.
+- Quitado el `.single()` de `create_item`: la función devuelve una fila suelta y pedirle a
+  PostgREST que la trate como objeto único era una forma de fallar a cambio de un dato que
+  no se usaba.

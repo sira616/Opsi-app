@@ -159,10 +159,11 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
 | 🟠 | D5 · Development build con EAS | `eas.json` ya está; falta `eas init` (necesita cuenta de Expo). Ver [`NATIVA.md`](../NATIVA.md) |
 | 🟠 | **Sin icono ni pantalla de carga** | `app/assets` está vacío. El prompt para generar el logo está en [`DISENO.md`](../DISENO.md) |
-| 🟠 | **El diseño propuesto no está implementado** | `DISENO.md` y su prototipo son una propuesta; el código sigue con la paleta provisional y `@expo/vector-icons`. Sin modo oscuro |
+| 🟠 | **La paleta del diseño no está aplicada** | Los iconos ya son Phosphor y hay iconos de comida, pero `tokens.ts` sigue con la paleta provisional y **no hay modo oscuro**. Es lo que falta del paso 1 de `DISENO.md` |
+| 🟡 | Las tipografías tampoco | Bricolage Grotesque y Plus Jakarta Sans están elegidas y sin cargar |
 | 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
 | ✅ | ~~Sin confirmación al tirar ni al terminar~~ | Resuelto: confirmación en línea, con el nombre del alimento en la pregunta. En línea y no `Alert.alert` porque este último no hace nada en la versión web |
-| 🟡 | La fecha se teclea, no se elige | `31/12/2026` a mano. Rápido para copiar de un envase, pero un selector nativo debería existir como alternativa |
+| 🟡 | Sin selector de fecha nativo | Ahora se teclean ocho dígitos y las barras salen solas, más tres atajos. Es rápido para copiar de un envase, pero un calendario debería existir como alternativa |
 | 🟠 | **La lista de zonas horarias está escrita a mano** | Seis zonas más la del dispositivo. Sirve para España y Latinoamérica, pero alguien fuera de esa lista se queda con la del dispositivo o nada. Una búsqueda sobre `Intl.supportedValuesOf('timeZone')` lo resolvería |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
 | 🟠 | **La app habla con Supabase sin tipos** | `src/api/inventory.ts` afirma los tipos a mano con `as unknown as`. Si una columna cambia de nombre, compila y revienta en ejecución. Lo arregla `npm run types` + quitar los casts |

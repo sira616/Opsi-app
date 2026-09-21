@@ -1,9 +1,12 @@
+import { BowlSteam } from 'phosphor-react-native';
+
+import { colors } from '@/shared/theme/tokens';
 import { Proximamente } from '@/shared/ui/Proximamente';
 
 export default function Chat() {
   return (
     <Proximamente
-      icon="message-circle"
+      icon={<BowlSteam size={28} color={colors.brand} weight="duotone" />}
       title="Opsi"
       phase="Fase 5"
       what="Preguntarle qué cenar con lo que hay, y que te lo marque como gastado cuando lo termines. Con acceso real al inventario, no adivinando."

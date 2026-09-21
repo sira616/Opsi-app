@@ -173,6 +173,24 @@ npx expo install phosphor-react-native react-native-svg
 > Los iconos **nunca van solos** en una acción destructiva. Un cubo de basura sin la
 > palabra «Tirar» al lado se confunde con «vaciar» o «borrar todo».
 
+### Un icono por alimento
+
+Cada elemento del inventario lleva **su propio icono de comida, deducido del nombre**.
+«Leche entera» trae una jarra, «huevos» un huevo, «merluza» un pez. Nadie lo elige: sale
+de lo que escribes.
+
+Es lo que más cambia la sensación de la app: una lista de texto con fechas parece una
+hoja de cálculo; la misma lista con un icono de comida a la izquierda parece una cocina.
+Y no le cuesta nada al usuario.
+
+El icono va en **peso `duotone`** dentro de una pastilla redondeada, teñido según la
+urgencia: verde lo normal, rojo lo que corre prisa, azul lo congelado. Cuando no acierta
+cae en unos cubiertos — equivocarse es barato, porque el icono acompaña al nombre y
+nunca lo sustituye.
+
+Las reglas viven en `app/src/shared/lib/iconos-comida.tsx`, y ampliarlas es añadir una
+línea.
+
 ## 6. Layout
 
 | | |

@@ -27,6 +27,14 @@ ordenador y el móvil se conecta a él por la Wi-Fi de casa.
 
 ---
 
+> [!IMPORTANT]
+> **Después de cada `git pull`, ejecuta `npm run up`.**
+>
+> Casi todos los cambios traen migraciones nuevas, y una base de datos que va por
+> detrás del código falla de formas que no se parecen a su causa: el caso típico es que
+> la pantalla de añadir comida no guarda nada, porque la función que usa todavía no
+> existe en tu base. `npm run up` las aplica.
+
 ## Paso 1 · Descargar el proyecto
 
 Abre una terminal (en Windows, **PowerShell** o **Símbolo del sistema**) y ve a donde
@@ -239,6 +247,7 @@ Para volver a empezar otro día: pasos 2, 3, 5 y 6. Los datos siguen ahí.
 | El QR no carga y la Wi-Fi es de invitados o de oficina | La red aísla los dispositivos | `npm run app:tunnel` (ver arriba, con su aviso) |
 | `Falta EXPO_PUBLIC_SUPABASE_URL` | Expo arrancó antes de que existiera el fichero | Ctrl+C y `npm run app` de nuevo |
 | Puerto ocupado | Hay otro Supabase levantado | `npx supabase stop --all` y vuelve al paso 3 |
+| **No puedo añadir comida** · «faltan tablas» | Tu base va por detrás del código | `npm run up`. La app te lo dice ahora con esas palabras |
 
 ### Ver los datos a mano
 

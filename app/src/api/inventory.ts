@@ -149,8 +149,11 @@ export type NewItem = {
  * `created` se escriban en la misma transacción. El hogar lo resuelve el
  * servidor: el cliente no lo sabe ni lo necesita.
  */
-export async function createItem(item: NewItem): Promise<{ id: string }> {
-  const { data, error } = await supabase
+export async function createItem(item: NewItem): Promise<void> {
+  // Sin `.single()`: la función devuelve una fila suelta, no un conjunto, y
+  // pedirle a PostgREST que la trate como objeto único es una forma de fallar
+  // a cambio de un dato que aquí no se usa.
+  const { error } = await supabase
     .rpc('create_item', {
       p_name: item.name,
       p_unit_family: item.unitFamily,
@@ -160,11 +163,9 @@ export async function createItem(item: NewItem): Promise<{ id: string }> {
       p_limit_date: item.limitDate,
       p_date_kind: item.dateKind,
       p_date_source: item.dateSource,
-    })
-    .single();
+    });
 
   if (error) throw error;
-  return data as unknown as { id: string };
 }
 
 /** Las seis acciones, cada una con su evento, en una transacción del servidor. */

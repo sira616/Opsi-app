@@ -1,11 +1,12 @@
-import { Feather } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import type { ReactNode } from 'react';
 
 import { colors, font, radius, space } from '@/shared/theme/tokens';
 
 type Props = {
-  icon: keyof typeof Feather.glyphMap;
+  icon: ReactNode;
   title: string;
   phase: string;
   what: string;
@@ -24,15 +25,12 @@ export function Proximamente({ icon, title, phase, what, ready }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.iconBox}>
-          <Feather name={icon} size={26} color={colors.inkFaint} />
-        </View>
+        <View style={styles.iconBox}>{icon}</View>
         <Text style={font.title}>{title}</Text>
         <Text style={styles.phase}>{phase}</Text>
         <Text style={styles.what}>{what}</Text>
         {ready ? (
           <View style={styles.readyBox}>
-            <Feather name="check" size={15} color={colors.brand} />
             <Text style={styles.readyText}>{ready}</Text>
           </View>
         ) : null}
@@ -45,12 +43,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
   content: { flex: 1, padding: space.xl, gap: space.md, justifyContent: 'center', alignItems: 'flex-start' },
   iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: space.xs,

@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PriorityItem } from '@/api/inventory';
+import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDateSource, describeDaysLeft, describeReason } from '@/shared/lib/dates';
 import { formatQuantity } from '@/shared/lib/units';
 import { colors, radius, space } from '@/shared/theme/tokens';
@@ -42,6 +43,10 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   const source = describeDateSource(item.effective_date_source);
   const footnote = [reason, source].filter(Boolean).join(' · ');
 
+  // El icono sale del nombre: nadie lo elige. Es lo que convierte una lista de
+  // texto en algo que apetece mirar, sin pedirle nada al usuario.
+  const tono = urgent ? colors.expiry : item.state === 'frozen' ? '#2A7BB8' : colors.brand;
+
   return (
     <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
       <Pressable
@@ -53,6 +58,10 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           pressed && styles.cardPressed,
         ]}
       >
+      <View style={[styles.avatar, { backgroundColor: urgent ? colors.expirySoft : colors.brandSoft }]}>
+        <IconoComida nombre={item.name} size={22} color={tono} weight="duotone" />
+      </View>
+
       <View style={styles.main}>
         <Text style={styles.name} numberOfLines={1}>
           {item.name}
@@ -94,6 +103,14 @@ const styles = StyleSheet.create({
   },
   cardUndated: { borderStyle: 'dashed', borderColor: '#DCD3C4' },
   cardPressed: { opacity: 0.7 },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
   main: { flex: 1, gap: 3 },
   name: { fontSize: 15.5, fontWeight: '600', color: colors.ink },
   meta: { fontSize: 12.5, color: colors.inkMuted },

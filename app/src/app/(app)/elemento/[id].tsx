@@ -12,6 +12,7 @@ import {
   type ItemDetail,
 } from '@/api/inventory';
 import { describeDateSource, describeDaysLeft } from '@/shared/lib/dates';
+import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity, toBase } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
@@ -81,8 +82,8 @@ export default function Detalle() {
         queryClient.invalidateQueries({ queryKey: queryKeys.priorityList }),
       ]);
     },
-    onError(caught: Error) {
-      setError(caught.message);
+    onError(caught: unknown) {
+      setError(describeDbError(caught));
     },
   });
 
