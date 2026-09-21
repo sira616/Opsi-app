@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -18,7 +18,7 @@ import { formatQuantity, toBase } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
-import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 const STATE_LABEL: Record<ItemDetail['state'], string> = {
   closed: 'Cerrado',
@@ -42,6 +42,9 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 export default function Detalle() {
+  const styles = useStyles();
+  const t = useType();
+  const c = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -90,7 +93,7 @@ export default function Detalle() {
   if (item.isPending) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator color={colors.brand} />
+        <ActivityIndicator color={c.brand} />
       </SafeAreaView>
     );
   }
@@ -99,7 +102,7 @@ export default function Detalle() {
   if (!data) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <Text style={font.body}>Ese elemento ya no está.</Text>
+        <Text style={t.body}>Ese elemento ya no está.</Text>
         <Pressable onPress={() => router.back()} style={styles.backLink}>
           <Text style={styles.backText}>Volver</Text>
         </Pressable>
@@ -144,10 +147,10 @@ export default function Detalle() {
         </Pressable>
 
         <View style={styles.titleBlock}>
-          <Text style={font.title}>{data.name}</Text>
+          <Text style={t.title}>{data.name}</Text>
           <View style={styles.chips}>
             <Text style={styles.stateChip}>{STATE_LABEL[data.state]}</Text>
-            <Text style={font.bodySmall}>{formatQuantity(data.remaining_quantity, data.display_unit)}</Text>
+            <Text style={t.bodySmall}>{formatQuantity(data.remaining_quantity, data.display_unit)}</Text>
           </View>
         </View>
 
@@ -242,7 +245,7 @@ export default function Detalle() {
           </View>
         ) : (
           <View style={styles.closedNote}>
-            <Text style={font.bodySmall}>
+            <Text style={t.bodySmall}>
               Este elemento está {STATE_LABEL[data.state].toLowerCase()} y ya no admite acciones.
             </Text>
           </View>
@@ -251,7 +254,7 @@ export default function Detalle() {
         <View style={styles.history}>
           <Text style={styles.sectionTitle}>Historial</Text>
           {(events.data ?? []).length === 0 ? (
-            <Text style={font.bodySmall}>Todavía no hay nada registrado.</Text>
+            <Text style={t.bodySmall}>Todavía no hay nada registrado.</Text>
           ) : (
             (events.data ?? []).map((event: InventoryEvent) => (
               <View key={event.id} style={styles.eventRow}>
@@ -261,7 +264,7 @@ export default function Detalle() {
                     month: 'short',
                   })}
                 </Text>
-                <Text style={font.body}>
+                <Text style={t.body}>
                   {EVENT_LABEL[event.type] ?? event.type}
                   {event.quantity_used
                     ? ` · ${formatQuantity(event.quantity_used, data.display_unit)}`
@@ -284,6 +287,7 @@ export default function Detalle() {
  * número sin explicación es justo lo que el proyecto no quiere dar.
  */
 function FechaLimite({ item }: { item: ItemDetail }) {
+  const styles = useStyles();
   const urgent = item.priority === 'high';
 
   const explanation =
@@ -348,6 +352,7 @@ function Action({
   danger?: boolean;
   primary?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.actionWrapper}>
       <Pressable
@@ -378,53 +383,53 @@ function Action({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   center: { alignItems: 'center', justifyContent: 'center', gap: space.md },
   content: { padding: space.xl, gap: space.xl, paddingBottom: space.xxl * 2 },
 
   back: { minHeight: touchTarget, justifyContent: 'center', marginLeft: -2, alignSelf: 'flex-start' },
   backLink: { minHeight: touchTarget, justifyContent: 'center' },
-  backText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+  backText: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
 
   titleBlock: { gap: space.sm },
   chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   stateChip: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: colors.brand,
-    backgroundColor: colors.brandSoft,
+    color: c.brand,
+    backgroundColor: c.brandSoft,
     borderRadius: radius.sm - 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
     overflow: 'hidden',
   },
 
-  bar: { height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: 4, backgroundColor: colors.brand },
+  bar: { height: 8, borderRadius: 4, backgroundColor: c.border, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand },
 
   dateCard: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.xs + 2 },
-  dateCardNeutral: { backgroundColor: colors.surface, borderColor: colors.border },
-  dateCardUrgent: { backgroundColor: colors.expirySoft, borderColor: '#F0CFC8' },
+  dateCardNeutral: { backgroundColor: c.surface, borderColor: c.border },
+  dateCardUrgent: { backgroundColor: c.expirySoft, borderColor: c.expiryLine },
   dateLabel: {
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.9,
     textTransform: 'uppercase',
-    color: colors.inkMuted,
+    color: c.inkMuted,
   },
-  dateLabelUrgent: { color: colors.expiry },
-  dateValue: { fontSize: 22, fontWeight: '600', color: colors.ink },
-  dateValueUrgent: { color: colors.expiry },
-  dateExplain: { fontSize: 12.5, lineHeight: 18, color: colors.inkMuted },
-  dateExplainUrgent: { color: '#6B4038' },
+  dateLabelUrgent: { color: c.expiry },
+  dateValue: { fontSize: 22, fontWeight: '600', color: c.ink },
+  dateValueUrgent: { color: c.expiry },
+  dateExplain: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
+  dateExplainUrgent: { color: c.expiryInk },
 
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: colors.inkMuted,
+    color: c.inkMuted,
     marginBottom: space.xs,
   },
 
@@ -436,36 +441,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
   },
-  actionPrimary: { backgroundColor: colors.brand, borderColor: colors.brand },
-  actionDanger: { borderColor: '#E0BDB6' },
+  actionPrimary: { backgroundColor: c.brand, borderColor: c.brand },
+  actionDanger: { borderColor: c.expiryLine },
   actionPressed: { opacity: 0.85 },
   actionBusy: { opacity: 0.5 },
-  actionText: { fontSize: 15, fontWeight: '600', color: colors.ink },
-  actionTextPrimary: { color: colors.ground },
-  actionTextDanger: { color: colors.expiry },
-  actionHint: { fontSize: 11.5, lineHeight: 16, color: colors.inkFaint, paddingHorizontal: 2 },
+  actionText: { fontSize: 15, fontWeight: '600', color: c.ink },
+  actionTextPrimary: { color: c.ground },
+  actionTextDanger: { color: c.expiry },
+  actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
 
   usePanel: {
     gap: space.md,
     padding: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.lg,
   },
 
   closedNote: {
     padding: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.lg,
   },
 
   history: { gap: space.sm },
   eventRow: { flexDirection: 'row', gap: space.md, alignItems: 'baseline' },
-  eventDate: { fontSize: 12, color: colors.inkFaint, minWidth: 58 },
-});
+  eventDate: { fontSize: 12, color: c.inkFaint, minWidth: 58 },
+}));

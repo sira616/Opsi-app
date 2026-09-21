@@ -26,6 +26,11 @@ jobs:
       - name: Aplicar migraciones y comprobar aislamiento
         run: npm run db:check
 
+      # La paleta se lee del propio tokens.ts, así que esto falla en cuanto
+      # alguien mete un color que no llega al contraste mínimo.
+      - name: La paleta cumple WCAG AA
+        run: npm run check:contrast
+
   # ── El veredicto de verdad: Supabase real en Docker ─────────────────────
   base-de-datos:
     name: Base de datos (Supabase real)

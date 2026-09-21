@@ -1,78 +1,101 @@
-// Validador de contraste WCAG 2.1 para la paleta de Opsi.
-const hex = (h) => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16) / 255);
-const lin = (c) => (c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4));
-const L = (h) => { const [r,g,b] = hex(h).map(lin); return 0.2126*r + 0.7152*g + 0.0722*b; };
-const ratio = (a,b) => { const l1 = L(a), l2 = L(b); const [hi,lo] = l1>l2 ? [l1,l2] : [l2,l1]; return (hi+0.05)/(lo+0.05); };
+/**
+ * Verifica la paleta de Opsi contra WCAG 2.1 AA.
+ *
+ *     npm run check:contrast
+ *
+ * Lee los colores DIRECTAMENTE de app/src/shared/theme/tokens.ts, que es donde
+ * los usa la app. Tener aquí una copia era pedir que las dos se separaran, y
+ * se separaron: la primera versión de este script daba todo por bueno mientras
+ * la app usaba otros valores.
+ */
 
-const CLARO = {
-  bg:        '#F6F5F2',
-  surface:   '#FFFFFF',
-  surfaceAlt:'#EFEDE7',
-  line:      '#E3E0D8',
-  lineStrong:'#9D947F',
-  ink:       '#16181A',
-  inkMuted:  '#5F6470',
-  inkFaint:  '#717683',
-  brand:     '#0A7D56',
-  brandInk:  '#08694A',
-  brandSoft: '#DDF5EB',
-  expiry:    '#C23B2B',
-  expiryInk: '#8F2B1E',
-  expirySoft:'#FBE8E4',
-  warn:      '#A46718',
-  warnSoft:  '#FBF0DC',
-  frost:     '#2A7BB8',
-  frostSoft: '#E2F0FA',
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const TOKENS = join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'src', 'shared', 'theme', 'tokens.ts');
+
+/** Saca `const NOMBRE: Palette = { … }` del fichero de tokens. */
+function leerPaleta(fuente, nombre) {
+  const inicio = fuente.indexOf(`const ${nombre}: Palette = {`);
+  if (inicio === -1) throw new Error(`No encuentro la paleta ${nombre} en tokens.ts`);
+  const fin = fuente.indexOf('};', inicio);
+  const cuerpo = fuente.slice(inicio, fin);
+
+  const paleta = {};
+  for (const [, clave, valor] of cuerpo.matchAll(/(\w+):\s*'(#[0-9A-Fa-f]{6})'/g)) {
+    paleta[clave] = valor;
+  }
+  return paleta;
+}
+
+// ── Contraste WCAG ────────────────────────────────────────────────────────
+const canales = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const lineal = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const luminancia = (h) => {
+  const [r, g, b] = canales(h).map(lineal);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contraste = (a, b) => {
+  const l1 = luminancia(a);
+  const l2 = luminancia(b);
+  const [alto, bajo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (alto + 0.05) / (bajo + 0.05);
 };
 
-const OSCURO = {
-  bg:        '#111316',
-  surface:   '#1B1E22',
-  surfaceAlt:'#23272C',
-  line:      '#2E3339',
-  lineStrong:'#616974',
-  ink:       '#F2F3F5',
-  inkMuted:  '#A8AFBA',
-  inkFaint:  '#7F8690',
-  brand:     '#34D399',
-  brandInk:  '#0C231B',
-  brandSoft: '#16302A',
-  expiry:    '#FF8A75',
-  expiryInk: '#2E1512',
-  expirySoft:'#33201D',
-  warn:      '#F2B65A',
-  warnSoft:  '#312716',
-  frost:     '#7CC4F2',
-  frostSoft: '#17262F',
-};
-
-function comprobar(nombre, P, oscuro) {
-  console.log(`\n\x1b[1m${nombre}\x1b[0m`);
-  const casos = [
-    ['texto principal sobre fondo',      P.ink, P.bg,        4.5],
-    ['texto principal sobre tarjeta',    P.ink, P.surface,   4.5],
-    ['texto secundario sobre fondo',     P.inkMuted, P.bg,   4.5],
-    ['texto secundario sobre tarjeta',   P.inkMuted, P.surface, 4.5],
-    ['texto tenue sobre tarjeta (11px)', P.inkFaint, P.surface, 4.5],
-    ['marca sobre fondo',                P.brand, P.bg,      4.5],
-    ['marca sobre tarjeta',              P.brand, P.surface,  4.5],
-    ['texto sobre relleno de marca',     oscuro ? P.brandInk : '#FFFFFF', P.brand, 4.5],
-    ['caducidad sobre tarjeta',          P.expiry, P.surface, 4.5],
-    ['caducidad sobre su fondo suave',   oscuro ? P.expiry : P.expiryInk, P.expirySoft, 4.5],
-    ['aviso sobre tarjeta',              P.warn, P.surface,   4.5],
-    ['congelado sobre tarjeta',          P.frost, P.surface,  4.5],
-    ['marca sobre su fondo suave',       oscuro ? P.brand : P.brandInk, P.brandSoft, 4.5],
-    ['borde fuerte sobre tarjeta (UI)',  P.lineStrong, P.surface, 3.0],
+/**
+ * Cada pareja que la app pinta de verdad.
+ *
+ * 4.5:1 para texto, 3:1 para bordes de controles, que es lo que pide la norma
+ * para elementos de interfaz no textuales.
+ */
+function casos(p) {
+  return [
+    ['texto principal sobre el fondo', p.ink, p.ground, 4.5],
+    ['texto principal sobre tarjeta', p.ink, p.surface, 4.5],
+    ['texto secundario sobre el fondo', p.inkMuted, p.ground, 4.5],
+    ['texto secundario sobre tarjeta', p.inkMuted, p.surface, 4.5],
+    ['nota de 11px sobre tarjeta', p.inkFaint, p.surface, 4.5],
+    ['marca sobre el fondo', p.brand, p.ground, 4.5],
+    ['marca sobre tarjeta', p.brand, p.surface, 4.5],
+    ['texto sobre un relleno de marca', p.onBrand, p.brand, 4.5],
+    ['texto de marca sobre su fondo suave', p.brandInk, p.brandSoft, 4.5],
+    ['caducidad sobre tarjeta', p.expiry, p.surface, 4.5],
+    ['texto de caducidad sobre su fondo', p.expiryInk, p.expirySoft, 4.5],
+    ['borde de caducidad sobre su fondo', p.expiryLine, p.expirySoft, 3.0],
+    ['aviso sobre tarjeta', p.warning, p.surface, 4.5],
+    ['congelado sobre tarjeta', p.frost, p.surface, 4.5],
+    ['borde de control sobre tarjeta', p.borderStrong, p.surface, 3.0],
   ];
+}
+
+function comprobar(titulo, paleta) {
+  console.log(`\n\x1b[1m${titulo}\x1b[0m`);
   let fallos = 0;
-  for (const [etiqueta, fg, bg, min] of casos) {
-    const r = ratio(fg, bg);
-    const ok = r >= min;
-    if (!ok) fallos++;
-    console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${etiqueta.padEnd(36)} ${r.toFixed(2)}:1  (mín ${min})`);
+  for (const [etiqueta, fg, bg, minimo] of casos(paleta)) {
+    if (!fg || !bg) {
+      console.log(`  \x1b[31m✗\x1b[0m ${etiqueta.padEnd(38)} falta un color en la paleta`);
+      fallos++;
+      continue;
+    }
+    const r = contraste(fg, bg);
+    const bien = r >= minimo;
+    if (!bien) fallos++;
+    console.log(
+      `  ${bien ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${etiqueta.padEnd(38)} ${r.toFixed(2)}:1  (mín ${minimo})`,
+    );
   }
   return fallos;
 }
 
-const f = comprobar('MODO CLARO', CLARO, false) + comprobar('MODO OSCURO', OSCURO, true);
-console.log(f === 0 ? '\n\x1b[32m\x1b[1mTodo cumple WCAG AA.\x1b[0m\n' : `\n\x1b[31m\x1b[1m${f} combinaciones por debajo del mínimo.\x1b[0m\n`);
+const fuente = readFileSync(TOKENS, 'utf8');
+const fallos =
+  comprobar('MODO CLARO', leerPaleta(fuente, 'CLARO')) +
+  comprobar('MODO OSCURO', leerPaleta(fuente, 'OSCURO'));
+
+console.log(
+  fallos === 0
+    ? '\n\x1b[32m\x1b[1mLa paleta cumple WCAG AA.\x1b[0m\n'
+    : `\n\x1b[31m\x1b[1m${fallos} combinaciones por debajo del mínimo.\x1b[0m\n`,
+);
+process.exit(fallos === 0 ? 0 : 1);

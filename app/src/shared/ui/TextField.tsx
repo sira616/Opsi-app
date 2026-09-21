@@ -1,6 +1,5 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-
-import { colors, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { Text, TextInput, View, type TextInputProps } from 'react-native';
+import { makeStyles, radius, space, touchTarget, useTheme } from '@/shared/theme/tokens';
 
 type Props = TextInputProps & {
   label: string;
@@ -13,6 +12,8 @@ type Props = TextInputProps & {
  * cuando hace falta, y los lectores de pantalla no siempre lo anuncian.
  */
 export function TextField({ label, hint, ...props }: Props) {
+  const styles = useStyles();
+  const c = useTheme();
   const id = `field-${label.toLowerCase().replace(/\s+/g, '-')}`;
 
   return (
@@ -23,7 +24,7 @@ export function TextField({ label, hint, ...props }: Props) {
       <TextInput
         accessibilityLabelledBy={id}
         accessibilityLabel={label}
-        placeholderTextColor={colors.inkFaint}
+        placeholderTextColor={c.inkFaint}
         style={styles.input}
         {...props}
       />
@@ -32,18 +33,18 @@ export function TextField({ label, hint, ...props }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrapper: { gap: space.xs + 2 },
-  label: { fontSize: 12.5, color: colors.inkMuted },
+  label: { fontSize: 12.5, color: c.inkMuted },
   input: {
     minHeight: touchTarget + 2,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
     borderRadius: radius.sm + 2,
     paddingHorizontal: space.md,
     fontSize: 15.5,
-    color: colors.ink,
+    color: c.ink,
   },
-  hint: { fontSize: 11.5, color: colors.inkFaint },
-});
+  hint: { fontSize: 11.5, color: c.inkFaint },
+}));

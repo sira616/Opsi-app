@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { colors, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { Pressable, Text, View } from 'react-native';
+import { makeStyles, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 type Props = {
   label: string;
@@ -29,6 +28,7 @@ type Props = {
  * invita a confirmarlo sin leerlo cuando vuelves.
  */
 export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, danger }: Props) {
+  const styles = useStyles();
   const [asking, setAsking] = useState(false);
 
   useEffect(() => {
@@ -87,29 +87,29 @@ export function ConfirmAction({ label, confirmLabel, question, onConfirm, busy, 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   button: {
     minHeight: touchTarget + 6,
     justifyContent: 'center',
     paddingHorizontal: space.lg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
   },
-  buttonDanger: { borderColor: '#E0BDB6' },
-  label: { fontSize: 15, fontWeight: '600', color: colors.ink },
-  labelDanger: { color: colors.expiry },
+  buttonDanger: { borderColor: c.expiryLine },
+  label: { fontSize: 15, fontWeight: '600', color: c.ink },
+  labelDanger: { color: c.expiry },
 
   confirmBox: {
     gap: space.md,
     padding: space.lg,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.expiry,
-    backgroundColor: colors.expirySoft,
+    borderColor: c.expiry,
+    backgroundColor: c.expirySoft,
   },
-  question: { fontSize: 14.5, fontWeight: '600', color: '#6B4038' },
+  question: { fontSize: 14.5, fontWeight: '600', color: c.expiryInk },
   row: { flexDirection: 'row', gap: space.sm },
   confirmButton: {
     flex: 1,
@@ -117,10 +117,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.sm + 2,
-    backgroundColor: colors.ink,
+    backgroundColor: c.ink,
   },
-  confirmButtonDanger: { backgroundColor: colors.expiry },
-  confirmText: { fontSize: 14.5, fontWeight: '600', color: colors.ground },
+  confirmButtonDanger: { backgroundColor: c.expiry },
+  confirmText: { fontSize: 14.5, fontWeight: '600', color: c.ground },
   cancelButton: {
     minHeight: touchTarget,
     alignItems: 'center',
@@ -128,11 +128,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     borderRadius: radius.sm + 2,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
   },
-  cancelText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+  cancelText: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
 
   pressed: { opacity: 0.85 },
   busy: { opacity: 0.5 },
-});
+}));

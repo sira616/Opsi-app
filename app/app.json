@@ -4,30 +4,32 @@
     "slug": "opsi",
     "version": "0.0.1",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "scheme": "opsi",
-
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.opsi.app"
+      "bundleIdentifier": "com.opsi.app",
+      "userInterfaceStyle": "automatic"
     },
     "android": {
       "package": "com.opsi.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "userInterfaceStyle": "automatic"
     },
-
-    "plugins": ["expo-router"],
-
+    "plugins": [
+      "expo-router"
+    ],
     "web": {
       "bundler": "metro",
       "output": "single"
     },
-
-
     "experiments": {
       "typedRoutes": true
+    },
+    "splash": {
+      "backgroundColor": "#F6F5F2",
+      "resizeMode": "contain"
     }
   }
 }

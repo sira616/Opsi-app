@@ -1,30 +1,38 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
 import { describeDbError } from '@/shared/lib/db-errors';
+import type { Palette } from '@/shared/theme/tokens';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
 import { BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
-import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
  * El orden de los grupos NO es alfabético ni casual: es el orden en que hay
  * que mirar la despensa. Y «sin fecha» va antes que «congelado» a propósito:
  * no saber cuándo vence algo es una pregunta abierta, no una tranquilidad.
  */
-const GROUPS: { key: PriorityGroup; title: string; dot: string; tone?: 'danger' | 'warn' }[] = [
-  { key: 'high', title: 'Prioridad alta', dot: colors.expiry, tone: 'danger' },
-  { key: 'medium', title: 'Prioridad media', dot: '#C67A1E', tone: 'warn' },
-  { key: 'low', title: 'Sin urgencia', dot: '#B9B1A3' },
-  { key: 'undated', title: 'Sin fecha', dot: 'transparent' },
-  { key: 'frozen', title: 'En el congelador', dot: '#8FB9D9' },
-];
+type Grupo = { key: PriorityGroup; title: string; dot: string; tone?: 'danger' | 'warn' | 'frost' };
+
+function grupos(c: Palette): Grupo[] {
+  return [
+    { key: 'high', title: 'Prioridad alta', dot: c.expiry, tone: 'danger' },
+    { key: 'medium', title: 'Prioridad media', dot: c.warning, tone: 'warn' },
+    { key: 'low', title: 'Sin urgencia', dot: c.inkFaint },
+    { key: 'undated', title: 'Sin fecha', dot: 'transparent' },
+    { key: 'frozen', title: 'En el congelador', dot: c.frost, tone: 'frost' },
+  ];
+}
 
 export default function ConsumirPrimero() {
+  const styles = useStyles();
+  const t = useType();
+  const c = useTheme();
   const router = useRouter();
 
   const { data, error, isPending, isFetching, refetch } = useQuery({
@@ -46,8 +54,8 @@ export default function ConsumirPrimero() {
             </Pressable>
           </Link>
         </View>
-        <Text style={font.title}>Consumir primero</Text>
-        <Text style={font.bodySmall}>
+        <Text style={t.title}>Consumir primero</Text>
+        <Text style={t.bodySmall}>
           {items.length === 0
             ? 'Nada guardado todavía'
             : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
@@ -60,28 +68,28 @@ export default function ConsumirPrimero() {
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={isFetching && !isPending} onRefresh={() => void refetch()} tintColor={colors.brand} />
+          <RefreshControl refreshing={isFetching && !isPending} onRefresh={() => void refetch()} tintColor={c.brand} />
         }
       >
-        {isPending ? <ActivityIndicator color={colors.brand} style={styles.loader} /> : null}
+        {isPending ? <ActivityIndicator color={c.brand} style={styles.loader} /> : null}
 
         <ErrorNote message={error ? describeDbError(error) : null} />
 
         {!isPending && items.length === 0 && !error ? (
           <View style={styles.empty}>
             <View style={styles.emptyIcons}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}>
-                <Carrot size={26} color={colors.brand} weight="duotone" />
+              <View style={[styles.emptyIcon, { backgroundColor: c.brandSoft }]}>
+                <Carrot size={26} color={c.brand} weight="duotone" />
               </View>
-              <View style={[styles.emptyIcon, { backgroundColor: '#FBF0DC', marginLeft: -12 }]}>
-                <Egg size={26} color={colors.warning} weight="duotone" />
+              <View style={[styles.emptyIcon, { backgroundColor: c.warningSoft, marginLeft: -12 }]}>
+                <Egg size={26} color={c.warning} weight="duotone" />
               </View>
-              <View style={[styles.emptyIcon, { backgroundColor: '#E2F0FA', marginLeft: -12 }]}>
-                <BowlFood size={26} color="#2A7BB8" weight="duotone" />
+              <View style={[styles.emptyIcon, { backgroundColor: c.frostSoft, marginLeft: -12 }]}>
+                <BowlFood size={26} color={c.frost} weight="duotone" />
               </View>
             </View>
             <Text style={styles.emptyTitle}>Tu despensa está vacía</Text>
-            <Text style={font.bodySmall}>
+            <Text style={t.bodySmall}>
               Da de alta lo primero y aparecerá aquí, ordenado por lo que conviene gastar antes.
             </Text>
             <Pressable
@@ -96,14 +104,14 @@ export default function ConsumirPrimero() {
 
         {!isPending && items.length > 0 && urgent === 0 ? (
           <View style={styles.allGood}>
-            <Confetti size={20} color={colors.brand} weight="fill" />
+            <Confetti size={20} color={c.brand} weight="fill" />
             <Text style={styles.allGoodText}>
               Nada corre prisa hoy. Buen momento para cocinar sin agobios.
             </Text>
           </View>
         ) : null}
 
-        {GROUPS.map((group) => {
+        {grupos(c).map((group) => {
           const groupItems = items.filter((i: PriorityItem) => i.priority === group.key);
           if (groupItems.length === 0) return null;
 
@@ -120,8 +128,9 @@ export default function ConsumirPrimero() {
                 <Text
                   style={[
                     styles.groupTitle,
-                    group.tone === 'danger' && { color: colors.expiry },
-                    group.tone === 'warn' && { color: colors.warning },
+                    group.tone === 'danger' && { color: c.expiry },
+                    group.tone === 'warn' && { color: c.warning },
+                    group.tone === 'frost' && { color: c.frost },
                   ]}
                 >
                   {group.title}
@@ -139,41 +148,41 @@ export default function ConsumirPrimero() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   header: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.md, gap: space.xs },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm },
-  wordmark: { fontSize: 21, fontWeight: '600', color: colors.brand },
+  wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
   add: {
     width: touchTarget,
     height: touchTarget,
     borderRadius: radius.pill,
-    backgroundColor: colors.brand,
+    backgroundColor: c.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addIcon: { color: colors.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
+  addIcon: { color: c.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
   content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
   loader: { marginTop: space.xl },
   allGood: {
     flexDirection: 'row',
     gap: space.sm,
     alignItems: 'center',
-    backgroundColor: colors.brandSoft,
+    backgroundColor: c.brandSoft,
     borderRadius: radius.md,
     padding: space.md,
   },
-  allGoodText: { flex: 1, fontSize: 13, lineHeight: 18, color: '#245540' },
+  allGoodText: { flex: 1, fontSize: 13, lineHeight: 18, color: c.brandInk },
   group: { gap: space.sm },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  dotHollow: { borderWidth: 1.5, borderColor: '#B9B1A3' },
+  dotHollow: { borderWidth: 1.5, borderColor: c.inkFaint },
   groupTitle: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: colors.inkMuted,
+    color: c.inkMuted,
   },
   empty: { gap: space.md, paddingVertical: space.xxl, alignItems: 'flex-start' },
   emptyIcons: { flexDirection: 'row', marginBottom: space.xs },
@@ -184,16 +193,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.ground,
+    borderColor: c.ground,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.ink },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: c.ink },
   emptyButton: {
     minHeight: touchTarget,
     justifyContent: 'center',
     paddingHorizontal: space.xl,
     borderRadius: radius.md,
-    backgroundColor: colors.brand,
+    backgroundColor: c.brand,
     marginTop: space.xs,
   },
-  emptyButtonText: { color: colors.ground, fontSize: 15, fontWeight: '600' },
-});
+  emptyButtonText: { color: c.ground, fontSize: 15, fontWeight: '600' },
+}));

@@ -798,3 +798,20 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - Quitado el `.single()` de `create_item`: la función devuelve una fila suelta y pedirle a
   PostgREST que la trate como objeto único era una forma de fallar a cambio de un dato que
   no se usaba.
+
+### 2026-09-21 (sesión 12) · La paleta y las tipografías, aplicadas
+
+- **Dos paletas y modo oscuro automático.** `useTheme()` lee el ajuste del sistema y
+  `makeStyles()` construye hojas de estilo que lo conocen, memoizadas por paleta. Hubo que
+  tocar los 17 ficheros que usaban los colores viejos.
+- **Bricolage Grotesque y Plus Jakarta Sans**, cargadas al arrancar con la pantalla de
+  carga esperando a que estén: sin eso la app aparece con la tipografía del sistema y
+  salta a la suya medio segundo después, que se ve como un fallo.
+- **El validador de contraste ahora lee `tokens.ts`.** Su primera versión tenía copia
+  propia de la paleta y las dos se separaron: daba todo por bueno mientras la app usaba
+  otros valores. Ese fallo se repitió dos veces en esta sesión antes de arreglarlo de
+  raíz. Ya está en la CI.
+- **Ni un color fuera del sistema**: los catorce hexadecimales sueltos que quedaban se
+  convirtieron en tokens, y dos de ellos —`expiryLine` y `brandInk`— hicieron falta
+  crearlos. El borde de las tarjetas de caducidad no llegaba a 3:1 y se calculó el valor
+  que sí llega en vez de bajar el listón.

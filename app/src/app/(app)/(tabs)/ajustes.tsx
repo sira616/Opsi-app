@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CaretDown, CaretUp, Clock } from 'phosphor-react-native';
@@ -10,7 +10,7 @@ import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { useSession } from '@/shared/lib/session';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
  * La zona horaria del dispositivo, si el sistema la sabe.
@@ -37,6 +37,9 @@ const COMMON_ZONES = [
 ];
 
 export default function Ajustes() {
+  const styles = useStyles();
+  const t = useType();
+  const c = useTheme();
   const { session, signOut } = useSession();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -72,9 +75,9 @@ export default function Ajustes() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={font.title}>Ajustes</Text>
+        <Text style={t.title}>Ajustes</Text>
 
-        {settings.isPending ? <ActivityIndicator color={colors.brand} /> : null}
+        {settings.isPending ? <ActivityIndicator color={c.brand} /> : null}
         <ErrorNote message={error ?? (settings.error ? describeDbError(settings.error) : null)} />
 
         {data ? (
@@ -88,7 +91,7 @@ export default function Ajustes() {
                   <Switch
                     value={data.digest_enabled}
                     onValueChange={(v) => patch({ digest_enabled: v })}
-                    trackColor={{ true: colors.brand, false: colors.borderStrong }}
+                    trackColor={{ true: c.brand, false: c.borderStrong }}
                     disabled={save.isPending}
                   />
                 }
@@ -96,7 +99,7 @@ export default function Ajustes() {
 
               {data.digest_enabled ? (
                 <View style={styles.hours}>
-                  <Text style={font.label}>A qué hora</Text>
+                  <Text style={t.label}>A qué hora</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hourRow}>
                     {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
                       const on = data.digest_hour === hour;
@@ -115,14 +118,14 @@ export default function Ajustes() {
                       );
                     })}
                   </ScrollView>
-                  <Text style={font.caption}>
+                  <Text style={t.caption}>
                     Hora local: se calcula con tu zona horaria, no con la del servidor.
                   </Text>
                 </View>
               ) : null}
 
               <View style={styles.note}>
-                <Clock size={15} color={colors.inkFaint} weight="duotone" />
+                <Clock size={15} color={c.inkFaint} weight="duotone" />
                 <Text style={styles.noteText}>
                   Los avisos llegan en la fase 3. Lo que elijas aquí se guarda desde ya.
                 </Text>
@@ -138,12 +141,12 @@ export default function Ajustes() {
               >
                 <View style={styles.zoneText}>
                   <Text style={styles.zoneValue}>{data.timezone}</Text>
-                  <Text style={font.caption}>Decide qué cuenta como «hoy» en tu inventario.</Text>
+                  <Text style={t.caption}>Decide qué cuenta como «hoy» en tu inventario.</Text>
                 </View>
                 {showZones ? (
-                  <CaretUp size={17} color={colors.inkMuted} weight="bold" />
+                  <CaretUp size={17} color={c.inkMuted} weight="bold" />
                 ) : (
-                  <CaretDown size={17} color={colors.inkMuted} weight="bold" />
+                  <CaretDown size={17} color={c.inkMuted} weight="bold" />
                 )}
               </Pressable>
 
@@ -181,7 +184,7 @@ export default function Ajustes() {
                   <Switch
                     value={data.auto_add_to_shopping_list}
                     onValueChange={(v) => patch({ auto_add_to_shopping_list: v })}
-                    trackColor={{ true: colors.brand, false: colors.borderStrong }}
+                    trackColor={{ true: c.brand, false: c.borderStrong }}
                     disabled={save.isPending}
                   />
                 }
@@ -198,7 +201,7 @@ export default function Ajustes() {
               >
                 <Text style={styles.signOutText}>Cerrar sesión</Text>
               </Pressable>
-              <Text style={font.caption}>
+              <Text style={t.caption}>
                 Borrar la cuenta y sus datos todavía no es posible desde la app. Está pendiente.
               </Text>
             </Section>
@@ -210,6 +213,7 @@ export default function Ajustes() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -227,6 +231,7 @@ function Row({
   subtitle?: string;
   right?: React.ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -239,6 +244,7 @@ function Row({
 }
 
 function ZoneOption({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -250,8 +256,8 @@ function ZoneOption({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   content: { padding: space.xl, gap: space.xl, paddingBottom: space.xxl * 2 },
 
   section: { gap: space.sm },
@@ -260,12 +266,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: colors.inkMuted,
+    color: c.inkMuted,
   },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.lg,
     padding: space.lg,
     gap: space.lg,
@@ -273,10 +279,10 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', gap: space.lg, alignItems: 'center' },
   rowText: { flex: 1, gap: 3 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: colors.ink },
-  rowSubtitle: { fontSize: 12.5, lineHeight: 18, color: colors.inkMuted },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: c.ink },
+  rowSubtitle: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
 
-  hours: { gap: space.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg },
+  hours: { gap: space.sm, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg },
   hourRow: { gap: space.sm - 2, paddingRight: space.lg },
   hour: {
     minWidth: touchTarget,
@@ -285,21 +291,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.sm + 2,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-  hourOn: { backgroundColor: colors.brandSoft, borderColor: colors.brand, borderWidth: 1.5 },
-  hourText: { fontSize: 14, fontWeight: '600', color: colors.inkMuted },
-  hourTextOn: { color: colors.brand },
+  hourOn: { backgroundColor: c.brandSoft, borderColor: c.brand, borderWidth: 1.5 },
+  hourText: { fontSize: 14, fontWeight: '600', color: c.inkMuted },
+  hourTextOn: { color: c.brand },
 
   note: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  noteText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: colors.inkFaint },
+  noteText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: c.inkFaint },
 
   zoneCurrent: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },
   zoneText: { flex: 1, gap: 3 },
-  zoneValue: { fontSize: 15, fontWeight: '600', color: colors.ink },
-  zoneList: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.sm },
+  zoneValue: { fontSize: 15, fontWeight: '600', color: c.ink },
+  zoneList: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.sm },
   zoneOption: { minHeight: touchTarget, justifyContent: 'center' },
-  zoneOptionText: { fontSize: 14.5, color: colors.brand, fontWeight: '600' },
+  zoneOptionText: { fontSize: 14.5, color: c.brand, fontWeight: '600' },
 
   signOut: {
     minHeight: touchTarget,
@@ -307,9 +313,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
   },
-  signOutText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+  signOutText: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
 
   pressed: { opacity: 0.7 },
-});
+}));

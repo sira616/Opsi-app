@@ -1,8 +1,8 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { useSession } from '@/shared/lib/session';
-import { colors } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/tokens';
 
 /**
  * La puerta de entrada: decide adónde va el usuario según tenga sesión o no.
@@ -13,12 +13,14 @@ import { colors } from '@/shared/theme/tokens';
  * le hace ver un parpadeo. Mientras `loading` es true, aquí no se decide nada.
  */
 export default function Index() {
+  const styles = useStyles();
+  const c = useTheme();
   const { session, loading } = useSession();
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.brand} />
+        <ActivityIndicator color={c.brand} />
       </View>
     );
   }
@@ -26,6 +28,6 @@ export default function Index() {
   return <Redirect href={session ? '/inventario' : '/entrar'} />;
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ground },
-});
+const useStyles = makeStyles((c) => ({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.ground },
+}));

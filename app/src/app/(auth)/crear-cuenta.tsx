@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
@@ -8,12 +8,14 @@ import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
 import { describeAuthError } from '@/shared/lib/auth-errors';
 import { useSession } from '@/shared/lib/session';
-import { colors, font, space } from '@/shared/theme/tokens';
+import { fonts,makeStyles, space, useType } from '@/shared/theme/tokens';
 
 /** Fijado en supabase/config.toml (auth.minimum_password_length). */
 const MIN_PASSWORD = 10;
 
 export default function CrearCuenta() {
+  const styles = useStyles();
+  const t = useType();
   const { signUp } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,7 +53,7 @@ export default function CrearCuenta() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.wordmark}>Opsi</Text>
-            <Text style={font.title}>Crear cuenta</Text>
+            <Text style={t.title}>Crear cuenta</Text>
             <Text style={styles.tagline}>
               Se crea tu casa automáticamente. Nadie más ve lo que guardes en ella.
             </Text>
@@ -97,7 +99,7 @@ export default function CrearCuenta() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={font.bodySmall}>¿Ya tienes cuenta?</Text>
+            <Text style={t.bodySmall}>¿Ya tienes cuenta?</Text>
             <Link href="/entrar" style={styles.link}>
               Entrar
             </Link>
@@ -108,14 +110,14 @@ export default function CrearCuenta() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: space.xl, gap: space.xxl, justifyContent: 'center' },
   header: { gap: space.sm },
-  wordmark: { fontSize: 21, fontWeight: '600', color: colors.brand },
-  tagline: { ...font.bodySmall, maxWidth: 300 },
+  wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
+  tagline: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: c.inkMuted, maxWidth: 300 },
   form: { gap: space.lg },
   footer: { flexDirection: 'row', gap: space.sm, alignItems: 'center', justifyContent: 'center' },
-  link: { fontSize: 13, fontWeight: '600', color: colors.brand },
-});
+  link: { fontSize: 13, fontWeight: '600', color: c.brand },
+}));

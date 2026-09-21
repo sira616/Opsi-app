@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
-
-import { colors, radius, space } from '@/shared/theme/tokens';
+import { Text, View } from 'react-native';
+import { makeStyles, radius, space } from '@/shared/theme/tokens';
 
 export function ErrorNote({ message }: { message: string | null }) {
+  const styles = useStyles();
   if (!message) return null;
 
   return (
@@ -12,13 +12,13 @@ export function ErrorNote({ message }: { message: string | null }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   box: {
-    backgroundColor: colors.expirySoft,
+    backgroundColor: c.expirySoft,
     borderWidth: 1,
-    borderColor: '#F0CFC8',
+    borderColor: c.expiryLine,
     borderRadius: radius.md,
     padding: space.md,
   },
-  text: { fontSize: 13.5, lineHeight: 19, color: '#6B4038' },
-});
+  text: { fontSize: 13.5, lineHeight: 19, color: c.expiryInk },
+}));

@@ -1,7 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Basket, ChatCircleDots, GearSix, ListChecks } from 'phosphor-react-native';
-
-import { colors } from '@/shared/theme/tokens';
+import { useTheme } from '@/shared/theme/tokens';
 
 /**
  * Las cuatro secciones de Opsi.
@@ -24,15 +23,16 @@ import { colors } from '@/shared/theme/tokens';
  * —sin buscar un sustituto— porque Phosphor trae seis pesos del mismo dibujo.
  */
 export default function TabsLayout() {
+  const c = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.inkMuted,
+        tabBarActiveTintColor: c.brand,
+        tabBarInactiveTintColor: c.inkMuted,
         tabBarStyle: {
-          backgroundColor: colors.ground,
-          borderTopColor: colors.border,
+          backgroundColor: c.ground,
+          borderTopColor: c.border,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}

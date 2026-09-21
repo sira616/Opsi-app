@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createItem, type DateKind, type DateSource, type StorageLocation } from '@/api/inventory';
@@ -13,7 +13,7 @@ import { Button } from '@/shared/ui/Button';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
-import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, touchTarget, useType } from '@/shared/theme/tokens';
 
 const UNIT_OPTIONS: ChipOption<MeasurementUnit>[] = [
   { value: 'unit', label: 'unidades' },
@@ -44,6 +44,8 @@ const SOURCE_OPTIONS: ChipOption<DateSource>[] = [
 ];
 
 export default function AltaManual() {
+  const styles = useStyles();
+  const t = useType();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -112,7 +114,7 @@ export default function AltaManual() {
           >
             <Text style={styles.backText}>Cancelar</Text>
           </Pressable>
-          <Text style={font.title}>Añadir alimento</Text>
+          <Text style={t.title}>Añadir alimento</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -149,7 +151,7 @@ export default function AltaManual() {
               </View>
               <View style={styles.toggleText}>
                 <Text style={styles.toggleTitle}>Tiene fecha en el envase</Text>
-                <Text style={font.caption}>Si no la tiene, déjalo sin marcar. No pasa nada.</Text>
+                <Text style={t.caption}>Si no la tiene, déjalo sin marcar. No pasa nada.</Text>
               </View>
             </Pressable>
 
@@ -218,19 +220,19 @@ export default function AltaManual() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   flex: { flex: 1 },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm, gap: space.xs },
   back: { minHeight: touchTarget, justifyContent: 'center', marginLeft: -2, alignSelf: 'flex-start' },
-  backText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+  backText: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
   content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.xl },
 
   dateBlock: {
     gap: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.lg,
     padding: space.lg,
   },
@@ -240,16 +242,16 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
   },
-  checkboxOn: { backgroundColor: colors.brand, borderColor: colors.brand },
-  check: { color: colors.ground, fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  checkboxOn: { backgroundColor: c.brand, borderColor: c.brand },
+  check: { color: c.ground, fontSize: 14, fontWeight: '700', lineHeight: 18 },
   toggleText: { flex: 1, gap: 2 },
-  toggleTitle: { fontSize: 15, fontWeight: '600', color: colors.ink },
-  dateFields: { gap: space.lg, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg },
+  toggleTitle: { fontSize: 15, fontWeight: '600', color: c.ink },
+  dateFields: { gap: space.lg, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg },
 
   atajos: { flexDirection: 'row', gap: space.sm, marginTop: -space.sm },
   atajo: {
@@ -257,7 +259,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
-    backgroundColor: colors.brandSoft,
+    backgroundColor: c.brandSoft,
   },
-  atajoText: { fontSize: 12.5, fontWeight: '600', color: colors.brand },
-});
+  atajoText: { fontSize: 12.5, fontWeight: '600', color: c.brand },
+}));

@@ -1,6 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
-
-import { colors, radius, touchTarget } from '@/shared/theme/tokens';
+import { ActivityIndicator, Pressable, Text } from 'react-native';
+import { makeStyles, radius, touchTarget, useTheme } from '@/shared/theme/tokens';
 
 type Props = {
   label: string;
@@ -11,6 +10,8 @@ type Props = {
 };
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: Props) {
+  const styles = useStyles();
+  const c = useTheme();
   const inactive = disabled || loading;
   const primary = variant === 'primary';
 
@@ -28,7 +29,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={primary ? colors.ground : colors.brand} />
+        <ActivityIndicator color={primary ? c.ground : c.brand} />
       ) : (
         <Text style={[styles.label, primary ? styles.labelPrimary : styles.labelQuiet]}>
           {label}
@@ -38,7 +39,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   base: {
     minHeight: touchTarget + 8,
     borderRadius: radius.md,
@@ -46,11 +47,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  primary: { backgroundColor: colors.brand },
+  primary: { backgroundColor: c.brand },
   quiet: { backgroundColor: 'transparent' },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },
   label: { fontSize: 15.5, fontWeight: '600' },
-  labelPrimary: { color: colors.ground },
-  labelQuiet: { color: colors.inkMuted },
-});
+  labelPrimary: { color: c.ground },
+  labelQuiet: { color: c.inkMuted },
+}));

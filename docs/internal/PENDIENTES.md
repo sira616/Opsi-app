@@ -159,8 +159,8 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
 | 🟠 | D5 · Development build con EAS | `eas.json` ya está; falta `eas init` (necesita cuenta de Expo). Ver [`NATIVA.md`](../NATIVA.md) |
 | 🟠 | **Sin icono ni pantalla de carga** | `app/assets` está vacío. El prompt para generar el logo está en [`DISENO.md`](../DISENO.md) |
-| 🟠 | **La paleta del diseño no está aplicada** | Los iconos ya son Phosphor y hay iconos de comida, pero `tokens.ts` sigue con la paleta provisional y **no hay modo oscuro**. Es lo que falta del paso 1 de `DISENO.md` |
-| 🟡 | Las tipografías tampoco | Bricolage Grotesque y Plus Jakarta Sans están elegidas y sin cargar |
+| 🟡 | Alta y detalle no son hojas modales | Se apilan como pantallas normales. Es el paso 5 de `DISENO.md`, el único que queda |
+| 🟡 | Sin translucidez en las barras | La decisión de `DISENO.md` era cristal suave solo en las barras. Ahora son opacas |
 | 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
 | ✅ | ~~Sin confirmación al tirar ni al terminar~~ | Resuelto: confirmación en línea, con el nombre del alimento en la pregunta. En línea y no `Alert.alert` porque este último no hace nada en la versión web |
 | 🟡 | Sin selector de fecha nativo | Ahora se teclean ocho dígitos y las barras salen solas, más tres atajos. Es rápido para copiar de un envase, pero un calendario debería existir como alternativa |
@@ -205,10 +205,7 @@ tú.
    crear una cuenta desde Expo Go. Si la pantalla pinta tu hogar, la fase 0 funciona de
    punta a punta y se cierra casi toda la sección 1.
 2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
-3. **Aplicar el sistema de diseño** de [`DISENO.md`](../DISENO.md): las dos paletas, las
-   tipografías, los iconos de Phosphor y las hojas modales. El paso 9 de ese documento
-   tiene la lista ordenada.
-4. **Generar el logo** con el prompt de `DISENO.md` y meter `icon.png` y `splash.png` en
+3. **Generar el logo** con el prompt de `DISENO.md` y meter `icon.png` y `splash.png` en
    `app/assets`, que sigue vacío.
 4. **La fase 2**: escáner de códigos de barras y la Edge Function `lookup-barcode`. Ahí
    sí hace falta la development build de EAS.

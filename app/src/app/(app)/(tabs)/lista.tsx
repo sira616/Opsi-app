@@ -1,12 +1,13 @@
 import { ShoppingCart } from 'phosphor-react-native';
 
-import { colors } from '@/shared/theme/tokens';
 import { Proximamente } from '@/shared/ui/Proximamente';
+import { useTheme } from '@/shared/theme/tokens';
 
 export default function Lista() {
+  const c = useTheme();
   return (
     <Proximamente
-      icon={<ShoppingCart size={28} color={colors.brand} weight="duotone" />}
+      icon={<ShoppingCart size={28} color={c.brand} weight="duotone" />}
       title="Lista de la compra"
       phase="Fase 4"
       what="Apuntar lo que falta, marcarlo como comprado y pasarlo al inventario de una vez. Al agotar algo, Opsi te preguntará si lo añade — preguntar, no añadirlo sola."

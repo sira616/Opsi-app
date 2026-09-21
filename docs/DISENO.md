@@ -3,8 +3,8 @@
 Propuesta de identidad e interfaz. Qué aspecto tiene la app, con qué recursos se
 construye y por qué cada decisión.
 
-> **Estado:** propuesta. Nada de esto está implementado todavía; el código actual usa una
-> paleta provisional. El [prototipo navegable](#el-prototipo) enseña el resultado.
+> **Estado:** implementado. La paleta, las tipografías y los iconos están en la app, con
+> modo claro y oscuro automáticos. Falta el logo y las hojas modales (paso 9).
 
 ---
 
@@ -280,17 +280,18 @@ la marca centrada sobre `bg`. Se declaran en `app/app.json`.
 
 ## 9. Qué hay que cambiar en el código
 
-| Paso | Qué |
+| Paso | Estado |
 |---|---|
-| 1 | `src/shared/theme/tokens.ts` pasa a tener las dos paletas y un hook `useTheme()` que lee `useColorScheme()` |
-| 2 | Cargar las dos tipografías en `_layout.tsx` con `useFonts`, y no pintar hasta que estén |
-| 3 | Sustituir `@expo/vector-icons` por `phosphor-react-native` |
-| 4 | Barra de pestañas con `fill` en la activa y translucidez suave |
-| 5 | Alta y detalle pasan a hoja modal |
-| 6 | `scripts/check-contrast.mjs` en la CI, para que nadie meta un color que no cumpla |
+| 1 · Las dos paletas y `useTheme()` | ✅ En `src/shared/theme/tokens.ts`, con `makeStyles()` para hojas que conocen el tema |
+| 2 · Cargar las tipografías | ✅ En `_layout.tsx`, con la pantalla de carga esperando a que estén |
+| 3 · Phosphor en vez de `@expo/vector-icons` | ✅ Y un icono de comida por alimento |
+| 4 · Pestañas con `fill` en la activa | ✅ |
+| 5 · Alta y detalle como hoja modal | ⬜ Pendiente |
+| 6 · El contraste en la CI | ✅ `npm run check:contrast`, y **lee los colores de `tokens.ts`** |
 
-**Estimación honesta:** los pasos 1 a 4 son una tarde. El 5 depende de cuánto se quiera
-afinar el gesto de arrastre.
+Sobre el paso 6: la primera versión del validador tenía su propia copia de la paleta, y
+las dos se separaron — daba todo por bueno mientras la app usaba otros valores. Ahora
+parsea `tokens.ts`, así que no pueden divergir.
 
 ## El prototipo
 

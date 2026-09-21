@@ -1,11 +1,11 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { PriorityItem } from '@/api/inventory';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDateSource, describeDaysLeft, describeReason } from '@/shared/lib/dates';
 import { formatQuantity } from '@/shared/lib/units';
-import { colors, radius, space } from '@/shared/theme/tokens';
+import { makeStyles, radius, space, useTheme } from '@/shared/theme/tokens';
 
 const STATE_LABEL: Record<PriorityItem['state'], string> = {
   closed: 'Cerrado',
@@ -36,6 +36,8 @@ const LOCATION_LABEL: Record<PriorityItem['location'], string> = {
  *     lo que pone el envase no se entiende si no se dice.
  */
 export function ItemRow({ item }: { item: PriorityItem }) {
+  const styles = useStyles();
+  const c = useTheme();
   const urgent = item.priority === 'high';
   const isExpiry = item.effective_date_source === 'package' && item.effective_date_reason === 'label';
 
@@ -45,7 +47,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
 
   // El icono sale del nombre: nadie lo elige. Es lo que convierte una lista de
   // texto en algo que apetece mirar, sin pedirle nada al usuario.
-  const tono = urgent ? colors.expiry : item.state === 'frozen' ? '#2A7BB8' : colors.brand;
+  const tono = urgent ? c.expiry : item.state === 'frozen' ? c.frost : c.brand;
 
   return (
     <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
@@ -58,7 +60,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           pressed && styles.cardPressed,
         ]}
       >
-      <View style={[styles.avatar, { backgroundColor: urgent ? colors.expirySoft : colors.brandSoft }]}>
+      <View style={[styles.avatar, { backgroundColor: urgent ? c.expirySoft : c.brandSoft }]}>
         <IconoComida nombre={item.name} size={22} color={tono} weight="duotone" />
       </View>
 
@@ -89,19 +91,19 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   card: {
     flexDirection: 'row',
     gap: space.md,
     alignItems: 'flex-start',
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.lg,
     paddingVertical: 13,
     paddingHorizontal: 14,
   },
-  cardUndated: { borderStyle: 'dashed', borderColor: '#DCD3C4' },
+  cardUndated: { borderStyle: 'dashed', borderColor: c.borderStrong },
   cardPressed: { opacity: 0.7 },
   avatar: {
     width: 42,
@@ -112,18 +114,18 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   main: { flex: 1, gap: 3 },
-  name: { fontSize: 15.5, fontWeight: '600', color: colors.ink },
-  meta: { fontSize: 12.5, color: colors.inkMuted },
-  footnote: { fontSize: 11, color: colors.inkFaint },
+  name: { fontSize: 15.5, fontWeight: '600', color: c.ink },
+  meta: { fontSize: 12.5, color: c.inkMuted },
+  footnote: { fontSize: 11, color: c.inkFaint },
   dateBlock: { alignItems: 'flex-end', gap: 1 },
   dateLabel: {
     fontSize: 9.5,
     fontWeight: '700',
     letterSpacing: 0.7,
     textTransform: 'uppercase',
-    color: colors.inkMuted,
+    color: c.inkMuted,
   },
-  dateLabelUrgent: { color: colors.expiry },
-  dateValue: { fontSize: 15.5, fontWeight: '600', color: colors.ink },
-  dateValueUrgent: { color: colors.expiry },
-});
+  dateLabelUrgent: { color: c.expiry },
+  dateValue: { fontSize: 15.5, fontWeight: '600', color: c.ink },
+  dateValueUrgent: { color: c.expiry },
+}));

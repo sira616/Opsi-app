@@ -1,9 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ReactNode } from 'react';
-
-import { colors, font, radius, space } from '@/shared/theme/tokens';
+import { fonts,makeStyles, radius, space, useType } from '@/shared/theme/tokens';
 
 type Props = {
   icon: ReactNode;
@@ -22,11 +21,13 @@ type Props = {
  * y probadas desde hace fases, y no se ven por ningún sitio.
  */
 export function Proximamente({ icon, title, phase, what, ready }: Props) {
+  const styles = useStyles();
+  const t = useType();
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
         <View style={styles.iconBox}>{icon}</View>
-        <Text style={font.title}>{title}</Text>
+        <Text style={t.title}>{title}</Text>
         <Text style={styles.phase}>{phase}</Text>
         <Text style={styles.what}>{what}</Text>
         {ready ? (
@@ -39,14 +40,14 @@ export function Proximamente({ icon, title, phase, what, ready }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.ground },
+const useStyles = makeStyles((c) => ({
+  safe: { flex: 1, backgroundColor: c.ground },
   content: { flex: 1, padding: space.xl, gap: space.md, justifyContent: 'center', alignItems: 'flex-start' },
   iconBox: {
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: colors.brandSoft,
+    backgroundColor: c.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: space.xs,
@@ -56,17 +57,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: colors.inkFaint,
+    color: c.inkFaint,
   },
-  what: { ...font.body, lineHeight: 22, color: colors.inkMuted },
+  what: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.inkMuted },
   readyBox: {
     flexDirection: 'row',
     gap: space.sm,
     alignItems: 'flex-start',
-    backgroundColor: colors.brandSoft,
+    backgroundColor: c.brandSoft,
     borderRadius: radius.md,
     padding: space.md,
     marginTop: space.sm,
   },
-  readyText: { flex: 1, fontSize: 13, lineHeight: 19, color: '#245540' },
-});
+  readyText: { flex: 1, fontSize: 13, lineHeight: 19, color: c.brandInk },
+}));

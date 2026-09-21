@@ -1,6 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-import { colors, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { makeStyles, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 export type ChipOption<T extends string> = {
   value: T;
@@ -25,6 +24,8 @@ type Props<T extends string> = {
  * que se usa con una mano y con prisa, verlas todas gana.
  */
 export function Chips<T extends string>({ label, options, value, onChange, hint }: Props<T>) {
+  const styles = useStyles();
+
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
@@ -60,9 +61,9 @@ export function Chips<T extends string>({ label, options, value, onChange, hint 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrapper: { gap: space.sm - 2 },
-  label: { fontSize: 12.5, color: colors.inkMuted },
+  label: { fontSize: 12.5, color: c.inkMuted },
   row: { gap: space.sm, paddingRight: space.lg },
   chip: {
     minHeight: touchTarget,
@@ -70,13 +71,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
   },
-  chipOn: { borderColor: colors.brand, borderWidth: 1.5, backgroundColor: colors.brandSoft },
-  chipDanger: { borderColor: colors.expiry, borderWidth: 1.5, backgroundColor: colors.expirySoft },
-  chipText: { fontSize: 14, fontWeight: '600', color: colors.inkMuted },
-  chipTextOn: { color: colors.brand },
-  chipTextDanger: { color: colors.expiry },
-  hint: { fontSize: 11.5, color: colors.inkFaint },
-});
+  chipOn: { borderColor: c.brand, borderWidth: 1.5, backgroundColor: c.brandSoft },
+  chipDanger: { borderColor: c.expiry, borderWidth: 1.5, backgroundColor: c.expirySoft },
+  chipText: { fontSize: 14, fontWeight: '600', color: c.inkMuted },
+  chipTextOn: { color: c.brand },
+  chipTextDanger: { color: c.expiry },
+  hint: { fontSize: 11.5, color: c.inkFaint },
+}));
