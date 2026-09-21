@@ -24,7 +24,8 @@
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
     "up": "node scripts/up.mjs",
-    "app:tunnel": "npm run --workspace app start -- --tunnel"
+    "app:tunnel": "npm run --workspace app start -- --tunnel",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
