@@ -149,6 +149,23 @@ que aparece arriba. Expo Go en iOS ya no trae lector de QR propio: se usa el del
 
 La primera vez tarda unos segundos: está enviando la app al móvil.
 
+### iPhone · si la cámara dice «No hay datos»
+
+Significa que lee el código pero iOS no sabe qué hacer con él. El QR contiene una
+dirección `exp://…`, y el sistema solo la reconoce si **Expo Go ya está instalado**. Si
+lo está y sigue fallando, suele ser que el QR sale deformado en la terminal de Windows.
+
+**La vía que nunca falla es no usar la cámara:**
+
+1. En la terminal donde corre `npm run app`, debajo del QR está la dirección impresa en
+   texto. Algo como `exp://192.168.1.42:8081`.
+2. Abre **Expo Go** en el iPhone.
+3. Toca **«Enter URL manually»** en la pantalla de inicio.
+4. Escribe esa dirección tal cual y conecta.
+
+Es más rápido que pelearse con el QR, y una vez conectado queda en «Recently opened»:
+las siguientes veces es un toque.
+
 ### iPhone · el permiso que hay que dar
 
 La primera vez, iOS preguntará si Expo Go puede acceder a la **red local**. **Di que
@@ -218,6 +235,7 @@ Para volver a empezar otro día: pasos 2, 3, 5 y 6. Los datos siguen ahí.
 | Sigue fallando tras poner la IP | El cortafuegos de Windows bloquea el puerto | Permite Node.js en redes privadas cuando Windows lo pregunte, o abre el puerto 54321 |
 | **iPhone:** el QR abre Expo Go y se queda cargando | Falta el permiso de red local | **Ajustes → Expo Go → Red local**, actívalo |
 | **iPhone:** Expo Go no encuentra el lector de QR | En iOS no lo trae | Usa la app **Cámara** del sistema |
+| **iPhone:** la cámara dice «No hay datos» | iOS no reconoce la dirección `exp://` | Escribe la dirección a mano en Expo Go (ver arriba). Comprueba también que Expo Go está instalado |
 | El QR no carga y la Wi-Fi es de invitados o de oficina | La red aísla los dispositivos | `npm run app:tunnel` (ver arriba, con su aviso) |
 | `Falta EXPO_PUBLIC_SUPABASE_URL` | Expo arrancó antes de que existiera el fichero | Ctrl+C y `npm run app` de nuevo |
 | Puerto ocupado | Hay otro Supabase levantado | `npx supabase stop --all` y vuelve al paso 3 |
