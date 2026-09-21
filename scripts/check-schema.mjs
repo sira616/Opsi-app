@@ -39,18 +39,42 @@ const AUTH_DOUBLE = `
 
   create schema auth;
   create table auth.users (
-    id                  uuid primary key,
-    instance_id         uuid,
-    aud                 text,
-    role                text,
-    email               text unique,
-    encrypted_password  text,
-    email_confirmed_at  timestamptz,
-    created_at          timestamptz default now(),
-    updated_at          timestamptz default now(),
-    raw_app_meta_data   jsonb,
-    raw_user_meta_data  jsonb
+    id                      uuid primary key,
+    instance_id             uuid,
+    aud                     text,
+    role                    text,
+    email                   text unique,
+    encrypted_password      text,
+    email_confirmed_at      timestamptz,
+    created_at              timestamptz default now(),
+    updated_at              timestamptz default now(),
+    raw_app_meta_data       jsonb,
+    raw_user_meta_data      jsonb,
+    -- GoTrue lee estas como texto y revienta con null: por eso el seed las
+    -- pone a cadena vacía, y por eso están aquí.
+    confirmation_token      text,
+    recovery_token          text,
+    email_change            text,
+    email_change_token_new  text
   );
+
+  -- El inicio de sesión por contraseña necesita su fila de identidad.
+  create table auth.identities (
+    provider_id      text,
+    user_id          uuid references auth.users (id) on delete cascade,
+    identity_data    jsonb,
+    provider         text,
+    last_sign_in_at  timestamptz,
+    created_at       timestamptz default now(),
+    updated_at       timestamptz default now(),
+    primary key (provider_id, provider)
+  );
+
+  -- pgcrypto no viene con PGlite. Aquí solo importa que el seed pueda
+  -- llamarlas; el hash de verdad lo hace Postgres en la máquina del usuario.
+  create schema if not exists extensions;
+  create function extensions.gen_salt(t text) returns text language sql as $fn$ select '$2a$10$stub' $fn$;
+  create function extensions.crypt(p text, s text) returns text language sql as $fn$ select s || md5(p) $fn$;
   create function auth.uid() returns uuid language sql stable as $fn$
     select nullif(current_setting('request.jwt.claims', true)::json ->> 'sub', '')::uuid;
   $fn$;
@@ -221,7 +245,7 @@ async function main() {
 
   // ── El trigger de alta ──────────────────────────────────────────────────
   console.log(`\n\x1b[1mAlta de usuario\x1b[0m`);
-  await db.exec(`insert into auth.users (id, email) values ('${USER_A}', 'a@opsi.test'), ('${USER_B}', 'b@opsi.test');`);
+  await db.exec(`insert into auth.users (id, email) values ('${USER_A}', 'ana@opsi.test'), ('${USER_B}', 'bruno@opsi.test');`);
 
   const households = await db.query(`select count(*)::int as n from public.households`);
   check('registrarse crea un hogar por usuario', households.rows[0].n === 2, `hogares creados: ${households.rows[0].n}`);
@@ -405,6 +429,52 @@ async function main() {
   // Base nueva, para que los datos de las comprobaciones de arriba no choquen
   // con los usuarios que crean los tests.
   await runPgtapFiles();
+
+  // ── Los seeds ───────────────────────────────────────────────────────────
+  console.log(`\n\x1b[1mDatos de arranque\x1b[0m`);
+  const dbSeed = await PGlite.create();
+  try {
+    await dbSeed.exec(AUTH_DOUBLE);
+    for (const migration of (await readdir(MIGRATIONS)).filter((f) => f.endsWith('.sql')).sort()) {
+      await dbSeed.exec(await readFile(join(MIGRATIONS, migration), 'utf8'));
+    }
+    const SEEDS = join(ROOT, 'supabase', 'seed');
+    for (const seed of (await readdir(SEEDS)).filter((f) => f.endsWith('.sql')).sort()) {
+      await dbSeed.exec(await readFile(join(SEEDS, seed), 'utf8'));
+    }
+    check('los seeds se aplican sin errores', true);
+
+    const prod = await dbSeed.query(`select count(*)::int as n from public.products where household_id is null`);
+    check('el catálogo global queda sembrado', prod.rows[0].n >= 10, `productos: ${prod.rows[0].n}`);
+
+    const ref = await dbSeed.query(`select count(*)::int as n from public.open_shelf_life_reference`);
+    check('la tabla de conservación queda sembrada', ref.rows[0].n >= 10);
+
+    const dev = await dbSeed.query(
+      `select s.username, u.email from auth.users u
+         join public.user_settings s on s.user_id = u.id
+        where s.username = 'syreta'`,
+    );
+    check('el usuario de desarrollo syreta existe', dev.rows.length === 1);
+    check(
+      'y su correo es sintético, no uno real',
+      dev.rows[0]?.email === 'syreta@usuarios.opsi.local',
+      `correo: ${dev.rows[0]?.email}`,
+    );
+
+    const casa = await dbSeed.query(
+      `select count(*)::int as n from public.household_members m
+         join public.user_settings s on s.user_id = m.user_id
+        where s.username = 'syreta'`,
+    );
+    check('y el trigger le creó su hogar', casa.rows[0].n === 1);
+
+    const ident = await dbSeed.query(`select count(*)::int as n from auth.identities`);
+    check('con su fila de identidad, que GoTrue exige', ident.rows[0].n === 1);
+  } catch (error) {
+    check('los seeds se aplican sin errores', false, error.message);
+  }
+  await dbSeed.close();
 
   // ── Resultado ───────────────────────────────────────────────────────────
   console.log(

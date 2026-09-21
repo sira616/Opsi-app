@@ -37,7 +37,7 @@ hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
 |---|---|
 | Esquema | **10 migraciones**, 8 tablas, 10 tipos enumerados, RLS en todas |
 | Seguridad | `is_household_member()` + 21 políticas + trigger de hogar personal |
-| Auth | Correo y contraseña; sin dependencia de correo para entrar |
+| Auth | Usuario y contraseña; el correo es opcional y solo sirve para recuperarla |
 | Fase 1 | 6 acciones RPC + vista `inventory_with_priority` con el tope de 24 h |
 | CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
 | Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
@@ -388,6 +388,55 @@ contexto de React, que ya funciona y es lo idiomático con los layouts de Expo R
 Cambiarlo sería churn sin ganancia. Si algún día hay estado compartido de verdad —más
 allá de la sesión— se reconsidera.
 
+### D-19 · El usuario es la identidad; el correo es opcional · 2026-09-21 *(matiza D-13)*
+
+D-13 cambió el magic link por correo y contraseña y quitó la dependencia del SMTP para
+entrar. Quedaba una fricción que no tenía por qué existir: **pedir un correo para algo
+que no lo necesita**. Opsi no manda nada salvo la recuperación de contraseña, así que el
+correo pasa a ser opcional y la identidad pasa a ser el nombre de usuario.
+
+**El problema:** GoTrue solo sabe autenticar por correo o por teléfono. No existe el
+inicio de sesión por nombre de usuario, ni un ajuste que lo active.
+
+**Lo que se descartó, y por qué:**
+
+| Opción | Por qué no |
+|---|---|
+| Buscar el correo por usuario antes de entrar | Necesita una función pública que responda «este usuario existe» a quien pregunte: un oráculo de enumeración de cuentas, y encima abierto a `anon` |
+| Un Auth Hook que traduzca usuario → correo | Solo en planes de pago de Supabase, y no existe en el entorno local |
+| Teléfono en lugar de correo | Pide un proveedor de SMS, que es exactamente la dependencia que D-13 quitó |
+
+**Lo elegido: correo sintético.** Cada cuenta lleva un correo derivado del nombre,
+`syreta@usuarios.opsi.local`, que no existe y al que no se envía nada. La app lo compone
+en el cliente y el usuario no lo ve nunca.
+
+Tiene una ventaja que no era el objetivo: **GoTrue ya exige que el correo sea único**, así
+que el nombre de usuario es único gratis, sin consultas previas y sin oráculo.
+
+**El correo de verdad** se añade en Ajustes → Cuenta. Al confirmarlo, GoTrue
+*reemplaza* el sintético por el real, y desde ese momento la recuperación estándar de
+Supabase funciona sin que haya que inventar nada. `mi_correo()` distingue los dos casos
+mirando el dominio, sin exponer `auth.users`.
+
+**El usuario es inmutable**, y no por una regla de la app: la migración quita el `UPDATE`
+de tabla sobre `user_settings` y lo devuelve columna a columna, dejando `username` fuera.
+Cambiarlo dejaría el correo sintético apuntando al nombre anterior —se seguiría entrando
+con el viejo mientras la app enseña el nuevo—, y esa incoherencia es peor que la
+limitación. Revocar solo la columna no habría servido: en PostgreSQL un permiso de tabla
+sigue cubriéndolas todas.
+
+**La regla vive en dos sitios**, `public.dominio_sintetico()` y `shared/lib/usuario.ts`,
+porque el cliente tiene que componer el correo **antes** de tener sesión, que es
+justamente cuando no puede preguntarle nada a la base de datos.
+
+**Usuario de desarrollo:** `syreta` / `opsi-dev-2026`, sembrado en
+`supabase/seed/03_usuario_dev.sql`. Es una contraseña conocida escrita en el repositorio:
+vale solo para el Supabase local y hay que borrar ese fichero antes de sembrar en la nube.
+Queda anotado en los pendientes.
+
+**Q7 sigue abierta y sube un poco de prioridad**: quien no añada un correo no tiene forma
+de recuperar la contraseña.
+
 ## 3. Convenciones
 
 ### Ramas
@@ -625,7 +674,7 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 | Q4 | ¿Qué modelo en producción? | **Aplazada**: en desarrollo se usa Ollama ([D-17](#d-17--ollama-en-desarrollo-el-modelo-de-producción-sin-decidir--2026-09-21-aplaza-q4)). La costura tiene que estar puesta desde el principio | Fase 5 |
 | ~~Q5~~ | ~~¿Cuántas unidades permite el MVP?~~ | **Cerrada: masa, volumen y unidades** ([D-07](#d-07--masa-volumen-y-unidades--2026-09-19-cierra-q5)) | ✅ |
 | ~~Q6~~ | ~~¿Qué pasa con un elemento congelado?~~ | **Cerrada: se reanuda** ([D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6)) | ✅ |
-| Q7 | ¿Qué SMTP en producción? | Ya no bloquea: se entra con contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7)). Sigue haciendo falta para recuperar contraseña y verificar correos | Antes de publicar |
+| Q7 | ¿Qué SMTP en producción? | No bloquea el desarrollo: se entra con usuario y contraseña ([D-13](#d-13--correo-y-contraseña-en-vez-de-magic-link--2026-09-19-revierte-d-06-cierra-q7), [D-19](#d-19--el-usuario-es-la-identidad-el-correo-es-opcional--2026-09-21-matiza-d-13)). Pero sin SMTP, quien no añada un correo no puede recuperar la contraseña | Antes de publicar |
 | **Q8** | ¿Se pone tope de seguridad al descongelar? | Reanudar el reloj choca con «seguridad antes que desperdicio» para lo descongelado. Ver el aviso en [D-12](#d-12--congelar-pausa-la-cuenta-atrás-descongelar-la-reanuda--2026-09-19-cierra-q6) | Fase 1, con la vista |
 
 ---
@@ -848,3 +897,20 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   traducirlos encima solo quita información.
 - Un fallo de red no es una sesión huérfana: se distinguen, porque confundirlos mandaría a
   cerrar sesión a quien solo tiene el servidor apagado.
+
+### 2026-09-21 (sesión 15) · El usuario, no el correo
+
+- **Login por usuario y contraseña** ([D-19](#d-19--el-usuario-es-la-identidad-el-correo-es-opcional--2026-09-21-matiza-d-13)).
+  El correo deja de pedirse al registrarse y pasa a Ajustes → Cuenta, donde además se
+  cambia la contraseña.
+- **Usuario de desarrollo `syreta`** sembrado directamente en `auth.users`. Costó dos
+  detalles que no están documentados en ningún sitio obvio: GoTrue lee las columnas de
+  token como texto y revienta con `null` —se ponen a cadena vacía—, y exige una fila en
+  `auth.identities` o el inicio de sesión por contraseña no encuentra al usuario.
+- **Un fixture invisible**: los correos de prueba eran `a@opsi.test`, y el nuevo CHECK del
+  usuario exige 3 caracteres. Un test que no probaba nada de esto habría fallado por una
+  letra.
+- **`mi_correo()` pasaba por la razón equivocada.** El test corría como dueño de la base,
+  sin `auth.uid()`, así que la función devolvía `null` pasara lo que pasara. Ahora corre
+  como Ana y con correo sintético de verdad. Una aserción que pasa sin ejercitar lo que
+  cree ejercitar es peor que no tenerla.

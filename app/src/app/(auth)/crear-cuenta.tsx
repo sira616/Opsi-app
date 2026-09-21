@@ -8,27 +8,38 @@ import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
 import { describeAuthError } from '@/shared/lib/auth-errors';
 import { useSession } from '@/shared/lib/session';
+import {
+  CONTRASENA_MIN,
+  esUsuarioValido,
+  motivoUsuarioInvalido,
+  normalizarUsuario,
+  USUARIO_MAX,
+} from '@/shared/lib/usuario';
 import { fonts,makeStyles, space, useType } from '@/shared/theme/tokens';
 
-/** Fijado en supabase/config.toml (auth.minimum_password_length). */
-const MIN_PASSWORD = 10;
+const MIN_PASSWORD = CONTRASENA_MIN;
 
 export default function CrearCuenta() {
   const styles = useStyles();
   const t = useType();
   const { signUp } = useSession();
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
+  const problemaUsuario = motivoUsuarioInvalido(usuario);
 
   async function onSubmit() {
     setError(null);
 
     // Se comprueba aquí además de en el servidor para no gastar un viaje de
     // red en decir algo que ya se sabe. El servidor sigue mandando.
+    if (!esUsuarioValido(usuario)) {
+      setError(problemaUsuario ?? 'Ese usuario no vale.');
+      return;
+    }
     if (password.length < MIN_PASSWORD) {
       setError(`La contraseña necesita al menos ${MIN_PASSWORD} caracteres.`);
       return;
@@ -36,7 +47,7 @@ export default function CrearCuenta() {
 
     setBusy(true);
     try {
-      await signUp(email, password);
+      await signUp(usuario, password);
     } catch (caught) {
       setError(describeAuthError(caught));
     } finally {
@@ -55,21 +66,23 @@ export default function CrearCuenta() {
             <Text style={styles.wordmark}>Opsi</Text>
             <Text style={t.title}>Crear cuenta</Text>
             <Text style={styles.tagline}>
-              Se crea tu casa automáticamente. Nadie más ve lo que guardes en ella.
+              Solo usuario y contraseña. El correo lo añades luego, en ajustes, si
+              quieres poder recuperarla.
             </Text>
           </View>
 
           <View style={styles.form}>
             <TextField
-              label="Correo"
-              value={email}
-              onChangeText={setEmail}
+              label="Usuario"
+              hint={problemaUsuario ?? 'Letras sin acentos, números y guion bajo.'}
+              value={usuario}
+              onChangeText={(v) => setUsuario(normalizarUsuario(v))}
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="username-new"
               autoCorrect={false}
-              keyboardType="email-address"
-              inputMode="email"
-              textContentType="emailAddress"
+              maxLength={USUARIO_MAX}
+              textContentType="username"
+              returnKeyType="next"
             />
             <TextField
               label="Contraseña"
@@ -94,7 +107,7 @@ export default function CrearCuenta() {
               label="Crear cuenta"
               onPress={onSubmit}
               loading={busy}
-              disabled={!email || !password}
+              disabled={!usuario || !password}
             />
           </View>
 

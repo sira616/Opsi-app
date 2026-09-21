@@ -64,6 +64,8 @@ function casos(p) {
     ['texto de caducidad sobre su fondo', p.expiryInk, p.expirySoft, 4.5],
     ['borde de caducidad sobre su fondo', p.expiryLine, p.expirySoft, 3.0],
     ['aviso sobre tarjeta', p.warning, p.surface, 4.5],
+    ['texto sobre el fondo de aviso', p.inkMuted, p.warningSoft, 4.5],
+    ['icono de aviso sobre su fondo', p.warning, p.warningSoft, 3.0],
     ['congelado sobre tarjeta', p.frost, p.surface, 4.5],
     ['borde de control sobre tarjeta', p.borderStrong, p.surface, 3.0],
   ];

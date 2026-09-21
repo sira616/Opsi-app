@@ -192,7 +192,8 @@ tú.
 
 | | Qué | Por qué |
 |:--:|---|---|
-| 🟠 | SMTP real y `enable_confirmations = true` | Ahora mismo puede haber cuentas con el correo sin verificar. Ver Q7 |
+| 🔴 | **Borrar `supabase/seed/03_usuario_dev.sql`** | Siembra `syreta` con una contraseña escrita en el repositorio. Vale para el Supabase local; sembrarlo en la nube sería regalar una cuenta |
+| 🟠 | SMTP real | Sin él, quien no añada un correo en Ajustes no puede recuperar su contraseña. Ver Q7 y [D-19](BITACORA.md#d-19--el-usuario-es-la-identidad-el-correo-es-opcional--2026-09-21-matiza-d-13) |
 | 🟠 | **Borrado de cuenta y de datos** | No existe ninguna vía para que un usuario borre su hogar y su historial. Con datos personales en Europa, esto no es opcional. Tampoco hay política de retención |
 | 🟠 | Proyecto de Supabase en **región EU** | Decidido, pero el proyecto aún no está creado |
 | 🟠 | Límites de uso de la IA por usuario | Fase 5. El roadmap ya lo pide; sin ello, la factura es imprevisible |

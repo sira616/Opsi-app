@@ -30,10 +30,10 @@ insert into auth.users (
 )
 values
   ('00000000-0000-0000-0000-000000000000', '1111aaaa-1111-4111-8111-111111111111',
-   'authenticated', 'authenticated', 'ana@opsi.test', '',
+   'authenticated', 'authenticated', 'ana@usuarios.opsi.local', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-0000-0000-000000000000', '2222bbbb-2222-4222-8222-222222222222',
-   'authenticated', 'authenticated', 'bruno@opsi.test', '',
+   'authenticated', 'authenticated', 'bruno@usuarios.opsi.local', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
 -- Los identificadores se guardan como ajustes de la transacción, no en una
@@ -82,6 +82,53 @@ select is(
 select is(
   (select bool_or(auto_add_to_shopping_list) from public.user_settings), false,
   'el anadido automatico a la lista viene desactivado (principio del proyecto)'
+);
+
+-- ── El usuario es la identidad ────────────────────────────────────────────
+
+select is(
+  (select username from public.user_settings
+    where user_id = current_setting('opsi.ana')::uuid),
+  'ana',
+  'el alta guarda el nombre de usuario'
+);
+
+select throws_ok(
+  format(
+    $$insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+        email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+      values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated',
+        'authenticated', 'ANA@%s', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb)$$,
+    public.dominio_sintetico()
+  ),
+  '23505',
+  null,
+  'el nombre de usuario es unico sin distinguir mayusculas'
+);
+
+-- A partir de aqui como Ana, y no como el dueno de la base: mi_correo() se
+-- resuelve con auth.uid(), y sin sesion devolveria null pasase lo que pasase.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"1111aaaa-1111-4111-8111-111111111111","role":"authenticated"}';
+
+select is(
+  public.mi_correo(),
+  null,
+  'mi_correo() devuelve null mientras el correo sea sintetico'
+);
+
+-- La inmutabilidad del usuario no es una regla de la app: la columna no tiene
+-- UPDATE concedido, asi que el intento muere en el motor.
+select throws_ok(
+  $$update public.user_settings set username = 'otro'$$,
+  '42501',
+  null,
+  'el nombre de usuario no se puede cambiar desde el cliente'
+);
+
+select lives_ok(
+  $$update public.user_settings set digest_hour = 8$$,
+  'pero el resto de los ajustes si se puede cambiar'
 );
 
 -- ── Ana llena su despensa ─────────────────────────────────────────────────

@@ -189,13 +189,21 @@ pero la pantalla se queda en blanco o cargando, mira ahí primero.
 
 ---
 
-## Paso 7 · Crear tu cuenta
+## Paso 7 · Entrar
 
-En la pantalla de entrada, pulsa **Crear una**.
+Hay una cuenta de desarrollo ya creada por los seeds:
 
-- **Correo:** cualquiera, aunque no exista. `prueba@opsi.test` vale.
-  No se envía ningún correo: está desactivado a propósito para desarrollo.
+| Usuario | Contraseña |
+|---|---|
+| `syreta` | `opsi-dev-2026` |
+
+Si prefieres la tuya, pulsa **Crear una**:
+
+- **Usuario:** de 3 a 20 caracteres, solo letras sin acentos, números y `_`.
 - **Contraseña:** mínimo **10 caracteres**.
+
+No se pide correo. Se puede añadir después en **Ajustes → Cuenta**, y solo sirve para
+recuperar la contraseña si se olvida.
 
 Al registrarte se crea tu casa automáticamente. Verás «Consumir primero» vacío.
 

@@ -130,10 +130,11 @@ Y entonces la build usa esa URL en lugar de la local. Ese paso está en
 [`docs/SETUP.md`](SETUP.md), sección «Nube».
 
 > [!IMPORTANT]
-> Antes de que la use alguien que no seas tú hacen falta dos cosas más, y están en los
-> pendientes: un **SMTP real** con `enable_confirmations = true` —ahora mismo puede haber
-> cuentas con el correo sin verificar— y una vía para **borrar la cuenta y los datos**,
-> que con datos personales en Europa no es opcional.
+> Antes de que la use alguien que no seas tú hacen falta tres cosas más, y están en los
+> pendientes: un **SMTP real** —sin él, quien no haya añadido un correo en Ajustes no
+> puede recuperar la contraseña—, **borrar el seed del usuario `syreta`**, cuya
+> contraseña está escrita en el repositorio, y una vía para **borrar la cuenta y los
+> datos**, que con datos personales en Europa no es opcional.
 
 ---
 

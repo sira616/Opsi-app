@@ -203,13 +203,13 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 **Fase 0 · en curso.** Lo que hay hoy:
 
 - [x] Monorepo con `app/` y `supabase/`
-- [x] CLI de Supabase fijada y `supabase/config.toml` configurado (magic link, deep links)
+- [x] CLI de Supabase fijada y `supabase/config.toml` configurado (contraseña, deep links)
 - [x] Separación de secretos: qué es público, qué va en el servidor
 - [x] Esquema inicial: 7 tablas, con RLS en todas
 - [x] Trigger de hogar personal al registrarse
 - [x] Tests de aislamiento entre dos cuentas y de restricciones del dominio
 - [x] CI con tres trabajos
-- [x] App Expo: alta y login con contraseña, sesión persistida, rutas protegidas
+- [x] App Expo: alta y login por usuario y contraseña, sesión persistida, rutas protegidas
 - [ ] Development build de EAS (solo hace falta para el escáner y los avisos)
 
 **Fase 1 · completa**

@@ -3,13 +3,15 @@ import { createContext, use, useEffect, useMemo, useState, type ReactNode } from
 import { AppState } from 'react-native';
 
 import { supabase } from './supabase';
+import { correoSintetico, normalizarUsuario } from './usuario';
 
 type SessionState = {
   session: Session | null;
   /** Mientras es true no se sabe aún si hay sesión: no se debe redirigir. */
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  /** Por nombre de usuario, no por correo: ver shared/lib/usuario.ts. */
+  signIn: (usuario: string, password: string) => Promise<void>;
+  signUp: (usuario: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -69,18 +71,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       session,
       loading,
 
-      async signIn(email, password) {
+      async signIn(usuario, password) {
+        const nombre = normalizarUsuario(usuario);
         const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: correoSintetico(nombre),
           password,
         });
-        if (error) throw error;
+        if (!error) return;
+
+        // Quien ya añadió un correo real perdió el sintético, así que el
+        // intento anterior no encuentra nada. Se reintenta con el correo tal
+        // cual por si lo que han escrito es eso. No es un caso raro: es
+        // exactamente lo que pasa tras confirmar el correo en ajustes.
+        if (usuario.includes('@')) {
+          const reintento = await supabase.auth.signInWithPassword({
+            email: usuario.trim(),
+            password,
+          });
+          if (!reintento.error) return;
+        }
+        throw error;
       },
 
-      async signUp(email, password) {
+      async signUp(usuario, password) {
+        const nombre = normalizarUsuario(usuario);
         const { error } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: correoSintetico(nombre),
           password,
+          // Lo lee el trigger handle_new_user para guardarlo en user_settings.
+          // Sin esto se deduciría de la parte local del correo, que aquí da lo
+          // mismo; se manda igual para que el día que el correo deje de
+          // derivarse del nombre siga habiendo una fuente explícita.
+          options: { data: { username: nombre } },
         });
         if (error) throw error;
         // El hogar personal lo crea un trigger de la base de datos al

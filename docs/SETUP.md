@@ -99,19 +99,29 @@ verdad sobre el Supabase de verdad. Las diferencias asumidas a cambio de la rapi
 el esquema `auth` es un doble mínimo, PGlite trae Postgres 18 (el proyecto fija la 17)
 y no hay Storage, Realtime ni Edge Functions.
 
-### El correo no hace falta para entrar
+### Se entra con usuario y contraseña; el correo es opcional
 
-Registrarse y entrar funciona **sin ningún correo configurado**: `enable_confirmations`
-está desactivado a propósito, así que creas la cuenta y ya estás dentro. Puedes usar
-`test@ejemplo.com` sin que ese buzón exista.
+No se pide correo para registrarse. Supabase Auth solo sabe autenticar por correo, así
+que por debajo cada cuenta lleva uno **sintético** derivado del nombre:
 
-El correo solo se usa para **recuperar la contraseña**. En local no sale a internet:
-lo captura Mailpit en <http://127.0.0.1:54324>.
+```
+syreta  →  syreta@usuarios.opsi.local
+```
+
+Ese dominio no existe y nadie le manda nada. El usuario no lo ve en ningún sitio.
+
+El correo de verdad se añade después, en **Ajustes → Cuenta**, y sirve para una sola
+cosa: recuperar la contraseña. Al confirmarlo, GoTrue **sustituye** el sintético por el
+real, y a partir de ahí la recuperación estándar de Supabase funciona sin nada extra.
+En local ese enlace no sale a internet: lo captura Mailpit en <http://127.0.0.1:54324>.
+
+El nombre de usuario admite `a-z`, `0-9` y `_`, entre 3 y 20 caracteres, y **no se puede
+cambiar**: la base de datos ni siquiera concede `UPDATE` sobre esa columna, porque
+cambiarlo dejaría el correo sintético apuntando al nombre anterior.
 
 > [!IMPORTANT]
-> Antes de publicar hay que configurar un SMTP real y poner
-> `auth.email.enable_confirmations = true`. Mientras siga desactivado puede haber
-> cuentas con un correo sin verificar.
+> Antes de publicar hay que configurar un SMTP real. Sin él, quien no haya añadido un
+> correo no tiene forma de recuperar la contraseña si la olvida.
 
 ## 2. Nube (cuando haya algo que desplegar)
 
@@ -186,11 +196,21 @@ Necesita el backend levantado y `app/.env` relleno.
 
 En el navegador no hace falta nada de esto: `127.0.0.1` funciona tal cual.
 
-### No hay usuario de prueba
+### Usuario de desarrollo
 
-El seed carga el catálogo de productos, no usuarios. **Créate la cuenta desde la app**:
-cualquier correo inventado sirve —no se envía nada— y la contraseña necesita 10
-caracteres. Registrarte es justamente lo que dispara el trigger que crea tu hogar.
+El seed crea uno, ya listo para entrar:
+
+| Usuario | Contraseña |
+|---|---|
+| `syreta` | `opsi-dev-2026` |
+
+> [!CAUTION]
+> Es una contraseña conocida y escrita en el repositorio. Vale **solo para el Supabase
+> local**. Antes de ejecutar los seeds contra un proyecto en la nube hay que borrar
+> `supabase/seed/03_usuario_dev.sql`.
+
+También puedes crearte la tuya desde la app: usuario, contraseña de 10 caracteres y
+listo. Registrarte es lo que dispara el trigger que crea tu hogar.
 
 ### Llenar el inventario para tener algo que mirar
 
@@ -212,4 +232,5 @@ realinea las dependencias con las que recomienda el SDK.
 | `db:start` se queda colgado | Descargando imágenes la primera vez | Esperar; la segunda vez tarda segundos |
 | Puerto 54322 ocupado | Otro proyecto Supabase levantado | `npx supabase stop --project-id <otro>` |
 | El móvil no conecta con la API | `127.0.0.1` es el propio móvil | Poner la IP local del ordenador en `.env` |
-| No llega el magic link | En local no se envía ningún correo | Mirar en Mailpit: <http://127.0.0.1:54324> |
+| No llega el correo de confirmación | En local no sale a internet | Mirar en Mailpit: <http://127.0.0.1:54324> |
+| `syreta` no entra | Los seeds no se han aplicado | `npm run db:reset` |

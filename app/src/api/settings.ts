@@ -13,6 +13,8 @@ import { supabase } from '@/shared/lib/supabase';
 
 export type UserSettings = {
   user_id: string;
+  /** El nombre de usuario. Es la identidad visible; ver shared/lib/usuario.ts. */
+  username: string;
   timezone: string;
   digest_enabled: boolean;
   digest_hour: number;
@@ -23,7 +25,9 @@ export type UserSettings = {
 export async function fetchSettings(): Promise<UserSettings | null> {
   const { data, error } = await supabase
     .from('user_settings')
-    .select('user_id, timezone, digest_enabled, digest_hour, auto_add_to_shopping_list, locale')
+    .select(
+      'user_id, username, timezone, digest_enabled, digest_hour, auto_add_to_shopping_list, locale',
+    )
     .maybeSingle();
 
   if (error) throw error;
@@ -31,10 +35,18 @@ export async function fetchSettings(): Promise<UserSettings | null> {
 }
 
 /**
+ * Lo que se puede tocar. `user_id` y `username` quedan fuera a propósito: el
+ * primero es la identidad de la fila y el segundo es inmutable, y la base de
+ * datos ya lo impide quitando el UPDATE de esa columna. Dejarlos en el tipo
+ * solo serviría para que el error saliera en tiempo de ejecución.
+ */
+export type SettingsPatch = Partial<Omit<UserSettings, 'user_id' | 'username'>>;
+
+/**
  * Sin `.eq('user_id', ...)`: la política RLS de user_settings ya limita el
  * UPDATE a tu propia fila. Ponerlo aquí sería repetir la regla.
  */
-export async function updateSettings(patch: Partial<UserSettings>): Promise<void> {
+export async function updateSettings(patch: SettingsPatch): Promise<void> {
   const { error } = await supabase.from('user_settings').update(patch).not('user_id', 'is', null);
   if (error) throw error;
 }

@@ -8,13 +8,14 @@ import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
 import { describeAuthError } from '@/shared/lib/auth-errors';
 import { useSession } from '@/shared/lib/session';
+import { normalizarUsuario } from '@/shared/lib/usuario';
 import { fonts,makeStyles, space, useType } from '@/shared/theme/tokens';
 
 export default function Entrar() {
   const styles = useStyles();
   const t = useType();
   const { signIn } = useSession();
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,7 @@ export default function Entrar() {
     setError(null);
     setBusy(true);
     try {
-      await signIn(email, password);
+      await signIn(usuario, password);
       // Sin navegación aquí: onAuthStateChange actualiza la sesión y el layout
       // de (auth) redirige solo. Navegar a mano dispararía dos veces.
     } catch (caught) {
@@ -50,15 +51,14 @@ export default function Entrar() {
 
           <View style={styles.form}>
             <TextField
-              label="Correo"
-              value={email}
-              onChangeText={setEmail}
+              label="Usuario"
+              value={usuario}
+              onChangeText={(v) => setUsuario(normalizarUsuario(v))}
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="username"
               autoCorrect={false}
-              keyboardType="email-address"
-              inputMode="email"
-              textContentType="emailAddress"
+              textContentType="username"
+              returnKeyType="next"
             />
             <TextField
               label="Contraseña"
@@ -78,7 +78,7 @@ export default function Entrar() {
               label="Entrar"
               onPress={onSubmit}
               loading={busy}
-              disabled={!email || !password}
+              disabled={!usuario || !password}
             />
           </View>
 
