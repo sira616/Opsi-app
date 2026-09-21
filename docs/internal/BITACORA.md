@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-21** (sesión 5)
+> Última actualización: **2026-09-21** (sesión 6)
 
 ---
 
@@ -41,7 +41,7 @@ hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
 | Fase 1 | 6 acciones RPC + vista `inventory_with_priority` con el tope de 24 h |
 | CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
 | Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
-| App Expo | **Nada.** Sigue siendo la tarea D1 |
+| App Expo | **D1–D4 hechos**: Expo SDK 57, Router, cliente de Supabase, alta y login, rutas protegidas. `typecheck` y `lint` limpios |
 
 ### Verificado vs. no verificado
 
@@ -658,3 +658,22 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - **CI escrita**: tres trabajos. El rápido sin Docker da señal en segundos.
 - 32 comprobaciones nuevas. **117 en total, todas en verde.**
 - Abierta **Q9**: la vista calcula «hoy» en UTC.
+
+### 2026-09-21 (sesión 6) · La app existe
+
+- **D1–D4**: proyecto Expo (SDK 57, React 19.2, RN 0.86), Expo Router con rutas en
+  `src/app`, cliente de Supabase con sesión persistida en AsyncStorage, alta y login con
+  correo y contraseña, y rutas protegidas.
+- Versiones resueltas desde `bundledNativeModules.json` del propio paquete `expo`: el
+  proxy bloquea la API de `expo install`, y era eso o inventármelas.
+- **Dos fallos cazados antes de commitear**:
+  - Fijé ESLint 10 y `eslint-config-expo` todavía va con la 9 — su `eslint-plugin-react`
+    usa una API que la 10 eliminó. Fijado en `^9.39.5`.
+  - El linter encontró un `setState` síncrono dentro de un `useEffect`, que provoca
+    renders en cascada. Reestructurado con un contador de recarga, de modo que todas las
+    escrituras de estado ocurren tras un `await`.
+- **Corregido un error de diseño mío**: el `.env` del cliente estaba en la raíz del
+  repositorio, y Expo lee el suyo desde su propia raíz de proyecto. Movido a `app/.env`.
+- La pantalla de aterrizaje lee el hogar y cuenta el inventario a propósito: comprueba de
+  una vez la sesión, el trigger de alta y la RLS.
+- **Nadie ha arrancado la app todavía.** `tsc` y ESLint pasan; eso no es lo mismo.

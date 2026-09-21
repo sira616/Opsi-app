@@ -39,31 +39,37 @@ El **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
 
 ## Puesta en marcha
 
-> [!WARNING]
-> **El proyecto de Expo aún no existe** (tarea D1 de la fase 0). Lo que sigue es el
-> procedimiento previsto, no un estado verificado.
+```bash
+npm install                 # desde la raíz del repositorio: es un workspace
+cp app/.env.example app/.env   # y pega la anon key de `npm run db:status`
+npm run --workspace app start  # o: cd app && npx expo start
+```
+
+Escanea el QR con Expo Go y ya puedes crear una cuenta. El backend tiene que estar
+levantado (`npm run dev` desde la raíz).
+
+> [!IMPORTANT]
+> El `.env` va en **`app/.env`**, no en la raíz: Expo lee el suyo desde su propia raíz de
+> proyecto y en la del monorepo no lo ve.
+
+> [!NOTE]
+> Desde un **dispositivo físico**, `127.0.0.1` es el propio móvil. Hay que poner la IP de
+> tu ordenador en la red local en `EXPO_PUBLIC_SUPABASE_URL`.
+
+Para el escáner (fase 2) y las notificaciones (fase 3) hará falta una *development build*:
 
 ```bash
-npm install             # desde la raíz: es un workspace
-cd app
-npx expo start          # Expo Go para iterar rápido
-npx expo run:ios        # build nativa: necesaria para el escáner y las push
 eas build --profile development
 ```
 
-El backend tiene que estar levantado (`npm run db:start` desde la raíz) y la `anon key`
-copiada al `.env`. Ver [`../docs/SETUP.md`](../docs/SETUP.md).
-
 El escáner de códigos y las notificaciones push **no funcionan en Expo Go**: requieren una
-*development build*. Conviene montarla ya en la fase 0 y no descubrirlo en la fase 2.
-
-El **login sí funciona en Expo Go** desde el primer día: con contraseña no hace falta
-volver de ningún correo, así que no depende de los deep links ni de la development build.
+*development build*. El **login sí**, porque con contraseña no hay que volver de ningún
+correo — por eso se puede probar la app entera hoy sin montar nada.
 
 ## Estado por fases
 
-- [ ] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, alta y login
-      con correo y contraseña, CI (lint + typecheck)
+- [x] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, alta y login
+      con correo y contraseña, rutas protegidas. Falta la development build (D5)
 - [ ] **Fase 1** — Alta manual, detalle del elemento con acciones, «Consumir primero»
 - [ ] **Fase 2** — Pantalla de cámara EAN-13/EAN-8/UPC, confirmación precargada, fallback manual
 - [ ] **Fase 3** — Permiso y registro del token push, pantalla de ajustes de aviso

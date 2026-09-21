@@ -4,7 +4,7 @@
 > Todo lo que se ha quedado sin pulir, sin verificar o decidido a medias. La
 > [bitácora](BITACORA.md) cuenta **qué se decidió y por qué**; esto cuenta **qué falta**.
 >
-> Última revisión: **2026-09-21**
+> Última revisión: **2026-09-21** (tras D1–D4)
 
 ## Cómo leerlo
 
@@ -28,7 +28,8 @@ Supabase real**, porque el contenedor donde trabajo no tiene daemon de Docker.
 | 🔴 | **pgTAP real** | Los 3 ficheros de `supabase/tests/` se han ejecutado con *dobles* de las funciones de pgTAP, no con pgTAP |
 | 🔴 | Los `insert into auth.users` de los tests | Mi `auth.users` es un doble mínimo. Si el real tiene columnas NOT NULL que los tests no rellenan, **fallarán los tres ficheros**. Arreglo de una línea, pero hay que verlo |
 | 🟠 | La CI | `.github/workflows/ci.yml` no ha corrido nunca. El primer push dirá si el YAML y los pasos son correctos |
-| 🟠 | `npm run types` | Nunca ejecutado: necesita Docker. **`app/src/lib/database.types.ts` no existe todavía** |
+| 🟠 | `npm run types` | Nunca ejecutado: necesita Docker. **`app/src/lib/database.types.ts` no existe todavía**, así que las consultas del cliente van sin tipar |
+| 🟡 | Las versiones de Expo salen de `bundledNativeModules.json` | Las resolví de la lista que trae el propio paquete `expo`, porque el proxy bloquea la API de `expo install`. `npx expo install --fix` desde `app/` lo confirmará |
 
 **Cómo se cierra esto**, y es un solo rato delante del ordenador:
 
@@ -149,20 +150,23 @@ cambiar a `plan(N)`** para detectar además los tests que no llegan a correr.
 
 ---
 
-## 4. La app 🔴
+## 4. La app 🟠
 
-**No existe una sola línea.** Es la mitad que falta de la fase 0.
+**D1–D4 hechos.** Proyecto Expo (SDK 57, React 19, RN 0.86), Expo Router, cliente de
+Supabase con sesión persistida, alta y login con contraseña, y rutas protegidas.
+`typecheck` y `lint` pasan limpios.
 
-| | Tarea | Notas |
+| | Qué falta | Notas |
 |:--:|---|---|
-| 🔴 | D1 · Proyecto Expo con TypeScript y Expo Router | `npx create-expo-app` |
-| 🔴 | D2 · Cliente de Supabase con la `anon key` desde `.env` | |
-| 🔴 | D3 · Alta y login con correo y contraseña | Funciona en Expo Go: no necesita deep links |
-| 🔴 | D4 · Rutas protegidas y sesión persistida | |
-| 🟠 | D5 · Development build con EAS | **Solo** hace falta para el escáner (fase 2) y las push (fase 3) |
-| 🟡 | Traducir el prototipo a React Native | El [prototipo](https://claude.ai/artifact/GN9eqEFUn1vvBwVQBkgNpv) es HTML: sirve de referencia visual, no de código |
-
----
+| 🔴 | **Nadie ha ejecutado la app** | No hay Docker aquí, así que no se ha arrancado ni una vez. `tsc` y ESLint pasan, pero eso no prueba que arranque en un móvil |
+| 🟠 | La sesión se guarda en **AsyncStorage sin cifrar** | Es lo que recomienda la guía de Supabase para React Native, pero en un móvil con root o comprometido el token está en claro. `expo-secure-store` lo cifraría, a cambio de trocear el JWT: su límite es de 2048 bytes |
+| 🟠 | D5 · Development build con EAS | Solo hace falta para el escáner (fase 2) y las push (fase 3) |
+| 🟠 | La pantalla de aterrizaje es provisional | Lee el hogar y cuenta el inventario para comprobar la cadena entera. «Consumir primero» es fase 1 |
+| 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
+| 🟡 | Sin TanStack Query | Las consultas se hacen a mano con `useEffect`. En cuanto haya varias pantallas leyendo lo mismo, hará falta caché y revalidación |
+| 🟡 | Sin pruebas de interfaz | Ni una. El typecheck y el linter son toda la red de seguridad del cliente |
+| ⚪ | `eslint-config-expo` no va con ESLint 10 | Su `eslint-plugin-react` usa una API que la 10 eliminó. ESLint queda fijado en `^9.39.5`; revisar cuando publiquen soporte |
+| ⚪ | Traducir el prototipo a React Native | El [prototipo](https://claude.ai/artifact/GN9eqEFUn1vvBwVQBkgNpv) es HTML: referencia visual, no código |
 
 ## 5. Repositorio y proceso 🟡
 
@@ -193,9 +197,11 @@ tú.
 
 ## 7. Lo siguiente, en orden
 
-1. **`npm run dev` y `npm run db:test`** en una máquina con Docker. Cierra toda la sección 1.
-2. **D1–D4**: la app Expo con alta y login. Cierra la fase 0.
-3. Con la app en pie, **las tres pantallas de la fase 1**: alta manual, detalle con
-   acciones y «Consumir primero». El backend que las alimenta ya está.
-4. Por el camino, decidir **Q9** (zona horaria) y el hueco del **evento `created`**, que
-   son los dos únicos de este documento que ensucian datos cuanto más se tarde.
+1. **Arrancar la app de verdad**: `npm run dev`, luego `npm run --workspace app start` y
+   crear una cuenta desde Expo Go. Si la pantalla pinta tu hogar, la fase 0 funciona de
+   punta a punta y se cierra casi toda la sección 1.
+2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
+3. **Las tres pantallas de la fase 1**: alta manual, detalle con acciones y «Consumir
+   primero». El backend que las alimenta ya está hecho y probado.
+4. Por el camino, decidir **Q9** (zona horaria) y el hueco del **evento `created`**: son
+   los dos únicos de este documento que ensucian datos cuanto más se tarde.

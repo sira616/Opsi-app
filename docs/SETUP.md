@@ -43,9 +43,13 @@ service_role key: eyJhb...               ← esta NO sale nunca del servidor
 Copia la `anon key` a tu `.env`:
 
 ```bash
-cp .env.example .env
+cp app/.env.example app/.env
 npm run db:status    # vuelve a imprimir las claves cuando las necesites
 ```
+
+> [!IMPORTANT]
+> El `.env` del cliente va en **`app/.env`**, no en la raíz. Expo lee el suyo desde su
+> propia raíz de proyecto.
 
 > [!IMPORTANT]
 > Las claves locales son **siempre las mismas** para todo el mundo: forman parte de la
@@ -138,8 +142,15 @@ GitHub → Settings → Secrets and variables → Actions. Nunca en un fichero v
 
 ## 3. App Expo
 
-Aún no existe: es la tarea D1 de la fase 0. Cuando esté, se arranca con `npm start`
-desde `app/`. Ver [`app/README.md`](../app/README.md).
+```bash
+npm run --workspace app start
+```
+
+Escanea el QR con Expo Go y crea una cuenta. Necesita el backend levantado y
+`app/.env` relleno. Detalles en [`app/README.md`](../app/README.md).
+
+Si al actualizar Expo algo deja de cuadrar, `npx expo install --fix` desde `app/`
+realinea las dependencias con las que recomienda el SDK.
 
 ## Problemas frecuentes
 
