@@ -1,0 +1,309 @@
+import { Feather } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { fetchSettings, updateSettings, type UserSettings } from '@/api/settings';
+import { queryKeys } from '@/shared/lib/query';
+import { useSession } from '@/shared/lib/session';
+import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
+
+/**
+ * La zona horaria del dispositivo, si el sistema la sabe.
+ *
+ * Es lo que quiere el 99 % de la gente, así que se ofrece primero en vez de
+ * obligar a buscarla en una lista.
+ */
+function deviceTimezone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz && tz.includes('/') ? tz : null;
+  } catch {
+    return null;
+  }
+}
+
+const COMMON_ZONES = [
+  'Europe/Madrid',
+  'Atlantic/Canary',
+  'Europe/Lisbon',
+  'Europe/London',
+  'America/Mexico_City',
+  'America/Argentina/Buenos_Aires',
+];
+
+export default function Ajustes() {
+  const { session, signOut } = useSession();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [showZones, setShowZones] = useState(false);
+
+  const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+
+  const save = useMutation({
+    mutationFn: updateSettings,
+    async onSuccess() {
+      setError(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
+        // La zona horaria cambia lo que cuenta como «hoy», así que la lista de
+        // prioridad puede quedar distinta. Sin esto seguiría mostrando los
+        // días calculados con la zona anterior.
+        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList }),
+      ]);
+    },
+    onError(caught: Error) {
+      setError(caught.message);
+    },
+  });
+
+  function patch(next: Partial<UserSettings>) {
+    setError(null);
+    save.mutate(next);
+  }
+
+  const data = settings.data;
+  const device = deviceTimezone();
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={font.title}>Ajustes</Text>
+
+        {settings.isPending ? <ActivityIndicator color={colors.brand} /> : null}
+        <ErrorNote message={error ?? (settings.error ? (settings.error as Error).message : null)} />
+
+        {data ? (
+          <>
+            {/* ── Avisos ─────────────────────────────────────────────── */}
+            <Section title="Avisos">
+              <Row
+                title="Resumen diario"
+                subtitle="Un solo aviso al día con lo que conviene gastar. Si no hay nada urgente, no llega nada."
+                right={
+                  <Switch
+                    value={data.digest_enabled}
+                    onValueChange={(v) => patch({ digest_enabled: v })}
+                    trackColor={{ true: colors.brand, false: colors.borderStrong }}
+                    disabled={save.isPending}
+                  />
+                }
+              />
+
+              {data.digest_enabled ? (
+                <View style={styles.hours}>
+                  <Text style={font.label}>A qué hora</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hourRow}>
+                    {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
+                      const on = data.digest_hour === hour;
+                      return (
+                        <Pressable
+                          key={hour}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          onPress={() => patch({ digest_hour: hour })}
+                          style={[styles.hour, on && styles.hourOn]}
+                        >
+                          <Text style={[styles.hourText, on && styles.hourTextOn]}>
+                            {`${hour}`.padStart(2, '0')}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                  <Text style={font.caption}>
+                    Hora local: se calcula con tu zona horaria, no con la del servidor.
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.note}>
+                <Feather name="clock" size={14} color={colors.inkFaint} />
+                <Text style={styles.noteText}>
+                  Los avisos llegan en la fase 3. Lo que elijas aquí se guarda desde ya.
+                </Text>
+              </View>
+            </Section>
+
+            {/* ── Zona horaria ───────────────────────────────────────── */}
+            <Section title="Zona horaria">
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowZones((v) => !v)}
+                style={styles.zoneCurrent}
+              >
+                <View style={styles.zoneText}>
+                  <Text style={styles.zoneValue}>{data.timezone}</Text>
+                  <Text style={font.caption}>Decide qué cuenta como «hoy» en tu inventario.</Text>
+                </View>
+                <Feather name={showZones ? 'chevron-up' : 'chevron-down'} size={18} color={colors.inkMuted} />
+              </Pressable>
+
+              {showZones ? (
+                <View style={styles.zoneList}>
+                  {device && device !== data.timezone ? (
+                    <ZoneOption
+                      label={`${device} · la de este dispositivo`}
+                      onPress={() => {
+                        patch({ timezone: device });
+                        setShowZones(false);
+                      }}
+                    />
+                  ) : null}
+                  {COMMON_ZONES.filter((z) => z !== data.timezone).map((zone) => (
+                    <ZoneOption
+                      key={zone}
+                      label={zone}
+                      onPress={() => {
+                        patch({ timezone: zone });
+                        setShowZones(false);
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </Section>
+
+            {/* ── Lista de la compra ─────────────────────────────────── */}
+            <Section title="Lista de la compra">
+              <Row
+                title="Añadir automáticamente al agotar"
+                subtitle="Desactivado a propósito. Con esto apagado, Opsi pregunta antes de añadir nada a tu lista."
+                right={
+                  <Switch
+                    value={data.auto_add_to_shopping_list}
+                    onValueChange={(v) => patch({ auto_add_to_shopping_list: v })}
+                    trackColor={{ true: colors.brand, false: colors.borderStrong }}
+                    disabled={save.isPending}
+                  />
+                }
+              />
+            </Section>
+
+            {/* ── Cuenta ─────────────────────────────────────────────── */}
+            <Section title="Cuenta">
+              <Row title="Sesión" subtitle={session?.user.email ?? '—'} />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void signOut()}
+                style={styles.signOut}
+              >
+                <Text style={styles.signOutText}>Cerrar sesión</Text>
+              </Pressable>
+              <Text style={font.caption}>
+                Borrar la cuenta y sus datos todavía no es posible desde la app. Está pendiente.
+              </Text>
+            </Section>
+          </>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+function Row({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+function ZoneOption({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.zoneOption, pressed && styles.pressed]}
+    >
+      <Text style={styles.zoneOptionText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ground },
+  content: { padding: space.xl, gap: space.xl, paddingBottom: space.xxl * 2 },
+
+  section: { gap: space.sm },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.inkMuted,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    gap: space.lg,
+  },
+
+  row: { flexDirection: 'row', gap: space.lg, alignItems: 'center' },
+  rowText: { flex: 1, gap: 3 },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  rowSubtitle: { fontSize: 12.5, lineHeight: 18, color: colors.inkMuted },
+
+  hours: { gap: space.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg },
+  hourRow: { gap: space.sm - 2, paddingRight: space.lg },
+  hour: {
+    minWidth: touchTarget,
+    minHeight: touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  hourOn: { backgroundColor: colors.brandSoft, borderColor: colors.brand, borderWidth: 1.5 },
+  hourText: { fontSize: 14, fontWeight: '600', color: colors.inkMuted },
+  hourTextOn: { color: colors.brand },
+
+  note: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
+  noteText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: colors.inkFaint },
+
+  zoneCurrent: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },
+  zoneText: { flex: 1, gap: 3 },
+  zoneValue: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  zoneList: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.sm },
+  zoneOption: { minHeight: touchTarget, justifyContent: 'center' },
+  zoneOptionText: { fontSize: 14.5, color: colors.brand, fontWeight: '600' },
+
+  signOut: {
+    minHeight: touchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  signOutText: { fontSize: 14.5, fontWeight: '600', color: colors.inkMuted },
+
+  pressed: { opacity: 0.7 },
+});

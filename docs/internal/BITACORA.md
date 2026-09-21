@@ -760,3 +760,20 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
 - **La fase 0 queda verificada en un dispositivo real.** El usuario describió la pantalla
   vieja corriendo en su iPhone con su hogar y su recuento de alimentos, lo que demuestra
   sesión, trigger de alta y RLS funcionando contra Supabase de verdad.
+
+### 2026-09-21 (sesión 10) · Navegación y ajustes
+
+- **Barra inferior con las cuatro secciones**: inventario, lista, chat y ajustes. Las dos
+  del medio son pantallas de «llega en la fase N», visibles **a propósito**: mover una
+  sección de sitio a mitad de proyecto desorienta a quien ya se acostumbró, y así se ve
+  de un vistazo hacia dónde va esto. Cada una dice además qué parte ya está hecha por
+  debajo, que en este proyecto es bastante.
+- El alta y el detalle no son pestañas: se apilan encima. Son cosas que se abren y se
+  cierran, no sitios donde estar.
+- **Pantalla de ajustes real**, conectada a `user_settings`: resumen diario y su hora,
+  zona horaria y el interruptor de añadido automático a la lista —desactivado por
+  defecto, como manda el principio—.
+- Cambiar la zona horaria invalida también la lista de prioridad: cambia lo que cuenta
+  como «hoy» y por tanto los días que quedan. Sin eso seguiría enseñando los números
+  calculados con la zona anterior.
+- Anotado que la lista de zonas está escrita a mano: seis más la del dispositivo.

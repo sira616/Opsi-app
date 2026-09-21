@@ -10,6 +10,7 @@ export const queryKeys = {
   item: (id: string) => ['inventory', 'item', id] as const,
   itemEvents: (id: string) => ['inventory', 'item', id, 'events'] as const,
   household: ['household'] as const,
+  settings: ['settings'] as const,
 };
 
 export const queryClient = new QueryClient({

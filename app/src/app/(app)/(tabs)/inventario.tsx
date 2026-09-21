@@ -7,7 +7,6 @@ import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
-import { useSession } from '@/shared/lib/session';
 import { colors, font, radius, space, touchTarget } from '@/shared/theme/tokens';
 
 /**
@@ -24,7 +23,6 @@ const GROUPS: { key: PriorityGroup; title: string; dot: string; tone?: 'danger' 
 ];
 
 export default function ConsumirPrimero() {
-  const { signOut } = useSession();
   const router = useRouter();
 
   const { data, error, isPending, isFetching, refetch } = useQuery({
@@ -112,9 +110,6 @@ export default function ConsumirPrimero() {
           );
         })}
 
-        <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOut}>
-          <Text style={styles.signOutText}>Cerrar sesión</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -158,6 +153,4 @@ const styles = StyleSheet.create({
     marginTop: space.xs,
   },
   emptyButtonText: { color: colors.ground, fontSize: 15, fontWeight: '600' },
-  signOut: { minHeight: touchTarget, justifyContent: 'center', alignItems: 'center', marginTop: space.lg },
-  signOutText: { fontSize: 13.5, fontWeight: '600', color: colors.inkMuted },
 });

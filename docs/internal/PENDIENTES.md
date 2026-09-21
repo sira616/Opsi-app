@@ -162,6 +162,7 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟡 | Una build nativa no lee el `.env` local | Las variables se congelan al construir, así que apuntar a Supabase local solo funciona con el ordenador encendido. Necesita el proyecto en la nube |
 | ✅ | ~~Sin confirmación al tirar ni al terminar~~ | Resuelto: confirmación en línea, con el nombre del alimento en la pregunta. En línea y no `Alert.alert` porque este último no hace nada en la versión web |
 | 🟡 | La fecha se teclea, no se elige | `31/12/2026` a mano. Rápido para copiar de un envase, pero un selector nativo debería existir como alternativa |
+| 🟠 | **La lista de zonas horarias está escrita a mano** | Seis zonas más la del dispositivo. Sirve para España y Latinoamérica, pero alguien fuera de esa lista se queda con la del dispositivo o nada. Una búsqueda sobre `Intl.supportedValuesOf('timeZone')` lo resolvería |
 | 🟡 | Sin recuperación de contraseña | Si olvidas la tuya, no hay pantalla. Necesita el SMTP de la sección 6 |
 | 🟠 | **La app habla con Supabase sin tipos** | `src/api/inventory.ts` afirma los tipos a mano con `as unknown as`. Si una columna cambia de nombre, compila y revienta en ejecución. Lo arregla `npm run types` + quitar los casts |
 | 🟡 | Sin pruebas de interfaz | Ni una. El typecheck y el linter son toda la red de seguridad del cliente |
@@ -203,6 +204,7 @@ tú.
    punta a punta y se cierra casi toda la sección 1.
 2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
 3. **Icono y pantalla de carga.** `app/assets` está vacío y cualquier build nativa sale
-   con el icono genérico de Expo.
+   con el icono genérico de Expo. Es lo único que queda entre el estado actual y una
+   build presentable.
 4. **La fase 2**: escáner de códigos de barras y la Edge Function `lookup-barcode`. Ahí
    sí hace falta la development build de EAS.
