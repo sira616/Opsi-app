@@ -48,9 +48,14 @@ export function describeDbError(error: unknown): string {
     if (lower.includes('quantity')) return 'La cantidad no cuadra.';
     return 'Ese dato no es válido. Revisa lo que has puesto.';
   }
-  if (code === '22023') return message; // Los mensajes de las RPC ya vienen en español.
-  if (code === 'P0002') return 'Ese elemento ya no existe, o no es de tu hogar.';
-  if (code === 'P0001') return message;
+  // Los mensajes que lanzan nuestras funciones RPC ya vienen escritos en
+  // español y dicen más que cualquier traducción genérica. P0002 estaba
+  // reemplazado por «ese elemento ya no existe», y eso tapó durante un rato un
+  // «No tienes ningún hogar» que era la verdadera pista.
+  if (code === '22023' || code === 'P0001') return message;
+  if (code === 'P0002') {
+    return message || 'Ese elemento ya no existe, o no es de tu hogar.';
+  }
 
   // ── Permisos y sesión ──────────────────────────────────────────────────
   if (code === '42501' || lower.includes('row-level security')) {

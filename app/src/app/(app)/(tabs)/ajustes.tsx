@@ -238,7 +238,18 @@ export default function Ajustes() {
               </Text>
             </Section>
           </>
-        ) : null}
+        ) : settings.isPending ? null : (
+          <View style={styles.card}>
+            <Text style={t.body}>No encuentro tus ajustes.</Text>
+            <Text style={t.bodySmall}>
+              Suele significar que la sesión apunta a un usuario que ya no está en la base
+              de datos. Cierra sesión y vuelve a entrar.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOut}>
+              <Text style={styles.signOutText}>Cerrar sesión</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

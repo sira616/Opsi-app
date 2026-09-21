@@ -829,3 +829,22 @@ cuando el escáner funcione). Este es el esqueleto y el material que hará falta
   conexión y no necesita migración.
 - El proveedor no pinta nada hasta saber qué aspecto toca, y si el almacenamiento falla
   cae al ajuste del sistema en lugar de quedarse en blanco.
+
+### 2026-09-21 (sesión 14) · Tres fallos con una misma lección
+
+- **Las hojas modales nunca fueron hojas.** Declaré las pantallas en el Stack raíz, donde
+  solo existen `index`, `(app)` y `(auth)`: desde allí `(app)` es una sola ruta, porque
+  tiene su propio layout. No daba error, simplemente no hacía nada. El aviso
+  «No route named … exists in nested children» lo decía literalmente, y conviene leer los
+  avisos del empaquetador aunque la app arranque.
+- **Sesiones huérfanas.** `db:reset` vacía también la tabla de usuarios, pero en local la
+  clave de firma es fija, así que el token guardado en el móvil sigue validando. Resultado:
+  sesión válida apuntando a un usuario que no existe, sin hogar y sin ajustes. Se
+  manifestaba como «no me deja añadir» y «ajustes en blanco», dos síntomas que no se
+  parecen a su causa. Ahora se detecta una vez, en el layout, y se explica.
+- **Y un error mío que tapó la pista**: `describeDbError` reemplazaba el código P0002 por
+  «ese elemento ya no existe», pisando el «No tienes ningún hogar» que lanzaba la función
+  y que era exactamente el diagnóstico. Los mensajes de nuestras RPC ya vienen en español:
+  traducirlos encima solo quita información.
+- Un fallo de red no es una sesión huérfana: se distinguen, porque confundirlos mandaría a
+  cerrar sesión a quien solo tiene el servidor apagado.

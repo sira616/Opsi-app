@@ -62,9 +62,11 @@ export default function RootLayout() {
  * lo sirve un proveedor que está por encima: un hook no se puede llamar desde
  * el mismo componente que monta su proveedor.
  *
- * El alta y el detalle se presentan como HOJA MODAL: suben desde abajo, dejan
- * ver el inventario detrás y se cierran arrastrando. Son cosas que se abren y
- * se cierran, no sitios donde estar, y esa diferencia se nota al usarlas.
+ * Aquí NO se declaran `alta` ni `elemento`. Desde la raíz solo existen tres
+ * rutas —`index`, `(app)` y `(auth)`—, porque `(app)` tiene su propio layout y
+ * se presenta como una sola. Declararlas aquí no daba error: simplemente no
+ * hacía nada, y las hojas modales nunca llegaron a ser hojas. El aviso
+ * «No route named … exists in nested children» decía exactamente eso.
  */
 function Navegacion() {
   const { colores: c, esquema } = useAspecto();
@@ -77,27 +79,7 @@ function Navegacion() {
           headerShown: false,
           contentStyle: { backgroundColor: c.ground },
         }}
-      >
-        <Stack.Screen name="(app)/(tabs)" />
-        <Stack.Screen
-          name="(app)/alta"
-          options={{
-            presentation: 'formSheet',
-            sheetGrabberVisible: true,
-            sheetAllowedDetents: [0.92],
-            sheetCornerRadius: 24,
-          }}
-        />
-        <Stack.Screen
-          name="(app)/elemento/[id]"
-          options={{
-            presentation: 'formSheet',
-            sheetGrabberVisible: true,
-            sheetAllowedDetents: [0.92],
-            sheetCornerRadius: 24,
-          }}
-        />
-      </Stack>
+      />
     </>
   );
 }

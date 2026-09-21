@@ -248,6 +248,7 @@ Para volver a empezar otro día: pasos 2, 3, 5 y 6. Los datos siguen ahí.
 | `Falta EXPO_PUBLIC_SUPABASE_URL` | Expo arrancó antes de que existiera el fichero | Ctrl+C y `npm run app` de nuevo |
 | Puerto ocupado | Hay otro Supabase levantado | `npx supabase stop --all` y vuelve al paso 3 |
 | **No puedo añadir comida** · «faltan tablas» | Tu base va por detrás del código | `npm run up`. La app te lo dice ahora con esas palabras |
+| «Tu sesión ya no vale» · ajustes en blanco | Reiniciaste la base y tu usuario desapareció, pero el móvil conserva el token | Cierra sesión desde esa pantalla y crea la cuenta otra vez |
 
 ### Ver los datos a mano
 
