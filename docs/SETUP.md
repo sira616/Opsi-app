@@ -22,12 +22,17 @@ de Supabase en la nube.
 ```bash
 git clone https://github.com/sira616/Opsi-app.git
 cd Opsi-app
-npm install          # instala la CLI de Supabase fijada en package.json
-npm run dev          # levanta todo, aplica migraciones y seed, e imprime las claves
+npm install
+npm run up           # levanta todo Y escribe app/.env por ti
+npm run app:web      # abre la app en el navegador
 ```
 
-`npm run dev` es el atajo de `db:start` + `db:reset` + `db:status`. Si prefieres los pasos
-sueltos, están todos en la tabla de abajo.
+**`npm run up` es el comando bueno.** Además de arrancar Supabase y aplicar migraciones y
+seed, lee la `anon key` recién generada y la escribe en `app/.env`. Copiar esa clave a
+mano es donde más fácil se falla, y el síntoma —un error al registrarse— no se parece
+nada a la causa.
+
+`npm run dev` hace lo mismo sin tocar el `.env`, por si prefieres controlarlo tú.
 
 La primera vez tarda unos minutos: descarga las imágenes. Al terminar imprime las URLs
 y las claves locales:
@@ -40,10 +45,10 @@ anon key: eyJhb...
 service_role key: eyJhb...               ← esta NO sale nunca del servidor
 ```
 
-Copia la `anon key` a tu `.env`:
+Si usaste `npm run up`, el `app/.env` ya está escrito y no tienes que tocar nada. Para
+verlo o cambiarlo a mano:
 
 ```bash
-cp app/.env.example app/.env
 npm run db:status    # vuelve a imprimir las claves cuando las necesites
 ```
 
@@ -59,7 +64,8 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 
 | Comando | Qué hace |
 |---|---|
-| `npm run dev` | **El atajo**: arranca, aplica migraciones y seed, e imprime las claves |
+| `npm run up` | **El bueno**: arranca, aplica migraciones y seed, y escribe `app/.env` |
+| `npm run dev` | Lo mismo sin tocar el `.env` |
 | `npm run db:start` / `db:stop` | Arranca o para los contenedores |
 | `npm run db:status` | URLs y claves locales |
 | `npm run db:reset` | **Borra la base y la reconstruye** desde `supabase/migrations/` + `supabase/seed/` |

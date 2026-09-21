@@ -220,7 +220,11 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 
 El esquema pasa 117 comprobaciones con `npm run db:check`, que corre sin Docker.
 
-Empezar por [`docs/SETUP.md`](docs/SETUP.md).
+```bash
+npm install && npm run up && npm run app:web
+```
+
+Detalles en [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Documentación
 
