@@ -1071,3 +1071,28 @@ Además: cabecera con el icono del alimento —el mismo que en la lista—, la c
 restante en grande con su barra teñida según la urgencia, «abierto hace N días» en la
 cabecera, y el historial con **hora** además de día, que sin ella dos acciones de la misma
 tarde salían como dos líneas idénticas.
+
+### 2026-09-22 (sesión 21) · Dos preguntas contestadas por escrito
+
+Nada de código; dos notas internas que cierran dos dudas que se repetían.
+
+**[SIN-DOCKER.md](SIN-DOCKER.md).** Docker hace falta para UN comando, `supabase start`.
+Comprobado en la CLI: `db push`, `test db` y `gen types` aceptan los tres `--db-url` y
+`--linked`. Es decir, la CLI necesita Docker para *hospedar* una base, no para *trabajar
+contra* una. El camino es un proyecto gratis en la nube (que además acaba con el problema
+de la IP del móvil, que costó una sesión entera) más Postgres nativo para el pgTAP real,
+que es el hueco que deja el arnés de PGlite con sus dobles escritos a mano.
+
+**[CATALOGOS.md](CATALOGOS.md).** La pregunta era «cómo conecto con los catálogos de
+Carrefour, Mercadona, Consum…», y la respuesta empieza por reformularla: el código de
+barras es un EAN de GS1, lo pone el fabricante, y es el MISMO en todas las cadenas. La
+fuente correcta es una base indexada por EAN —Open Food Facts, que ya está en el esquema
+desde el primer día— y no la web de una cadena. Ninguno de esos supermercados publica API
+para terceros; lo que circula es su API interna sin documentar, que ni está licenciada ni
+tiene compromiso de estabilidad.
+
+**Y una corrección a lo que dábamos por sabido:** el límite de Open Food Facts es de **15
+peticiones por minuto y por IP** para leer un producto, no 100. Eso convierte la caché
+global (`products` con `household_id IS NULL`) de optimización en requisito, y empuja a
+importar el volcado del subconjunto español antes de publicar en vez de tirar de la API en
+vivo. Se sube la prioridad del pendiente de Open Food Facts de 🟡 a 🟠.

@@ -197,7 +197,7 @@ tú.
 | 🟠 | **Borrado de cuenta y de datos** | No existe ninguna vía para que un usuario borre su hogar y su historial. Con datos personales en Europa, esto no es opcional. Tampoco hay política de retención |
 | 🟠 | Proyecto de Supabase en **región EU** | Decidido, pero el proyecto aún no está creado |
 | 🟠 | Límites de uso de la IA por usuario | Fase 5. El roadmap ya lo pide; sin ello, la factura es imprevisible |
-| 🟡 | Revisar los términos de uso de Open Food Facts | Piden identificarse con un `User-Agent` con contacto. `OFF_USER_AGENT` está en `.env.example` con un valor de ejemplo que hay que cambiar |
+| 🟠 | Revisar los términos de uso de Open Food Facts | Piden identificarse con un `User-Agent` con contacto (`OFF_USER_AGENT`), y la licencia ODbL obliga a atribución y compartir igual. Sube de prioridad: el límite real es de **15 peticiones/min por IP**, no 100, y eso condiciona el diseño de la fase 2. Ver [CATALOGOS.md](CATALOGOS.md) |
 
 ---
 
