@@ -67,8 +67,8 @@ export function ConfirmAction({
   }
 
   return (
-    <View style={styles.confirmBox}>
-      <Text style={styles.question}>{question}</Text>
+    <View style={[styles.confirmBox, danger && styles.confirmBoxDanger]}>
+      <Text style={[styles.question, danger && styles.questionDanger]}>{question}</Text>
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
@@ -114,15 +114,20 @@ const useStyles = makeStyles((c) => ({
   label: { fontSize: 15, fontWeight: '600', color: c.ink },
   labelDanger: { color: c.expiry },
 
+  // El rojo es para lo que puede salir caro, no para cualquier pregunta.
+  // «Terminar» pintado de alarma enseña al usuario a ignorar el color, y
+  // entonces tampoco lo lee cuando sí es «Tirar».
   confirmBox: {
     gap: space.md,
     padding: space.lg,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: c.expiry,
-    backgroundColor: c.expirySoft,
+    borderColor: c.brand,
+    backgroundColor: c.brandSoft,
   },
-  question: { fontSize: 14.5, fontWeight: '600', color: c.expiryInk },
+  confirmBoxDanger: { borderColor: c.expiry, backgroundColor: c.expirySoft },
+  question: { fontSize: 14.5, fontWeight: '600', color: c.brandInk },
+  questionDanger: { color: c.expiryInk },
   row: { flexDirection: 'row', gap: space.sm },
   confirmButton: {
     flex: 1,

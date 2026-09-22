@@ -1038,3 +1038,36 @@ app con las que tiene la vista lo dijo en la primera pasada.
 Se añade otra del mismo tipo: las categorías están escritas dos veces —el enum de la
 migración y la lista de la app, con sus etiquetas y sus reglas—, y ahora se comprueba que
 son las mismas. Separarse no daría error de compilación, solo un alta que falla al guardar.
+
+### 2026-09-22 (sesión 20) · El detalle, y tres bugs que tapaban información
+
+**Fracciones en «Usar».** ½, ⅓ y ¼ de **lo que queda** —«me he bebido la mitad» de un
+brick mediado es la mitad de lo que había, no del litro original—, cada botón con su
+icono y con la cantidad real debajo. No hay botón de «todo»: llegar a cero cierra el
+elemento, y para eso está «Terminar», que pregunta antes. Una fracción nunca llega a
+cero, así que ninguna puede cerrar nada por accidente. Por lo mismo, la fracción **no se
+ajusta** al resto exacto aunque falte poco: cuadrarlo parece amable hasta que se ve que
+convertiría un toque en «⅓» en un cierre sin preguntar.
+
+**Tres bugs, y los tres eran de lo mismo: esconder lo que el sistema ya sabía.**
+
+- `run()` pasaba su propio `onError` y sustituía el mensaje del servidor por «No se pudo
+  usar esa cantidad». `use_quantity` ya contesta «Quieres usar 500 pero solo quedan 300»,
+  en español y con los números. Es **el tercer caso** de lo mismo en este proyecto, tras
+  P0002 y el error de red sin URL. Regla, ya: un mensaje que viene escrito para leerse no
+  se traduce encima.
+- **Un fallo de red se veía como «ese elemento ya no está».** Los dos dejaban `data`
+  vacío. Mandar a alguien a buscar un elemento borrado cuando lo único que pasa es que el
+  servidor no contesta. Ahora se distinguen, y solo el caso real ofrece volver.
+- **El historial que no se pudo leer se veía igual que uno vacío.** «Todavía no hay nada
+  registrado» dicho cuando la consulta ha fallado es una mentira, y encima una que oculta
+  el fallo.
+
+**Y uno de color:** el cuadro de confirmación se pintaba de rojo para cualquier pregunta,
+«Terminar» incluido. El rojo es para lo que puede salir caro; gastarlo en todo enseña a
+ignorarlo, y entonces tampoco se lee cuando sí es «Tirar».
+
+Además: cabecera con el icono del alimento —el mismo que en la lista—, la cantidad
+restante en grande con su barra teñida según la urgencia, «abierto hace N días» en la
+cabecera, y el historial con **hora** además de día, que sin ella dos acciones de la misma
+tarde salían como dos líneas idénticas.

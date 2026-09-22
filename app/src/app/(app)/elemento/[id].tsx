@@ -5,13 +5,20 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  CaretLeft,
+  ChartPie,
+  ChartPieSlice,
   CheckCircle,
+  CircleHalf,
   Drop,
   ForkKnife,
   Minus,
   Package,
+  PencilSimple,
+  Plus,
   Snowflake,
   Trash,
+  type IconProps,
 } from 'phosphor-react-native';
 
 import {
@@ -21,6 +28,7 @@ import {
   type InventoryEvent,
   type ItemDetail,
 } from '@/api/inventory';
+import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
@@ -28,12 +36,21 @@ import { formatQuantity, toBase } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
-import { makeStyles, radius, space, tabular, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
+import {
+  fonts,
+  makeStyles,
+  radius,
+  space,
+  tabular,
+  touchTarget,
+  useTheme,
+  useType,
+} from '@/shared/theme/tokens';
 
 const STATE_LABEL: Record<ItemDetail['state'], string> = {
-  closed: 'Cerrado',
+  closed: 'Sin abrir',
   open: 'Abierto',
-  partially_consumed: 'Abierto',
+  partially_consumed: 'Empezado',
   frozen: 'Congelado',
   thawed: 'Descongelado',
   finished: 'Agotado',
@@ -50,6 +67,35 @@ const EVENT_LABEL: Record<string, string> = {
   discarded: 'Tirado',
   updated: 'Modificado',
 };
+
+/**
+ * Las fracciones de «usar cantidad».
+ *
+ * Son de lo QUE QUEDA, no de lo inicial: «me he bebido la mitad» dicho sobre
+ * un brick por la mitad significa la mitad de lo que había, no la mitad del
+ * litro original.
+ *
+ * No hay un botón de «todo»: llegar a cero cierra el elemento, y para eso está
+ * «Terminar», que pregunta antes. Una fracción nunca llega a cero, así que
+ * ninguna de estas tres puede cerrar nada por accidente.
+ */
+const FRACCIONES: { glifo: string; valor: number; icono: (p: IconProps) => React.ReactElement }[] = [
+  { glifo: '½', valor: 1 / 2, icono: (p) => <CircleHalf {...p} /> },
+  { glifo: '⅓', valor: 1 / 3, icono: (p) => <ChartPieSlice {...p} /> },
+  { glifo: '¼', valor: 1 / 4, icono: (p) => <ChartPie {...p} /> },
+];
+
+/**
+ * Lo que descuenta una fracción, en unidad base.
+ *
+ * Se redondea a dos decimales y NO se ajusta al resto exacto. Cuadrar el
+ * último tercio con lo que queda parece amable hasta que se ve lo que
+ * implica: llegar a cero cierra el elemento, así que un toque en «⅓» lo daría
+ * por terminado sin preguntar. Mejor que sobre un poco.
+ */
+function cantidadFraccion(restante: number, fraccion: number): number {
+  return Math.round(restante * fraccion * 100) / 100;
+}
 
 export default function Detalle() {
   const styles = useStyles();
@@ -108,6 +154,24 @@ export default function Detalle() {
     );
   }
 
+  // Un fallo de red NO es «ese elemento ya no está». Los dos dejaban `data`
+  // vacío y la pantalla decía lo mismo para los dos, que es mandar a alguien a
+  // buscar un elemento borrado cuando lo único que pasa es que el servidor no
+  // contesta. Se distinguen, y solo el caso real ofrece volver.
+  if (item.isError) {
+    return (
+      <SafeAreaView edges={['bottom']} style={[styles.safe, styles.center]}>
+        <Text style={t.body}>No he podido cargarlo.</Text>
+        <View style={styles.errorBox}>
+          <ErrorNote message={describeDbError(item.error)} />
+        </View>
+        <Pressable onPress={() => void item.refetch()} style={styles.backLink}>
+          <Text style={styles.backText}>Reintentar</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
   const data = item.data;
   if (!data) {
     return (
@@ -125,14 +189,38 @@ export default function Detalle() {
   const detail: ItemDetail = data;
 
   const closedOut = data.state === 'finished' || data.state === 'discarded';
+  const congelado = data.state === 'frozen';
+  const urgente = data.priority === 'high';
   const percent =
     data.initial_quantity > 0
       ? Math.max(0, Math.min(1, data.remaining_quantity / data.initial_quantity))
       : 0;
+  const tono = urgente ? c.expiry : congelado ? c.frost : c.brand;
+  const tonoSuave = urgente ? c.expirySoft : congelado ? c.frostSoft : c.brandSoft;
+  // Para TEXTO sobre el fondo suave hace falta el tono oscuro: el vivo sobre
+  // su propio fondo se queda por debajo de AA (frost sobre frostSoft, 3.9:1).
+  const tonoInk = urgente ? c.expiryInk : congelado ? c.frostInk : c.brandInk;
 
-  function run(label: string, fn: () => Promise<void>) {
+  /**
+   * Lanza una acción.
+   *
+   * Sin `onError` propio, y eso es el arreglo de un bug: el que había
+   * sustituía el mensaje del servidor por un «No se pudo usar esa cantidad»
+   * genérico. Nuestras funciones ya contestan en español y dicen lo que pasa
+   * —«Quieres usar 500 pero solo quedan 300»—, así que taparlo era perder el
+   * único dato útil. Es el mismo error que ya se cometió con P0002.
+   */
+  function run(fn: () => Promise<void>) {
     setError(null);
-    act.mutate(fn, { onError: () => setError(`No se pudo ${label}.`) });
+    act.mutate(fn);
+  }
+
+  function usar(cantidadBase: number) {
+    if (cantidadBase <= 0) {
+      setError('Queda muy poco para descontar una parte. Usa «Terminar».');
+      return;
+    }
+    run(() => actions.use(detail.id, cantidadBase));
   }
 
   function onUse() {
@@ -141,7 +229,14 @@ export default function Detalle() {
       setError('Pon una cantidad mayor que cero.');
       return;
     }
-    run('usar esa cantidad', () => actions.use(detail.id, toBase(value, detail.display_unit)));
+    const base = toBase(value, detail.display_unit);
+    if (base > detail.remaining_quantity) {
+      setError(
+        `Solo quedan ${formatQuantity(detail.remaining_quantity, detail.display_unit)}.`,
+      );
+      return;
+    }
+    usar(base);
   }
 
   return (
@@ -153,19 +248,43 @@ export default function Detalle() {
           onPress={() => router.back()}
           style={styles.back}
         >
-          <Text style={styles.backText}>‹ Inventario</Text>
+          <CaretLeft size={16} color={c.inkMuted} weight="bold" />
+          <Text style={styles.backText}>Inventario</Text>
         </Pressable>
 
-        <View style={styles.titleBlock}>
-          <Text style={t.title}>{data.name}</Text>
-          <View style={styles.chips}>
-            <Text style={styles.stateChip}>{STATE_LABEL[data.state]}</Text>
-            <Text style={t.bodySmall}>{formatQuantity(data.remaining_quantity, data.display_unit)}</Text>
+        {/* ── Cabecera: el mismo icono que en la lista ──────────────────── */}
+        <View style={styles.cabecera}>
+          <View style={[styles.avatar, { backgroundColor: tonoSuave }]}>
+            <IconoComida nombre={data.name} size={30} color={tono} weight="duotone" />
+          </View>
+          <View style={styles.cabeceraTexto}>
+            <Text style={t.title}>{data.name}</Text>
+            <View style={styles.chips}>
+              <Text style={[styles.stateChip, { backgroundColor: tonoSuave, color: tonoInk }]}>
+                {STATE_LABEL[data.state]}
+              </Text>
+              {data.opened_at ? (
+                <Text style={t.caption}>abierto {describeDesde(data.opened_at)}</Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        <View style={styles.bar}>
-          <View style={[styles.barFill, { width: `${percent * 100}%` }]} />
+        {/* ── Cuánto queda ─────────────────────────────────────────────── */}
+        <View style={styles.cantidadCard}>
+          <View style={styles.cantidadFila}>
+            <Text style={[styles.cantidadValor, { color: tono }]}>
+              {formatQuantity(data.remaining_quantity, data.display_unit)}
+            </Text>
+            {data.remaining_quantity !== data.initial_quantity ? (
+              <Text style={styles.cantidadInicial}>
+                de {formatQuantity(data.initial_quantity, data.display_unit)}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.bar}>
+            <View style={[styles.barFill, { width: `${percent * 100}%`, backgroundColor: tono }]} />
+          </View>
         </View>
 
         <FechaLimite item={data} />
@@ -176,13 +295,13 @@ export default function Detalle() {
           <View style={styles.actions}>
             <Text style={styles.sectionTitle}>Qué hago con esto</Text>
 
-            {data.state === 'frozen' ? (
+            {congelado ? (
               <>
                 <Action
                   label="Descongelar"
-                  icon={<Drop size={20} color={c.frost} weight="duotone" />}
+                  icono={<Drop size={20} color={c.frost} weight="duotone" />}
                   hint="A partir de ahí, 24 horas para consumirlo."
-                  onPress={() => run('descongelarlo', () => actions.thaw(data.id))}
+                  onPress={() => run(() => actions.thaw(detail.id))}
                   busy={act.isPending}
                 />
                 <ConfirmAction
@@ -191,7 +310,7 @@ export default function Detalle() {
                   confirmLabel="Sí, tirarlo"
                   question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
-                  onConfirm={() => run('tirarlo', () => actions.discard(detail.id))}
+                  onConfirm={() => run(() => actions.discard(detail.id))}
                   busy={act.isPending}
                 />
               </>
@@ -200,49 +319,90 @@ export default function Detalle() {
                 {data.opened_at === null ? (
                   <Action
                     label="Abrir"
-                    icon={<Package size={20} color={c.brand} weight="duotone" />}
+                    icono={<Package size={20} color={c.brand} weight="duotone" />}
                     hint="Desde que se abre, muchos alimentos duran menos de lo que pone el envase."
-                    onPress={() => run('abrirlo', () => actions.open(data.id))}
+                    onPress={() => run(() => actions.open(detail.id))}
                     busy={act.isPending}
                   />
                 ) : null}
 
-                <Action
-                  label="Usar cantidad"
-                  icon={<ForkKnife size={20} color={c.brand} weight="duotone" />}
-                  onPress={() => setUsePanel((v) => !v)}
-                  busy={act.isPending}
-                />
-
-                {usePanel ? (
-                  <View style={styles.usePanel}>
-                    <TextField
-                      label={`Cuánto has usado (en ${data.display_unit === 'unit' ? 'unidades' : data.display_unit})`}
-                      value={amount}
-                      onChangeText={setAmount}
-                      keyboardType="decimal-pad"
-                      inputMode="decimal"
-                      autoFocus
-                    />
-                    <Action
-                      label="Descontar"
-                      icon={<Minus size={20} color={c.onBrand} weight="bold" />}
-                      onPress={onUse}
-                      busy={act.isPending}
-                      primary
-                    />
+                {/* ── Usar cantidad, con sus fracciones ─────────────────── */}
+                <View style={styles.usarBloque}>
+                  <View style={styles.usarHead}>
+                    <ForkKnife size={18} color={c.brand} weight="duotone" />
+                    <Text style={styles.usarTitulo}>Usar</Text>
                   </View>
-                ) : null}
+
+                  <View style={styles.fracciones}>
+                    {FRACCIONES.map(({ glifo, valor, icono }) => {
+                      const base = cantidadFraccion(data.remaining_quantity, valor);
+                      const vacio = base <= 0;
+                      return (
+                        <Pressable
+                          key={glifo}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Usar ${glifo}, ${formatQuantity(base, data.display_unit)}`}
+                          accessibilityState={{ disabled: vacio || act.isPending }}
+                          disabled={vacio || act.isPending}
+                          onPress={() => usar(base)}
+                          style={({ pressed }) => [
+                            styles.fraccion,
+                            pressed && styles.pressed,
+                            (vacio || act.isPending) && styles.fraccionApagada,
+                          ]}
+                        >
+                          {icono({ size: 15, color: c.brand, weight: 'duotone' })}
+                          <Text style={styles.fraccionGlifo}>{glifo}</Text>
+                          <Text style={styles.fraccionCantidad} numberOfLines={1}>
+                            {formatQuantity(base, data.display_unit)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {usePanel ? (
+                    <View style={styles.usePanel}>
+                      <TextField
+                        label={`Otra cantidad, en ${
+                          data.display_unit === 'unit' ? 'unidades' : data.display_unit
+                        }`}
+                        hint={`Quedan ${formatQuantity(data.remaining_quantity, data.display_unit)}`}
+                        value={amount}
+                        onChangeText={setAmount}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        autoFocus
+                      />
+                      <Action
+                        label="Descontar"
+                        icono={<Minus size={20} color={c.onBrand} weight="bold" />}
+                        onPress={onUse}
+                        busy={act.isPending}
+                        primary
+                      />
+                    </View>
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setUsePanel(true)}
+                      style={({ pressed }) => [styles.otraCantidad, pressed && styles.pressed]}
+                    >
+                      <PencilSimple size={14} color={c.brand} weight="duotone" />
+                      <Text style={styles.otraCantidadText}>Otra cantidad</Text>
+                    </Pressable>
+                  )}
+                </View>
 
                 <Action
                   label="Congelar"
-                  icon={<Snowflake size={20} color={c.frost} weight="duotone" />}
+                  icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
                   hint={
                     data.state === 'thawed'
                       ? 'Ya se descongeló una vez: no vuelvas a congelarlo sin cocinarlo antes.'
                       : 'La cuenta atrás se para mientras esté congelado.'
                   }
-                  onPress={() => run('congelarlo', () => actions.freeze(data.id))}
+                  onPress={() => run(() => actions.freeze(detail.id))}
                   busy={act.isPending}
                 />
 
@@ -251,7 +411,7 @@ export default function Detalle() {
                   icon={<CheckCircle size={20} color={c.brand} weight="duotone" />}
                   confirmLabel="Sí, se ha terminado"
                   question={`¿Dar ${data.name} por terminado? Sale del inventario y no se puede deshacer.`}
-                  onConfirm={() => run('marcarlo como terminado', () => actions.finish(detail.id))}
+                  onConfirm={() => run(() => actions.finish(detail.id))}
                   busy={act.isPending}
                 />
 
@@ -261,7 +421,7 @@ export default function Detalle() {
                   confirmLabel="Sí, tirarlo"
                   question={`¿Tirar ${data.name}? No se puede deshacer.`}
                   danger
-                  onConfirm={() => run('tirarlo', () => actions.discard(detail.id))}
+                  onConfirm={() => run(() => actions.discard(detail.id))}
                   busy={act.isPending}
                 />
               </>
@@ -275,29 +435,12 @@ export default function Detalle() {
           </View>
         )}
 
-        <View style={styles.history}>
-          <Text style={styles.sectionTitle}>Historial</Text>
-          {(events.data ?? []).length === 0 ? (
-            <Text style={t.bodySmall}>Todavía no hay nada registrado.</Text>
-          ) : (
-            (events.data ?? []).map((event: InventoryEvent) => (
-              <View key={event.id} style={styles.eventRow}>
-                <Text style={styles.eventDate}>
-                  {new Date(event.created_at).toLocaleDateString('es-ES', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </Text>
-                <Text style={t.body}>
-                  {EVENT_LABEL[event.type] ?? event.type}
-                  {event.quantity_used
-                    ? ` · ${formatQuantity(event.quantity_used, data.display_unit)}`
-                    : ''}
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
+        <Historial
+          eventos={events.data ?? []}
+          unidad={data.display_unit}
+          fallo={events.isError ? describeDbError(events.error) : null}
+          cargando={events.isPending}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -377,7 +520,10 @@ function FechaLimite({ item }: { item: ItemDetail }) {
   return (
     <View style={[styles.dateCard, urgent ? styles.dateCardUrgent : styles.dateCardNeutral]}>
       <Text style={[styles.dateLabel, urgent && styles.dateLabelUrgent]}>
-        Fecha límite · {describeDateSource(item.effective_date_source)}
+        {item.date_kind === 'expiry' && item.effective_date_reason === 'label'
+          ? 'Caduca'
+          : 'Fecha límite'}{' '}
+        · {describeDateSource(item.effective_date_source)}
       </Text>
       <Text style={[styles.dateValue, urgent && styles.dateValueUrgent]}>
         {describeDaysLeft(item.days_left)}
@@ -387,9 +533,89 @@ function FechaLimite({ item }: { item: ItemDetail }) {
   );
 }
 
+/**
+ * El historial.
+ *
+ * Lleva la HORA además del día: abrir y usar algo la misma tarde salían como
+ * dos líneas idénticas, y entonces el historial no contaba nada.
+ */
+function Historial({
+  eventos,
+  unidad,
+  fallo,
+  cargando,
+}: {
+  eventos: InventoryEvent[];
+  unidad: ItemDetail['display_unit'];
+  /** El historial que no se pudo leer NO es un historial vacío. */
+  fallo: string | null;
+  cargando: boolean;
+}) {
+  const styles = useStyles();
+  const t = useType();
+  const c = useTheme();
+
+  return (
+    <View style={styles.history}>
+      <Text style={styles.sectionTitle}>Historial</Text>
+      {fallo ? (
+        <ErrorNote message={fallo} />
+      ) : cargando ? (
+        <ActivityIndicator color={c.brand} />
+      ) : eventos.length === 0 ? (
+        <Text style={t.bodySmall}>Todavía no hay nada registrado.</Text>
+      ) : (
+        <View style={styles.historyCard}>
+        {eventos.map((event) => {
+          const fecha = new Date(event.created_at);
+          return (
+            <View key={event.id} style={styles.eventRow}>
+              <View style={styles.eventIcon}>
+                <IconoEvento tipo={event.type} color={c.inkMuted} />
+              </View>
+              <Text style={styles.eventText}>
+                {EVENT_LABEL[event.type] ?? event.type}
+                {event.quantity_used ? ` · ${formatQuantity(event.quantity_used, unidad)}` : ''}
+              </Text>
+              <Text style={styles.eventDate}>
+                {fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                {'  '}
+                {fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          );
+        })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function IconoEvento({ tipo, color }: { tipo: string; color: string }) {
+  const props = { size: 14, color, weight: 'duotone' } as const;
+  switch (tipo) {
+    case 'created':
+      return <Plus {...props} weight="bold" />;
+    case 'opened':
+      return <Package {...props} />;
+    case 'quantity_used':
+      return <ForkKnife {...props} />;
+    case 'frozen':
+      return <Snowflake {...props} />;
+    case 'thawed':
+      return <Drop {...props} />;
+    case 'finished':
+      return <CheckCircle {...props} />;
+    case 'discarded':
+      return <Trash {...props} />;
+    default:
+      return <PencilSimple {...props} />;
+  }
+}
+
 function Action({
   label,
-  icon,
+  icono,
   hint,
   onPress,
   busy,
@@ -398,7 +624,7 @@ function Action({
 }: {
   label: string;
   /** El icono de la acción: congelar es un copo, tirar una papelera. */
-  icon?: React.ReactNode;
+  icono?: React.ReactNode;
   hint?: string;
   onPress: () => void;
   busy?: boolean;
@@ -421,7 +647,7 @@ function Action({
           busy && styles.actionBusy,
         ]}
       >
-        {icon}
+        {icono}
         <Text
           style={[
             styles.actionText,
@@ -440,27 +666,46 @@ function Action({
 const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
   center: { alignItems: 'center', justifyContent: 'center', gap: space.md },
-  content: { padding: space.xl, gap: space.xl, paddingBottom: space.xxl * 2 },
+  errorBox: { alignSelf: 'stretch', paddingHorizontal: space.xl },
+  content: { padding: space.xl, gap: space.lg, paddingBottom: space.xxl * 2 },
 
-  back: { minHeight: touchTarget, justifyContent: 'center', marginLeft: -2, alignSelf: 'flex-start' },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minHeight: touchTarget,
+    marginLeft: -4,
+    alignSelf: 'flex-start',
+  },
   backLink: { minHeight: touchTarget, justifyContent: 'center' },
   backText: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
 
-  titleBlock: { gap: space.sm },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  cabecera: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
+  avatar: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  cabeceraTexto: { flex: 1, minWidth: 0, gap: space.xs },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   stateChip: {
+    fontFamily: fonts.semibold,
     fontSize: 11.5,
-    fontWeight: '600',
-    color: c.brand,
-    backgroundColor: c.brandSoft,
     borderRadius: radius.sm - 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
     overflow: 'hidden',
   },
 
-  bar: { height: 8, borderRadius: 4, backgroundColor: c.border, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: 4, backgroundColor: c.brand },
+  cantidadCard: {
+    gap: space.sm,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radius.lg,
+    padding: space.lg,
+  },
+  cantidadFila: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  cantidadValor: { ...tabular, fontSize: 26, fontWeight: '700' },
+  cantidadInicial: { ...tabular, fontSize: 13, color: c.inkMuted },
+  bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceAlt, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4 },
 
   dateCard: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.xs + 2 },
   dateCardNeutral: { backgroundColor: c.surface, borderColor: c.border },
@@ -477,10 +722,10 @@ const useStyles = makeStyles((c) => ({
   dateLabelFrozen: { color: c.frostInk },
   dateValue: { ...tabular, fontSize: 22, fontWeight: '600', color: c.ink },
   dateValueUrgent: { color: c.expiry },
-  frozenHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
-  frozenSince: { fontSize: 13, fontWeight: '600', color: c.frostInk },
   dateExplain: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
   dateExplainUrgent: { color: c.expiryInk },
+  frozenHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
+  frozenSince: { fontSize: 13, fontWeight: '600', color: c.frostInk },
 
   sectionTitle: {
     fontSize: 11,
@@ -509,18 +754,46 @@ const useStyles = makeStyles((c) => ({
   actionPressed: { opacity: 0.85 },
   actionBusy: { opacity: 0.5 },
   actionText: { fontSize: 15, fontWeight: '600', color: c.ink },
-  actionTextPrimary: { color: c.ground },
+  actionTextPrimary: { color: c.onBrand },
   actionTextDanger: { color: c.expiry },
   actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
 
-  usePanel: {
+  usarBloque: {
     gap: space.md,
-    padding: space.lg,
-    backgroundColor: c.surface,
+    padding: space.md,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: radius.lg,
+    backgroundColor: c.surface,
   },
+  usarHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 },
+  usarTitulo: { fontSize: 15, fontWeight: '600', color: c.ink },
+
+  fracciones: { flexDirection: 'row', gap: space.sm - 2 },
+  fraccion: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: c.brandSoft,
+    backgroundColor: c.brandSoft,
+  },
+  fraccionApagada: { opacity: 0.4 },
+  fraccionGlifo: { fontFamily: fonts.semibold, fontSize: 21, color: c.brandInk, lineHeight: 26 },
+  fraccionCantidad: { ...tabular, fontSize: 10.5, color: c.brandInk },
+
+  otraCantidad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: touchTarget - 8,
+  },
+  otraCantidadText: { fontSize: 13.5, fontWeight: '600', color: c.brand },
+  usePanel: { gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.md },
 
   closedNote: {
     padding: space.lg,
@@ -530,7 +803,19 @@ const useStyles = makeStyles((c) => ({
     borderRadius: radius.lg,
   },
 
-  history: { gap: space.sm },
-  eventRow: { flexDirection: 'row', gap: space.md, alignItems: 'baseline' },
-  eventDate: { fontSize: 12, color: c.inkFaint, minWidth: 58 },
+  history: { gap: space.sm - 2 },
+  historyCard: {
+    gap: space.sm - 3,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radius.lg,
+    padding: space.md,
+  },
+  eventRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center', minHeight: 26 },
+  eventIcon: { width: 18, alignItems: 'center' },
+  eventText: { flex: 1, fontSize: 14, color: c.ink },
+  eventDate: { ...tabular, fontSize: 11.5, color: c.inkFaint },
+
+  pressed: { opacity: 0.7 },
 }));

@@ -184,7 +184,16 @@ npx expo install phosphor-react-native react-native-svg
 | Hasta cuándo (alta) | `CalendarBlank` | `duotone` |
 | Categoría adivinada | `Sparkle` | `fill`, 11px |
 | Filtro | `FunnelSimple` | `duotone` |
+| Usar ½ | `CircleHalf` | `duotone` |
+| Usar ⅓ | `ChartPieSlice` | `duotone` |
+| Usar ¼ | `ChartPie` | `duotone` |
+| Otra cantidad | `PencilSimple` | `duotone` |
+| Volver | `CaretLeft` | `bold` |
 
+> Las fracciones de «Usar» son la excepción a lo de abajo, y con motivo: el glifo
+> **½ ⅓ ¼** ya es el texto, y debajo va la cantidad real que se descontará («0,5 l»).
+> Un botón que dice lo que va a pasar no necesita más palabras.
+>
 > Los iconos **nunca van solos** en una acción destructiva. Un cubo de basura sin la
 > palabra «Tirar» al lado se confunde con «vaciar» o «borrar todo». Por eso todos los
 > botones de la pantalla de detalle llevan icono **y** texto, alineados a la izquierda:
