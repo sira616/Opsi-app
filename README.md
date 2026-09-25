@@ -13,8 +13,9 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 ---
 
 > [!NOTE]
-> **Fase 0 en curso.** El proyecto está en construcción: hay configuración y documentación,
-> todavía no una app que puedas usar. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
+> **Fase 1 completa.** Ya hay una app que se puede usar en desarrollo: entrar, guardar comida,
+> ver qué gastar primero, y varias neveras (la tuya y las que compartas). **Sin escáner todavía**
+> (fase 2) y sin publicar. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Índice
 
@@ -200,25 +201,23 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 
 ## Estado
 
-**Fase 0 · en curso.** Lo que hay hoy:
+**Fase 0 y fase 1 · completas.** Lo que hay hoy, y lo que se ha probado de verdad:
 
-- [x] Monorepo con `app/` y `supabase/`
-- [x] CLI de Supabase fijada y `supabase/config.toml` configurado (contraseña, deep links)
-- [x] Separación de secretos: qué es público, qué va en el servidor
-- [x] Esquema inicial: 7 tablas, con RLS en todas
-- [x] Trigger de hogar personal al registrarse
-- [x] Tests de aislamiento entre dos cuentas y de restricciones del dominio
-- [x] CI con tres trabajos
-- [x] App Expo: alta y login por usuario y contraseña, sesión persistida, rutas protegidas
-- [ ] Development build de EAS (solo hace falta para el escáner y los avisos)
-
-**Fase 1 · completa**
-
+- [x] Monorepo con `app/` y `supabase/`, con la CLI de Supabase fijada
+- [x] Esquema con **24 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
+- [x] Alta y login por usuario y contraseña; el alta solo admite usuarios de Opsi
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
-- [x] Vista `inventory_with_priority` con la fecha límite efectiva
-- [x] Las tres pantallas: alta manual, «Consumir primero» y detalle con acciones
+- [x] Vista `inventory_with_priority` con la fecha límite efectiva, contada desde el día del usuario
+- [x] Alta manual, «Consumir primero» y detalle con acciones, conservación orientativa e historial
+- [x] **Neveras**: una privada por persona (no se comparte) y compartidas con nombre e icono, con selector en el inicio; se invita por nombre de usuario y aceptar añade. Límite de 2 neveras por persona, previsto 5 con un plan de pago
+- [x] Ajustes por secciones, con la voz de Opsi ([`docs/VOZ.md`](docs/VOZ.md))
+- [x] Auditoría de seguridad y una primera pasada de arreglos ([`docs/internal/AUDITORIA-2026-09-24.md`](docs/internal/AUDITORIA-2026-09-24.md))
+- [ ] CI en verde
+- [ ] Development build con EAS (hace falta para el escáner, los avisos y el almacén cifrado de la sesión)
 
-El esquema pasa 117 comprobaciones con `npm run db:check`, que corre sin Docker.
+**Probado:** 241 tests pgTAP (8 ficheros) contra Supabase local, y 409 comprobaciones con
+`npm run db:check`, que corre sin Docker. La app, en el navegador con dos cuentas. **Sin
+probar todavía en un móvil.**
 
 ```bash
 npm install && npm run up && npm run app:web

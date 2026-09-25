@@ -70,7 +70,11 @@ Agrupación derivada de la fecha límite efectiva:
 
 | Término | Significado |
 |---|---|
-| **Hogar** (`household`) | Unidad de aislamiento de datos. Todo cuelga de él. En el MVP hay uno por usuario |
+| **Hogar** (`household`) | Unidad de aislamiento de datos. Todo cuelga de él. En la app se llama **nevera** |
+| **Nevera privada** (`kind = 'personal'`) | La de cada persona, creada al registrarse. **No se comparte nunca**: no se invita a nadie, no se abandona y no se traspasa |
+| **Nevera compartida** (`kind = 'shared'`) | La que crea una persona con nombre e icono, y a la que invita por nombre de usuario. Aceptar una invitación **añade** una nevera a las tuyas; no te saca de ninguna |
+| **Límite de neveras** (`household_limit`) | Cuántas neveras puede tener una persona, la privada incluida: 2 hoy, previsto 5 con un plan de pago. Lo escribe el servidor, nunca la app |
+| **Nevera huérfana** | Una compartida de la que salió la última persona. No se borra: su inventario existe, pero nadie llega a él |
 | **Evento** (`inventory_event`) | Registro inmutable de una acción. Nunca se edita ni se borra |
 | **Herramienta** | Función que la asistente puede ejecutar en el servidor, limitada por RLS |
 | **Fecha límite efectiva** | Ver arriba. Se calcula en la vista `inventory_with_priority` |
