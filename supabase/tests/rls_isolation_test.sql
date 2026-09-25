@@ -74,13 +74,21 @@ select is(
   'el usuario es owner de su hogar'
 );
 
+-- Acotado a las dos cuentas del test, y no contando la tabla entera: esto
+-- corre como `postgres`, o sea sin RLS, y la base ya trae al usuario de
+-- desarrollo que siembra supabase/seed. Contar todo hacia depender el test de
+-- cuanta gente haya en los seeds, que no es lo que se quiere probar.
 select is(
-  (select count(*) from public.user_settings), 2::bigint,
+  (select count(*) from public.user_settings s
+    where s.user_id in (current_setting('opsi.ana')::uuid,
+                        current_setting('opsi.bruno')::uuid)), 2::bigint,
   'el alta crea los ajustes de cada usuario'
 );
 
 select is(
-  (select bool_or(auto_add_to_shopping_list) from public.user_settings), false,
+  (select bool_or(s.auto_add_to_shopping_list) from public.user_settings s
+    where s.user_id in (current_setting('opsi.ana')::uuid,
+                        current_setting('opsi.bruno')::uuid)), false,
   'el anadido automatico a la lista viene desactivado (principio del proyecto)'
 );
 
