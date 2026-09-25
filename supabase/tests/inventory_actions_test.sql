@@ -23,10 +23,10 @@ insert into auth.users (
 )
 values
   ('00000000-0000-0000-0000-000000000000', '4444dddd-4444-4444-8444-444444444444',
-   'authenticated', 'authenticated', 'diego@opsi.test', '',
+   'authenticated', 'authenticated', 'diego@usuarios.opsi.local', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-0000-0000-000000000000', '5555eeee-5555-4555-8555-555555555555',
-   'authenticated', 'authenticated', 'elena@opsi.test', '',
+   'authenticated', 'authenticated', 'elena@usuarios.opsi.local', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
 select set_config('opsi.diego', '4444dddd-4444-4444-8444-444444444444', true);
@@ -286,7 +286,7 @@ select is(
 -- ── El alta registra su evento ────────────────────────────────────────────
 
 select lives_ok(
-  $$select public.create_item('Lentejas', 'mass', 'kg', 1000, 'pantry')$$,
+  $$select public.create_item(current_setting('opsi.casa')::uuid, 'Lentejas', 'mass', 'kg', 1000, 'pantry')$$,
   'dar de alta un elemento funciona'
 );
 
@@ -305,21 +305,21 @@ select is(
 );
 
 select throws_ok(
-  $$select public.create_item('Malo', 'volume', 'kg', 100)$$,
+  $$select public.create_item(current_setting('opsi.casa')::uuid, 'Malo', 'volume', 'kg', 100)$$,
   '23514',
   null,
   'el alta respeta la regla de familia y unidad (D-07)'
 );
 
 select throws_ok(
-  $$select public.create_item('Malo', 'mass', 'g', 100, 'pantry', current_date + 3)$$,
+  $$select public.create_item(current_setting('opsi.casa')::uuid, 'Malo', 'mass', 'g', 100, 'pantry', current_date + 3)$$,
   '22023',
   null,
   'una fecha sin tipo ni origen se rechaza con un mensaje legible'
 );
 
 select throws_ok(
-  $$select public.create_item('Malo', 'mass', 'g', 0)$$,
+  $$select public.create_item(current_setting('opsi.casa')::uuid, 'Malo', 'mass', 'g', 0)$$,
   '22023',
   null,
   'la cantidad tiene que ser mayor que cero'
@@ -334,7 +334,7 @@ select is(
 );
 
 select lives_ok(
-  $$select public.create_item('Merluza', 'mass', 'g', 500, 'fridge',
+  $$select public.create_item(current_setting('opsi.casa')::uuid, 'Merluza', 'mass', 'g', 500, 'fridge',
       null, null, null, null, null, 'pescado')$$,
   'el alta acepta una categoria'
 );

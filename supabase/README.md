@@ -24,14 +24,18 @@ La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 
 | Tabla | Qué guarda | Políticas |
 |---|---|---|
-| `households` | El hogar. Lo crea el trigger de alta | select, update |
-| `household_members` | Quién pertenece a qué hogar. **Define toda la RLS** | select |
+| `households` | La nevera: privada (`personal`) o compartida (`shared`), con nombre e icono. La privada la crea el trigger de alta; las compartidas, `create_shared_household()` | select |
+| `household_members` | Quién pertenece a qué nevera. **Define toda la RLS**. Una persona puede tener varias | select |
+| `household_invitations` | Invitaciones a una compartida, con estado y caducidad | select |
+| `household_invite_attempts` | Cuántas veces ha invitado cada persona en la última hora (tope: 5). No la lee nadie desde la app | — |
+| `household_icons` | Los iconos que se pueden elegir para una nevera (16). Solo lectura | select |
 | `products` | Catálogo. `household_id` NULL = global (caché de Open Food Facts) | las cuatro |
 | `inventory_items` | El alimento real en casa: estado, cantidad, fechas y su origen | las cuatro |
 | `inventory_events` | Registro **inmutable**: sin UPDATE ni DELETE, por diseño | select, insert |
 | `shopping_list_items` | La lista de la compra | las cuatro |
-| `user_settings` | Zona horaria, hora del aviso, token push. **No cuelga del hogar** | select, insert, update |
+| `user_settings` | Zona horaria (validada), hora del aviso, token push y `household_limit`. **No cuelga del hogar** | select, insert, update **por columna** |
 | `open_shelf_life_reference` | Días orientativos tras abrir, por categoría. Solo lectura | select |
+| `category_shelf_life_reference` | Plazo tras abrir y dónde guardarlo, por categoría de alimento. Solo lectura | select |
 | `inventory_with_priority` | *Vista*: fecha límite efectiva, su motivo y la prioridad | select |
 
 Todas las políticas se apoyan en una sola función, `is_household_member()`, que es
