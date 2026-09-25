@@ -20,7 +20,7 @@
     "db:diff": "supabase db diff",
     "db:test": "supabase test db",
     "db:lint": "supabase db lint --level warning",
-    "types": "supabase gen types typescript --local > app/src/lib/database.types.ts",
+    "types": "node scripts/gen-types.mjs",
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
     "up": "node scripts/up.mjs",
