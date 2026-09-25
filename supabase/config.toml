@@ -20,7 +20,13 @@ max_rows = 1000
 # `postgres` are reachable through the Data API roles (`anon`, `authenticated`, `service_role`)
 # without explicit GRANTs, matching the cloud default. Set to `false` to require explicit GRANTs
 # instead. Left unset, a fresh project falls back to `true`.
-# auto_expose_new_tables = true
+#
+# Opsi: `false`. Con `true`, una tabla nueva nace con todos los permisos para `anon`,
+# y una migración a la que se le olvide un `revoke` la deja abierta a internet (ya
+# pasó una vez: 20260922120000). Con `false`, cada migración concede lo que quiere,
+# con nombre y apellidos, y el local se comporta como la nube desde el 2026-10-30.
+# Ver 20260924140000_privilegios_por_defecto.sql.
+auto_expose_new_tables = false
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.
