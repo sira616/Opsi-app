@@ -51,6 +51,10 @@ export function ConfirmAction({
     return (
       <Pressable
         accessibilityRole="button"
+        // `disabled` sin `accessibilityState` deja al lector de pantalla
+        // anunciando un botón que sí se puede pulsar mientras la acción está
+        // en marcha. El resto de botones del detalle ya declaran las dos cosas.
+        accessibilityState={{ disabled: busy }}
         disabled={busy}
         onPress={() => setAsking(true)}
         style={({ pressed }) => [
@@ -72,6 +76,7 @@ export function ConfirmAction({
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={() => {
             setAsking(false);

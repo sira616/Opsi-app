@@ -15,19 +15,15 @@ import {
   Minus,
   Package,
   PencilSimple,
-  Plus,
   Snowflake,
   Trash,
   type IconProps,
 } from 'phosphor-react-native';
 
-import {
-  actions,
-  fetchItem,
-  fetchItemEvents,
-  type InventoryEvent,
-  type ItemDetail,
-} from '@/api/inventory';
+import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
+import { FichaProducto } from '@/features/elemento/FichaProducto';
+import { Historial } from '@/features/elemento/Historial';
+import { TarjetaConservacion } from '@/features/elemento/TarjetaConservacion';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -55,17 +51,6 @@ const STATE_LABEL: Record<ItemDetail['state'], string> = {
   thawed: 'Descongelado',
   finished: 'Agotado',
   discarded: 'Tirado',
-};
-
-const EVENT_LABEL: Record<string, string> = {
-  created: 'Añadido',
-  opened: 'Abierto',
-  quantity_used: 'Usado',
-  frozen: 'Congelado',
-  thawed: 'Descongelado',
-  finished: 'Terminado',
-  discarded: 'Tirado',
-  updated: 'Modificado',
 };
 
 /**
@@ -115,12 +100,6 @@ export default function Detalle() {
     enabled: Boolean(id),
   });
 
-  const events = useQuery({
-    queryKey: queryKeys.itemEvents(id),
-    queryFn: () => fetchItemEvents(id),
-    enabled: Boolean(id),
-  });
-
   /**
    * Una sola mutación para las seis acciones.
    *
@@ -128,6 +107,11 @@ export default function Detalle() {
    * cualquier acción cambia la fecha límite efectiva y por tanto el sitio del
    * elemento en «Consumir primero». Olvidarlo deja la lista mintiendo hasta la
    * siguiente recarga, que es el bug clásico de estas pantallas.
+   *
+   * Se invalidan las listas de TODAS las neveras (`priorityLists`) y no la de
+   * la activa. El elemento pudo abrirse desde un enlace de otra nevera, y
+   * acertar cuál era la suya exigiría esperar a que cargue el detalle; así no
+   * hay que acertar. Cuesta lo mismo: solo se recarga la que está a la vista.
    */
   const act = useMutation({
     mutationFn: (run: () => Promise<void>) => run(),
@@ -138,7 +122,7 @@ export default function Detalle() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.item(id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.itemEvents(id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.priorityLists }),
       ]);
     },
     onError(caught: unknown) {
@@ -289,6 +273,13 @@ export default function Detalle() {
 
         <FechaLimite item={data} />
 
+        {/* La conservación tras abrir se calla en dos casos, y los dos por lo
+            mismo: diría algo que contradice a lo de arriba. Congelado, porque
+            la cuenta atrás está parada y «guárdalo en la nevera» sonaría a
+            sacarlo; cerrado, porque a lo tirado o agotado no se le aconseja
+            nada. */}
+        {!closedOut && !congelado ? <TarjetaConservacion item={data} /> : null}
+
         <ErrorNote message={error} />
 
         {!closedOut ? (
@@ -300,7 +291,7 @@ export default function Detalle() {
                 <Action
                   label="Descongelar"
                   icono={<Drop size={20} color={c.frost} weight="duotone" />}
-                  hint="A partir de ahí, 24 horas para consumirlo."
+                  hint="Una vez descongelado, 24 horas para consumirlo. No se vuelve a congelar."
                   onPress={() => run(() => actions.thaw(detail.id))}
                   busy={act.isPending}
                 />
@@ -320,7 +311,7 @@ export default function Detalle() {
                   <Action
                     label="Abrir"
                     icono={<Package size={20} color={c.brand} weight="duotone" />}
-                    hint="Desde que se abre, muchos alimentos duran menos de lo que pone el envase."
+                    hint="Muchos alimentos duran menos una vez abiertos. Al abrirlo recalculo la fecha."
                     onPress={() => run(() => actions.open(detail.id))}
                     busy={act.isPending}
                   />
@@ -399,7 +390,7 @@ export default function Detalle() {
                   icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
                   hint={
                     data.state === 'thawed'
-                      ? 'Ya se descongeló una vez: no vuelvas a congelarlo sin cocinarlo antes.'
+                      ? 'Ya se descongeló una vez. No lo vuelvas a congelar sin cocinarlo antes.'
                       : 'La cuenta atrás se para mientras esté congelado.'
                   }
                   onPress={() => run(() => actions.freeze(detail.id))}
@@ -430,17 +421,15 @@ export default function Detalle() {
         ) : (
           <View style={styles.closedNote}>
             <Text style={t.bodySmall}>
-              Este elemento está {STATE_LABEL[data.state].toLowerCase()} y ya no admite acciones.
+              Esto ya está {STATE_LABEL[data.state].toLowerCase()}. Se queda en el historial y no
+              admite más acciones.
             </Text>
           </View>
         )}
 
-        <Historial
-          eventos={events.data ?? []}
-          unidad={data.display_unit}
-          fallo={events.isError ? describeDbError(events.error) : null}
-          cargando={events.isPending}
-        />
+        <FichaProducto item={data} />
+
+        <Historial item={data} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -458,14 +447,19 @@ function FechaLimite({ item }: { item: ItemDetail }) {
   const c = useTheme();
   const urgent = item.priority === 'high';
 
+  // De dónde salió la fecha de partida. Decir «la que trae el envase» de una
+  // fecha que puso el usuario es inventarse el dato justo que este proyecto se
+  // comprometió a enseñar tal cual.
+  const departida = item.effective_date_source === 'user' ? 'La que pusiste tú' : 'La del envase';
+
   const explanation =
     item.effective_date_reason === 'after_thawing'
-      ? 'Se descongeló, y lo descongelado se consume en 24 horas: eso manda sobre la fecha del envase.'
+      ? 'Se descongeló, y lo descongelado se consume en 24 horas: eso manda sobre cualquier otra fecha.'
       : item.effective_date_reason === 'after_opening'
-        ? 'Está abierto, y la conservación tras abrir llega antes que la fecha del envase.'
+        ? 'Está abierto, y lo que aguanta abierto se acaba antes que la fecha que tenía puesta.'
         : item.frozen_days > 0
-          ? `La fecha del envase, retrasada los ${item.frozen_days} días que pasó congelado.`
-          : 'La fecha que trae el envase.';
+          ? `${departida}, retrasada los ${item.frozen_days} días que pasó congelado.`
+          : `${departida}.`;
 
   if (item.state === 'frozen') {
     // Dos cuentas distintas, y confundirlas sería mentir: `dentro` son los días
@@ -509,7 +503,7 @@ function FechaLimite({ item }: { item: ItemDetail }) {
     return (
       <View style={[styles.dateCard, styles.dateCardNeutral]}>
         <Text style={styles.dateLabel}>Sin fecha</Text>
-        <Text style={styles.dateValue}>No sabemos cuándo vence</Text>
+        <Text style={styles.dateValue}>No sé cuándo vence</Text>
         <Text style={styles.dateExplain}>
           No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla.
         </Text>
@@ -531,86 +525,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
       <Text style={[styles.dateExplain, urgent && styles.dateExplainUrgent]}>{explanation}</Text>
     </View>
   );
-}
-
-/**
- * El historial.
- *
- * Lleva la HORA además del día: abrir y usar algo la misma tarde salían como
- * dos líneas idénticas, y entonces el historial no contaba nada.
- */
-function Historial({
-  eventos,
-  unidad,
-  fallo,
-  cargando,
-}: {
-  eventos: InventoryEvent[];
-  unidad: ItemDetail['display_unit'];
-  /** El historial que no se pudo leer NO es un historial vacío. */
-  fallo: string | null;
-  cargando: boolean;
-}) {
-  const styles = useStyles();
-  const t = useType();
-  const c = useTheme();
-
-  return (
-    <View style={styles.history}>
-      <Text style={styles.sectionTitle}>Historial</Text>
-      {fallo ? (
-        <ErrorNote message={fallo} />
-      ) : cargando ? (
-        <ActivityIndicator color={c.brand} />
-      ) : eventos.length === 0 ? (
-        <Text style={t.bodySmall}>Todavía no hay nada registrado.</Text>
-      ) : (
-        <View style={styles.historyCard}>
-        {eventos.map((event) => {
-          const fecha = new Date(event.created_at);
-          return (
-            <View key={event.id} style={styles.eventRow}>
-              <View style={styles.eventIcon}>
-                <IconoEvento tipo={event.type} color={c.inkMuted} />
-              </View>
-              <Text style={styles.eventText}>
-                {EVENT_LABEL[event.type] ?? event.type}
-                {event.quantity_used ? ` · ${formatQuantity(event.quantity_used, unidad)}` : ''}
-              </Text>
-              <Text style={styles.eventDate}>
-                {fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                {'  '}
-                {fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-          );
-        })}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function IconoEvento({ tipo, color }: { tipo: string; color: string }) {
-  const props = { size: 14, color, weight: 'duotone' } as const;
-  switch (tipo) {
-    case 'created':
-      return <Plus {...props} weight="bold" />;
-    case 'opened':
-      return <Package {...props} />;
-    case 'quantity_used':
-      return <ForkKnife {...props} />;
-    case 'frozen':
-      return <Snowflake {...props} />;
-    case 'thawed':
-      return <Drop {...props} />;
-    case 'finished':
-      return <CheckCircle {...props} />;
-    case 'discarded':
-      return <Trash {...props} />;
-    default:
-      return <PencilSimple {...props} />;
-  }
 }
 
 function Action({
@@ -802,20 +716,6 @@ const useStyles = makeStyles((c) => ({
     borderColor: c.border,
     borderRadius: radius.lg,
   },
-
-  history: { gap: space.sm - 2 },
-  historyCard: {
-    gap: space.sm - 3,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: radius.lg,
-    padding: space.md,
-  },
-  eventRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center', minHeight: 26 },
-  eventIcon: { width: 18, alignItems: 'center' },
-  eventText: { flex: 1, fontSize: 14, color: c.ink },
-  eventDate: { ...tabular, fontSize: 11.5, color: c.inkFaint },
 
   pressed: { opacity: 0.7 },
 }));

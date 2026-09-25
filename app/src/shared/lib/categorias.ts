@@ -89,7 +89,7 @@ export const CATEGORIAS: readonly Definicion[] = [
   },
   {
     valor: 'dulces',
-    etiqueta: 'Dulces y snacks',
+    etiqueta: 'Dulces y picoteo',
     patron:
       /galleta|chocolate|bombón|bombon|caramelo|chuche|gominola|regaliz|turrón|turron|polvorón|polvoron|mazapán|mazapan|tarta|pastel|bizcocho|brownie|flan|postre|gelatina|nube|palomita|snack|patatas fritas|nacho|dorito|cortez|fruto seco|almendra|nuez|nueces|anacardo|pistacho|cacahuete|avellana|pipa|dátil|datil|pasa\b|barrita|cacao|nocilla|nutella/i,
   },
