@@ -13,8 +13,10 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 ---
 
 > [!NOTE]
-> **Fase 0 en curso.** El proyecto está en construcción: hay configuración y documentación,
-> todavía no una app que puedas usar. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
+> **Fase 1 completa.** Ya hay una app que puedes usar: alta y login, rutas protegidas,
+> alta manual de alimentos, «Consumir primero» y detalle con acciones. Faltan el escáner,
+> los avisos, la lista de la compra y el chat. Ver [Estado](#estado) y
+> [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Índice
 
