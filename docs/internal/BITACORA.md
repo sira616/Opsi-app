@@ -576,8 +576,8 @@ layout raíz que no depende del tema ni de las fuentes, porque puede ser justo l
 ### D-29 · La CI tiene puertas de seguridad bloqueantes, y las exenciones caducan · 2026-10-08
 
 Acciones pinadas a SHA completo, permisos mínimos, `persist-credentials: false`, tiempo máximo por
-trabajo, Node 24 (el 20 salió de soporte en abril). Y dos puertas nuevas: **gitleaks** sobre todo el
-historial, y una de **dependencias** (`scripts/check-audit.mjs`).
+trabajo, Node 24 (el 20 salió de soporte en abril). Y dos puertas nuevas: **gitleaks** sobre los commits de cada PR o push (no recorre todo el
+historial en cada ejecución: la pasada completa, 47 revisiones, se hizo a mano), y una de **dependencias** (`scripts/check-audit.mjs`).
 
 `npm audit --audit-level=high` a secas no sirve aquí: da 21 paquetes marcados, **todos de la
 cadena de herramientas de Expo** (Metro, Expo CLI), y los «arreglos» que sugiere son *bajar* a

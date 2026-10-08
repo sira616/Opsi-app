@@ -146,8 +146,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Historial completo: una clave subida y borrada en un commit anterior
-          # sigue siendo una clave publicada, y solo se ve recorriéndolo.
+          # Historial descargado entero para que gitleaks pueda recorrer COMMIT A
+          # COMMIT: una clave subida y borrada dentro de la misma PR sigue publicada,
+          # y mirando solo el resultado final no se vería.
+          #
+          # Ojo con lo que NO hace: en una PR escanea los commits de esa PR, y en un
+          # push a main los del push. No vuelve a recorrer todo el historial en cada
+          # ejecución. La pasada completa se hizo a mano y se repite con el comando
+          # de la cabecera de .gitleaks.toml.
           fetch-depth: 0
           persist-credentials: false
 
