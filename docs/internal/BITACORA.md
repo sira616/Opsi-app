@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-25** (sesión 23)
+> Última actualización: **2026-10-08** (sesión 24)
 
 ---
 
@@ -40,10 +40,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **24 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **26 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **8 ficheros pgTAP, 241 tests**, contra pgTAP real · `db:check`: **409 comprobaciones** en PGlite |
+| Tests | **8 ficheros pgTAP, 243 tests**, contra pgTAP real · `db:check`: **414 comprobaciones** en PGlite · `db:carreras`: 8, con dos sesiones a la vez |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -51,8 +51,8 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | | |
 |---|---|
-| ✅ **Verificado aquí** | `db:reset` (24 migraciones y los 3 seeds) · `db:test` (241) · `db:lint` sin avisos · `db:check` (409) · `types` · en la app: `typecheck`, `lint` y contraste WCAG AA · **en el navegador (web, ancho de móvil) con `syreta` y `compi`**: crear una compartida con nombre e icono, cambiar a ella desde el inicio, dar de alta un alimento y ver en la base que cae en LA elegida y no en la privada, que al volver a la privada no aparece, invitar, ver el aviso en el inicio de la otra cuenta, aceptar (añade, no saca de la propia), el tope de 2 con su mensaje, la gestión como miembro y como privada, renombrar y cambiar el icono |
-| ⚠️ **Sin verificar** | **Nada nativo** (desenfoque de iOS, área segura, filas del inventario en nativo) · rechazar y cancelar invitaciones **desde la interfaz** (sí por pgTAP) · las carreras de las funciones de neveras (solo a mano) · la CI, que la auditoría da en rojo y yo no he comprobado · dispositivos físicos |
+| ✅ **Verificado aquí** | `db:reset` (26 migraciones y los 3 seeds) · `db:test` (243) · `db:lint` sin avisos · `db:check` (414) · `db:carreras` (8) · **la CI en verde, por primera vez, en la PR #1** · `types` · en la app: `typecheck`, `lint` y contraste WCAG AA · **en el navegador (web, ancho de móvil) con `syreta` y `compi`**: crear una compartida con nombre e icono, cambiar a ella desde el inicio, dar de alta un alimento y ver en la base que cae en LA elegida y no en la privada, que al volver a la privada no aparece, invitar, ver el aviso en el inicio de la otra cuenta, aceptar (añade, no saca de la propia), el tope de 2 con su mensaje, la gestión como miembro y como privada, renombrar y cambiar el icono |
+| ⚠️ **Sin verificar** | **Nada nativo** (desenfoque de iOS, área segura, filas del inventario en nativo) · rechazar y cancelar invitaciones **desde la interfaz** (sí por pgTAP) · las carreras de las funciones de neveras (solo a mano) · dispositivos físicos |
 
 ### Tres fallos que cazó `db:check` esta sesión
 
@@ -536,6 +536,61 @@ dentro fue el mensaje de error, y `tsc` reventó en toda la app con «';' expect
 `types` fallido de dos días antes— no se parecía en nada al síntoma. `scripts/gen-types.mjs`
 genera a memoria, comprueba que sea de verdad un fichero de tipos y solo entonces lo sustituye. Si
 algo falla, el anterior queda intacto.
+
+### D-26 · Las acciones sobre un elemento bloquean la fila · 2026-10-08
+
+`require_item()` leía el elemento sin bloquearlo y las seis acciones decidían con lo leído.
+Con neveras compartidas, dos personas pueden pulsar a la vez sobre el mismo yogur. Comprobado
+con dos sesiones reales: una lo terminaba y otra lo tiraba, y el elemento acababa `discarded`
+con un historial —inmutable— que decía las dos cosas; o dos personas gastaban 600 g de 1000 g y
+la segunda recibía el error de un CHECK en vez de «solo quedan 400». **`for update` en la
+lectura**: la segunda sesión espera y vuelve a leer la fila ya cambiada. Una sola función, un solo
+sitio. Se comprueba con `scripts/check-carreras.mjs` (`npm run db:carreras`, también en la CI),
+no con pgTAP, porque una carrera necesita dos sesiones y pgTAP corre en una. **Se verificó que
+falla sin la migración.**
+
+**Descartado:** `lock_timeout` (cada acción es una llamada corta y PostgREST ya corta las largas) y
+una versión en la fila para bloqueo optimista (obliga al cliente a saberlo y reintentar).
+
+### D-27 · `service_role` solo con lo que usa · 2026-10-08
+
+Es la clave que vivirá dentro de las Edge Functions y salta la RLS: lo único que la acota son sus
+permisos de tabla. Salió que, en las tablas existentes, conservaba `TRUNCATE`, `REFERENCES`,
+`TRIGGER` y `MAINTAIN` —los permisos «de fábrica» de Supabase— porque las migraciones de la fase 0
+solo revocaron los de `anon` y `authenticated`. Ahora no tiene **nada** salvo `SELECT`, `INSERT` y
+`UPDATE` sobre `products` (lo que necesita `lookup-barcode`). Cada función nueva que necesite otra
+tabla lo pide por escrito, y `privilegios_test.sql` falla si aparece algo que no estaba previsto.
+**Lo encontré al escribir el inventario de superficie, no en la auditoría**, que no miró `service_role`.
+
+### D-28 · Un error que no se reconoce no se enseña · 2026-10-08
+
+`describeDbError` y `describeAuthError` terminaban en `return message`: lo que no reconocían salía
+tal cual, en inglés y a veces con el nombre de una restricción. Ahora va a un mensaje genérico que
+dice qué hacer (`error-generico.ts`), y el detalle sale por la consola **solo en desarrollo**. Ese
+fichero es además el único punto por el que pasa todo lo no traducido: ahí se engancha la
+monitorización cuando exista. Para que esto no se tragase mensajes nuestros, `28000` pasa a la lista
+de códigos propios (16 sitios de las migraciones lo lanzan), y **añadir un `errcode` nuevo en una
+migración obliga ahora a decidir aquí qué se hace con él**. También hay un *error boundary* en el
+layout raíz que no depende del tema ni de las fuentes, porque puede ser justo lo que falló.
+
+### D-29 · La CI tiene puertas de seguridad bloqueantes, y las exenciones caducan · 2026-10-08
+
+Acciones pinadas a SHA completo, permisos mínimos, `persist-credentials: false`, tiempo máximo por
+trabajo, Node 24 (el 20 salió de soporte en abril). Y dos puertas nuevas: **gitleaks** sobre todo el
+historial, y una de **dependencias** (`scripts/check-audit.mjs`).
+
+`npm audit --audit-level=high` a secas no sirve aquí: da 21 paquetes marcados, **todos de la
+cadena de herramientas de Expo** (Metro, Expo CLI), y los «arreglos» que sugiere son *bajar* a
+`expo@44` o `react-native@0.72`. Una puerta que falla siempre acaba ignorada, y entonces deja de
+vigilar también lo que sí importa. Esas 21 salían de **solo 4 avisos**: uno crítico (`shell-quote`)
+y tres altos. El crítico y uno alto (`source-map-js`) se arreglaron subiendo **solo ese paquete**
+dentro de su rango (dos cambios en el lockfile, nada más). Los otros dos (`braces`, `node-forge`)
+**no tienen versión corregida publicada**, y están exentos en `docs/security-waivers.json`, por
+aviso y no por paquete —eximir un paquete entero taparía los avisos de mañana— con motivo y **fecha
+límite**: pasada, la puerta vuelve a fallar. No hay exenciones permanentes.
+
+**Descartado:** `npm audit fix --force` (bajaría Expo cuarenta versiones) y `audit-ci` (una
+dependencia nueva para lo que hacen cincuenta líneas).
 
 ## 3. Convenciones
 
@@ -1336,3 +1391,53 @@ la pantalla.
 **Queda, en este orden** (detalle y porqué en `AUDITORIA-2026-09-24.md` y `PENDIENTES.md` §7):
 cortafuegos (A1, tuyo), CI en verde, decidir la recuperación de cuenta (A4), una sola development
 build con almacén cifrado + cámara + notificaciones, y entonces `lookup-barcode`.
+
+### 2026-10-08 (sesión 24) · Abrir la PR y el bloque previo a la fase 2
+
+**Cómo fue.** Se abrió la PR #1 con las neveras y la primera pasada de seguridad, y la CI **no
+arrancó**. **Yo había dicho lo contrario**: tras el `push` anuncié que la CI estaba corriendo sobre la
+rama, y no era cierto. El workflow solo se dispara con `push` a `main` y con pull requests, así que
+una rama suelta no lo lanza; y una PR con conflictos tampoco, porque GitHub no puede construir la
+fusión que la CI prueba. Había conflicto: **otra sesión de Claude había empujado a `main`** (el 29/09,
+autor «Claude», hora UTC) un retoque del aviso del README. Se resolvió fusionando `main` en la rama,
+sin reescribir historia, y entonces **la CI pasó por primera vez en toda la historia del
+repositorio** (25 de 26 en rojo antes).
+
+**Lo que salió, además de lo pedido:**
+
+- **El repositorio es público.** Los documentos internos asumían que no. Cualquiera puede leer sin
+  sesión la bitácora, el informe de auditoría y las cuentas de desarrollo. Se comprobó que **no
+  hay ninguna clave real** (patrones sobre todo el historial y gitleaks sobre las 47 revisiones),
+  pero es el mapa de dónde apretar. Decisión pendiente, **tuya**: ver `PENDIENTES.md` §7.
+- `main` **no está protegida** y hay al menos otro escritor. En un repositorio público la
+  protección de ramas es gratuita.
+- `service_role` tenía permisos de más ([D-27](#d-27--service_role-solo-con-lo-que-usa--2026-10-08)).
+- Tu Expo se había lanzado una vez desde la **raíz** del repositorio (dejó `.expo/` y un
+  `tsconfig.json` sueltos), y tu IP del Wi-Fi había cambiado de `.19` a `.11`: el móvil abría la app
+  pero esta hablaba con una dirección que ya no era el portátil. `npm run up` **no lo habría
+  arreglado**: respeta a propósito cualquier URL que no sea `127.0.0.1`.
+
+**Hecho** (cada punto con su prueba; los tres de seguridad, comprobados por **mutación**):
+
+- La carrera de las acciones ([D-26](#d-26--las-acciones-sobre-un-elemento-bloquean-la-fila--2026-10-08)).
+- Errores genéricos y *error boundary* ([D-28](#d-28--un-error-que-no-se-reconoce-no-se-ense%C3%B1a--2026-10-08)),
+  probados en el navegador con una ruta que revienta (claro y oscuro) y con un `22P02` real.
+- Las puertas de la CI ([D-29](#d-29--la-ci-tiene-puertas-de-seguridad-bloqueantes-y-las-exenciones-caducan--2026-10-08)):
+  el escáner salta con un token falso plantado y deja pasar el valor público exento.
+- `docs/security-inventory.md`, y `db:check` **falla si una tabla, vista o función pública no
+  aparece en él** (comprobado quitando una). Y `docs/threat-model.md`: STRIDE de las tres
+  funcionalidades que existen y de `lookup-barcode` **antes de escribirla**, con su ficha.
+- `SECURITY.md`, `CODEOWNERS` y Dependabot, con las dependencias que Expo fija por SDK **excluidas**:
+  subir una sola desalinearía la app con Expo Go.
+
+**Sin hacer, a propósito:** protección de `main`, activar el aviso privado de vulnerabilidades, elegir
+licencia y el cortafuegos. Son ajustes del repositorio o del sistema, y no me tocan a mí.
+
+**Lagunas que quedan:** la app **no tiene runner de tests** (los errores se comprobaron a mano); el
+cambio de Node de la CI de 20 a 24 y las versiones nuevas de las acciones solo las prueba la propia
+CI; y no se ha probado nada en un móvil real.
+
+**Se aprendió:** (1) «la CI está corriendo» se comprueba, no se supone: `gh pr checks` antes de
+decirlo. (2) Una tabla recién escrita con las cosas que yo creía saber del catálogo (`service_role`)
+estaba mal: el inventario obliga a mirar, y mirar encontró un fallo que la auditoría no vio. (3)
+Antes de abrir una PR, `git fetch` y mirar si `main` se ha movido.
