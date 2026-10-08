@@ -24,6 +24,7 @@
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
     "db:carreras": "node scripts/check-carreras.mjs",
+    "check:audit": "node scripts/check-audit.mjs",
     "up": "node scripts/up.mjs",
     "app:tunnel": "npm run --workspace app start -- --tunnel",
     "check:contrast": "node scripts/check-contrast.mjs"

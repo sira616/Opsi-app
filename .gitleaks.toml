@@ -1,0 +1,31 @@
+# Configuración de gitleaks (escáner de secretos). Corre en la CI y se puede
+# lanzar a mano:
+#
+#   docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source=/repo --redact -v
+#
+# Parte de las reglas por defecto, que cubren las claves reales (Anthropic, AWS,
+# GitHub, JWT firmados, claves privadas…), y solo añade excepciones para lo que
+# ESTÁ en el repositorio a propósito y no es un secreto.
+
+title = "Opsi"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Valores públicos o solo de desarrollo local, escritos en el repo a propósito"
+regexes = [
+  # El secreto JWT por defecto de la CLI de Supabase. Es público (viene en su
+  # documentación) y es lo que hace reconocible la base LOCAL: los seeds de
+  # desarrollo solo siembran si lo ven. Un proyecto en la nube tiene otro.
+  '''super-secret-jwt-token-with-at-least-32-characters-long''',
+
+  # La contraseña de las cuentas de desarrollo (syreta, compi). Solo existen en
+  # el Supabase local, y el seed no las crea en ningún otro sitio.
+  '''opsi-dev-2026''',
+]
+
+# Lo que NO va aquí y por qué: ninguna exención por ruta de fichero. Excluir
+# `docs/` o `supabase/seed/` enteros dejaría ciegos a esas carpetas justo donde
+# más fácil es pegar una clave de verdad. Si salta una falsa alarma, se acota al
+# valor concreto, como arriba.

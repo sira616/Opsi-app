@@ -1,0 +1,51 @@
+# Actualizaciones automáticas de dependencias y de las acciones de la CI.
+# Las abre Dependabot como pull requests; pasan por la misma CI que todo lo demás.
+
+version: 2
+
+updates:
+  # ── npm (la raíz y el workspace `app/` comparten lockfile) ────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Un solo PR por semana con todo lo menor y los parches, en vez de uno por
+    # paquete: con tantas dependencias, cada uno por separado se acumula sin
+    # mirarse y acaba ignorado.
+    groups:
+      menores-y-parches:
+        update-types: [minor, patch]
+    ignore:
+      # Lo que Expo fija POR SDK. Cada versión del SDK trae una lista exacta de
+      # versiones compatibles (react, react-native, expo-*…) y subir una sola por
+      # su cuenta desalinea la app con Expo Go y con la build nativa. Se suben
+      # JUNTAS al cambiar de SDK, con `npx expo install --fix` desde app/, no desde
+      # aquí. `npx expo install --check` dice cuáles van por detrás.
+      - dependency-name: expo
+      - dependency-name: expo-*
+      - dependency-name: "@expo/*"
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: react-native
+      - dependency-name: react-native-*
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-async-storage/*"
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
+      - dependency-name: typescript
+
+  # ── Las acciones de la CI ────────────────────────────────────────────────
+  # Van pinadas a un SHA completo (un tag como `@v4` se puede mover y cambiar lo
+  # que corre en la CI sin que cambie ningún fichero del repo). Dependabot sabe
+  # actualizar el SHA y el comentario con la versión a la vez.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      acciones:
+        patterns: ["*"]

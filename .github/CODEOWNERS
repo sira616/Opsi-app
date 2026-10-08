@@ -1,0 +1,20 @@
+# Quién responde de cada zona. Con una sola persona mantenedora es sobre todo un
+# mapa de qué es delicado: GitHub lo usa para pedir revisión automáticamente, y
+# el día que haya más gente, aquí es donde se reparte.
+#
+# Lo último que coincide manda, así que lo general va arriba.
+
+*                          @sira616
+
+# La base de datos: una migración aplicada no se edita jamás, y una política de
+# RLS o un GRANT equivocado es una fuga de datos entre neveras.
+/supabase/                 @sira616
+/scripts/check-schema.mjs  @sira616
+
+# La CI y sus puertas de seguridad: quien las toca decide qué se vigila.
+/.github/                  @sira616
+/.gitleaks.toml            @sira616
+/docs/security-waivers.json @sira616
+
+# Las Edge Functions (fase 2 en adelante) llevan secretos y llaman a terceros.
+/supabase/functions/       @sira616
