@@ -40,6 +40,7 @@
  */
 
 import { esFalloDeRed, mensajeSinConexion } from './conexion';
+import { errorSinTraducir } from './error-generico';
 
 type SupabaseLikeError = {
   message?: string;
@@ -55,11 +56,17 @@ const FALTA_MIGRAR =
 /**
  * Los códigos con los que NUESTRAS funciones le hablan al usuario.
  *
- * Los tres salen de un `raise exception ... using errcode` escrito a mano, así
+ * Los cuatro salen de un `raise exception ... using errcode` escrito a mano, así
  * que su mensaje ya viene en español y dice más que cualquier traducción de
  * aquí. No hay ningún caso en que el motor los genere por su cuenta.
+ *
+ * `28000` («tienes que haber iniciado sesión») es el que más fácil se olvida: lo
+ * lanzan 16 sitios de las migraciones. Esta lista es lo que separa un mensaje
+ * nuestro de uno del motor: lo que NO esté aquí ni en las ramas de abajo acaba
+ * en el mensaje genérico (ver error-generico.ts), así que añadir un `errcode`
+ * nuevo en una migración obliga a decidir aquí qué se hace con él.
  */
-const CODIGOS_NUESTROS = new Set(['22023', 'P0001', 'P0002']);
+const CODIGOS_NUESTROS = new Set(['22023', '28000', 'P0001', 'P0002']);
 
 /**
  * Cómo deniega un permiso el motor, que son cuatro formas y no cambian.
@@ -139,7 +146,9 @@ export function describeDbError(error: unknown): string {
   // que es el dato que distingue una causa de otra.
   if (esFalloDeRed(message)) return mensajeSinConexion();
 
-  return message;
+  // Todo lo demás es del motor o de PostgREST, en inglés y con nombres internos:
+  // no se enseña. El detalle va a la consola en desarrollo (error-generico.ts).
+  return errorSinTraducir('base de datos', error);
 }
 
 /**

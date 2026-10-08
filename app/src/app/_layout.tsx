@@ -19,6 +19,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient } from '@/shared/lib/query';
 import { SessionProvider } from '@/shared/lib/session';
 import { ThemeProvider, useAspecto } from '@/shared/theme/tokens';
+import { ErrorFatal } from '@/shared/ui/ErrorFatal';
+
+// Si una pantalla revienta al pintarse, Expo Router busca un `ErrorBoundary` exportado
+// en la ruta (y en las que cuelgan de ella). Exportado aquí, cubre toda la app. Ver
+// ErrorFatal.tsx para por qué no depende del tema ni de las fuentes.
+export { ErrorFatal as ErrorBoundary };
 
 // La pantalla de carga se queda hasta que las fuentes están listas. Sin esto
 // la app aparece con la tipografía del sistema y salta a la suya medio segundo
