@@ -914,6 +914,39 @@ async function main() {
 
     const compartidas = await dbSeed.query(`select count(*)::int as n from public.households where kind = 'shared'`);
     check('las cuentas de desarrollo no comparten nada de salida', compartidas.rows[0].n === 0);
+
+    // ── El inventario de superficie está al día ───────────────────────────────
+    //
+    // docs/security-inventory.md es la tabla de qué hay expuesto y con qué control
+    // (§2 de la lista de seguridad). Un documento así se pudre en cuanto se añade
+    // una función y nadie lo toca, así que esto convierte «acordarse de
+    // actualizarlo» en algo que la CI exige: toda tabla, vista o función de
+    // `public` tiene que aparecer en él con su nombre entre comillas inversas.
+    //
+    // Es en un solo sentido a propósito: lo que existe tiene que estar documentado.
+    // Lo contrario (que el documento no nombre cosas que ya no existen) lo vigila
+    // quien lo lee, y exigirlo aquí haría que renombrar algo rompiera la CI por una
+    // cita en un párrafo.
+    const inventario = await readFile(join(ROOT, 'docs', 'security-inventory.md'), 'utf8');
+    const documentados = new Set([...inventario.matchAll(/`([a-z_][a-z0-9_]*)`/g)].map((m) => m[1]));
+    const existentes = await dbSeed.query(`
+      select c.relname as nombre, case c.relkind when 'v' then 'vista' else 'tabla' end as tipo
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relkind in ('r', 'v', 'p')
+      union
+      select p.proname, 'función'
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.prokind = 'f'
+       order by 2, 1
+    `);
+    const sinDocumentar = existentes.rows.filter((r) => !documentados.has(r.nombre));
+    check(
+      `todo lo público está en docs/security-inventory.md (${existentes.rows.length} nombres)`,
+      sinDocumentar.length === 0,
+      sinDocumentar.length === 0
+        ? ''
+        : `falta: ${sinDocumentar.map((r) => `${r.tipo} ${r.nombre}`).join(', ')}`,
+    );
   } catch (error) {
     check('los seeds se aplican sin errores', false, error.message);
   }
