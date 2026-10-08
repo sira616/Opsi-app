@@ -23,6 +23,7 @@
     "types": "node scripts/gen-types.mjs",
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
+    "db:carreras": "node scripts/check-carreras.mjs",
     "up": "node scripts/up.mjs",
     "app:tunnel": "npm run --workspace app start -- --tunnel",
     "check:contrast": "node scripts/check-contrast.mjs"
