@@ -14,8 +14,9 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 
 > [!NOTE]
 > **Fase 1 completa.** Ya hay una app que se puede usar en desarrollo: entrar, guardar comida,
-> ver qué gastar primero, y varias neveras (la tuya y las que compartas). **Sin escáner todavía**
-> (fase 2) y sin publicar. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
+> ver qué gastar primero y varias neveras (la tuya y las que compartas). Faltan el escáner,
+> los avisos, la lista de la compra y el chat, y todavía no está publicada. Ver
+> [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Índice
 
