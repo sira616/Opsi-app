@@ -19,7 +19,7 @@ la misma PR (§22 de la lista). El modelo de amenazas por funcionalidad está en
 |---|---|---|
 | `anon` | Cualquiera con la `anon key` (va en cada binario) | Casi nada: solo ejecutar `dominio_sintetico()`. Ninguna tabla, vista ni otra función |
 | `authenticated` | Una cuenta con sesión | Lo que dicen las filas de abajo, siempre acotado por RLS a sus neveras |
-| `service_role` | Solo las Edge Functions, en el servidor | Salta la RLS. Nunca sale del servidor. Sus permisos de tabla se reducen a `products` (leer, insertar y actualizar); en el resto, ninguno (comprobado en `privilegios_test.sql`) |
+| `service_role` | Solo las Edge Functions, en el servidor | Salta la RLS. Nunca sale del servidor. Sus permisos de tabla se reducen a **leer** `products`; escribe solo ejecutando cinco funciones concretas (comprobado en `privilegios_test.sql` y `escaner_test.sql`) |
 | `postgres` | Migraciones y seeds | Dueño de todo |
 | *dueño* / *miembro* | El papel de una persona **dentro de una nevera** (`household_members.role`) | El dueño invita, echa, traspasa y renombra |
 
@@ -35,7 +35,8 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/(tabs)/inventario` | Sesión | «Consumir primero» de la nevera activa |
 | `(app)/(tabs)/ajustes` | Sesión | Perfil, aspecto, avisos, mis neveras, cuenta, privacidad |
 | `(app)/(tabs)/lista`, `chat` | Sesión | «Próximamente» (fases 4 y 5) |
-| `(app)/alta` | Sesión | Alta manual en la nevera activa |
+| `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
+| `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
 | `(app)/elemento/[id]` | Sesión | Detalle y acciones de un elemento |
 | `(app)/cambiar-nevera` | Sesión | Selector de nevera |
 | `(app)/nevera/nueva`, `nevera/[id]`, `nevera/[id]/editar` | Sesión | Crear, gestionar y renombrar una nevera |
@@ -57,7 +58,9 @@ que **puede intentar**; la RLS decide además **sobre qué filas**.
 | `inventory_items` | Tabla | Las cuatro | RLS por nevera. Un trigger impide mover un elemento a otra nevera |
 | `inventory_events` | Tabla | Insertar y leer | **Inmutable**: sin UPDATE ni DELETE por permisos Y por RLS |
 | `inventory_with_priority` | Vista | Leer | `security_invoker = true`: aplica la RLS del que pregunta |
-| `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; solo `service_role` (fase 2) |
+| `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; `service_role` solo lo lee y lo escribe vía `upsert_global_product()` |
+| `lookup_usage` | Tabla | **Nada** (ni leer) | Contadores del límite de consultas del escáner. Sin política ni permiso para ningún rol: solo la tocan `consume_lookup_quota()` y `consume_off_slot()`. Se purga a los 2 días |
+| `barcode_misses` | Tabla | **Nada** (ni leer) | Caché de códigos que Open Food Facts no conoce. Sin política ni permiso; no guarda quién preguntó. Se purga a los 7 días |
 | `shopping_list_items` | Tabla | Las cuatro | RLS por nevera (la funcionalidad llega en la fase 4) |
 | `user_settings` | Tabla | Leer lo suyo; escribir **columna a columna** | `household_limit` y `username` no son editables; zona horaria validada por trigger |
 | `category_shelf_life_reference`, `open_shelf_life_reference` | Tabla | Leer | Referencias de solo lectura |
@@ -68,7 +71,7 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 
 | Función | Modo | Qué autoriza en el servidor |
 |---|---|---|
-| `create_item` | invoker | Que la nevera pedida sea de quien llama |
+| `create_item` | invoker | Que la nevera pedida sea de quien llama, y que el producto enlazado (si lo hay) sea del catálogo global o de esa misma nevera |
 | `open_item`, `use_quantity`, `freeze_item`, `thaw_item`, `finish_item`, `discard_item` | invoker | La RLS del elemento + `require_item()`, que **bloquea la fila** (dos personas a la vez no se pisan) |
 | `require_item`, `record_inventory_event` | invoker | Auxiliares de las acciones |
 | `shelf_life_for_item` | invoker | La RLS del elemento |
@@ -102,13 +105,25 @@ Sin permiso de ejecución para `anon` ni `authenticated`.
 | `handle_new_user` | Trigger de alta: solo admite correos sintéticos, saca el nombre del correo, crea la nevera privada |
 | `touch_updated_at` | Trigger de `updated_at` |
 
+### Funciones que solo ejecuta `service_role` (el escáner)
+
+Las llama `lookup-barcode` con la clave de servicio. Todas `definer` con `search_path = ''`, y sin
+EXECUTE para `anon` ni `authenticated` (comprobado en `escaner_test.sql`).
+
+| Función | Qué hace | Qué la acota |
+|---|---|---|
+| `consume_lookup_quota` | Cuenta una consulta de una persona y dice si cabe | 30 por minuto y 500 por día; el contador sube con un solo `insert … on conflict`, atómico |
+| `consume_off_slot` | Reserva una llamada a Open Food Facts | 10 por minuto entre todas las personas |
+| `is_recent_barcode_miss`, `record_barcode_miss` | Leer y anotar la caché de faltas | Código de 8 a 14 cifras; caduca a las 6 horas |
+| `upsert_global_product` | **La única vía** de escritura al catálogo global | Revalida nombre, marca, imagen (solo `images.openfoodfacts.org`), categorías y cantidad; rechaza caracteres de control, bidireccionales, de ancho cero y marcado |
+
 ## Edge Functions
 
-**Ninguna todavía.** Las previstas, y su modelo de amenazas, en [`threat-model.md`](threat-model.md):
+Una en código, el resto previstas. El modelo de amenazas de cada una está en [`threat-model.md`](threat-model.md):
 
 | Función | Fase | Quién la llama | Datos sensibles | Estado |
 |---|---|---|---|---|
-| `lookup-barcode` | 2 | Usuario con sesión | Código de barras (no es personal) | Diseño. STRIDE hecho |
+| `lookup-barcode` | 2 | Usuario con sesión (verificado dentro de la función) | Código de barras (no es personal) | Código y tests; sin desplegar |
 | `daily-digest` | 3 | Cron del servidor (`pg_cron`) | Hora y zona de cada persona | Sin diseñar |
 | `opsi-chat` | 5 | Usuario con sesión | Inventario, preguntas | Sin diseñar. Riesgo alto (escrituras) |
 | `parse-receipt` | 6 | Usuario con sesión | Fotos de tickets | Sin diseñar. Riesgo alto (PII) |
@@ -128,7 +143,7 @@ de segundos y borrado tras la revisión.
 | Integración | Qué sale hacia ella | Desde dónde | Estado |
 |---|---|---|---|
 | Supabase Auth (GoTrue) | Usuario y contraseña | La app | En uso |
-| Open Food Facts | El código de barras | **Solo desde una Edge Function**, nunca desde el móvil | Fase 2 |
+| Open Food Facts | El código de barras | **Solo desde una Edge Function**, nunca desde el móvil | Fase 2: código escrito, sin desplegar |
 | API de Claude | Nombres de alimentos y preguntas; fotos de tickets | **Solo desde una Edge Function** | Fases 5 y 6 |
 | Expo / EAS | El código fuente para compilar | Al hacer una *build* | Sin cuenta todavía |
 | GitHub Actions | El repositorio | La CI | En uso |

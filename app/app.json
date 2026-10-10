@@ -18,7 +18,15 @@
       "userInterfaceStyle": "automatic"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Opsi usa la cámara solo para leer el código de barras de lo que guardas. No se hace ni se guarda ninguna foto.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "web": {
       "bundler": "metro",

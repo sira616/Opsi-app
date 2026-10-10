@@ -78,7 +78,7 @@ Todo lo que implica **un secreto o una fuente externa** pasa por el servidor.
 
 | Función | Fase | Qué hace | Por qué no en el cliente |
 |---|:--:|---|---|
-| `lookup-barcode` | 2 | Busca en caché; si no está, consulta Open Food Facts y guarda el producto | La caché compartida evita repetir la llamada externa por cada usuario |
+| `lookup-barcode` | 2 | Busca en caché; si no está, consulta Open Food Facts, **filtra** la ficha y la guarda con `upsert_global_product()` | La caché compartida evita repetir la llamada externa por cada usuario; OFF lo edita cualquiera, y lo que se guarda lo ven todas las personas; los límites y la clave de servicio no pueden vivir en un móvil. Ver [D-32 a D-34](internal/BITACORA.md) y el [modelo de amenazas](threat-model.md) |
 | `daily-digest` | 3 | Programada con `pg_cron`; calcula el resumen y envía el push | Tiene que ocurrir aunque la app esté cerrada |
 | `opsi-chat` | 5 | Instrucciones de sistema, bucle de *tool use* y ejecución de herramientas | La clave de la API de Claude no puede salir del servidor |
 | `parse-receipt` | 6 | Claude con visión extrae las líneas del ticket | Ídem, y el modelo cambia sin tocar la app |

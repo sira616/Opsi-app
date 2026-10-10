@@ -58,43 +58,53 @@ Las seis acciones (abrir, usar, congelar, descongelar, terminar, tirar) por RPC.
 | **D**oS | Inundar a alguien de invitaciones | 5 por hora y por persona; una pendiente por nevera y destinatario; caducan a los 7 días | `household_sharing_test.sql` |
 | **E**levation | Echar, traspasar, renombrar o invitar sin ser el dueño; invitar a una nevera **privada** | `require_owner_household()` en el servidor; las privadas devuelven `nevera_personal` | `household_sharing_test.sql` |
 
-## 4 · `lookup-barcode` (fase 2) — *todavía no existe*
+## 4 · `lookup-barcode` (fase 2) — *código y tests hechos; sin desplegar*
 
-Se escribe aquí **antes** que el código, como pide la lista (§22). Es la primera Edge
+Se escribió aquí **antes** que el código, como pide la lista (§22). Es la primera Edge
 Function: lleva la clave de servicio y llama a un tercero (Open Food Facts), así que es
-donde más fácil es meter una deuda de seguridad que luego no se paga.
+donde más fácil es meter una deuda de seguridad que luego no se paga. La columna «Dónde se
+prueba» dice qué fichero lo comprueba; las filas que dicen *no probado* son lo que falta.
 
-**Flujo:** app → Edge Function (con el JWT de la persona) → caché global en `products` →
-si falta, Open Food Facts → normalizar → guardar con `service_role` → devolver.
+**Flujo:** app → producto privado de la nevera (lectura normal, sin cuota) → Edge Function
+(con el JWT de la persona) → caché global en `products` → si falta, Open Food Facts →
+normalizar → guardar con `upsert_global_product()` → devolver.
 
-| STRIDE | Amenaza concreta | Mitigación | Test |
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
 |---|---|---|---|
-| **S**poofing | Llamar a la función sin ser nadie: `verify_jwt` solo comprueba que el JWT sea válido, y la `anon key` **es** un JWT válido | Dentro de la función: `auth.getUser(token)` y exigir `role === 'authenticated'` | pendiente (con la función) |
-| **T**ampering (SSRF) | El código de barras se usa para construir la URL de OFF | Host y ruta fijos en el código; el código solo si `^[0-9]{8,14}$` **y** con dígito de control GS1 válido; `redirect: 'error'`; nunca se acepta URL, host ni ruta del cliente | pendiente |
-| **T**ampering | La caché se **envenena**: OFF lo edita cualquiera, y lo que se guarda lo ven todas las personas (y en la fase 5, el modelo) | Se guarda solo un subconjunto de campos, sin saltos de línea ni caracteres de control, bidireccionales o de ancho cero; longitudes máximas; `image_url` solo del dominio de imágenes de OFF; caducidad de la caché | pendiente |
-| **T**ampering | Dos filas para el mismo código por ceros a la izquierda (`0012345678905` y `12345678905`) | Normalizar todo a GTIN-13 antes de buscar y de guardar | pendiente |
-| **R**epudiation | No saber quién consultó qué | Log con `request_id` y `user_id`; sin cuerpo de la respuesta ni JWT | pendiente |
-| **I**nfo disclosure | Un error de OFF o una excepción llega a la app con detalle interno | Error genérico con código propio; el detalle solo en el log | pendiente |
+| **S**poofing | Llamar a la función sin ser nadie: `verify_jwt` solo comprueba que el JWT sea válido, y la `anon key` **es** un JWT válido | Dentro de la función: `auth.getUser(token)` y exigir `role === 'authenticated'` y que no sea una sesión anónima (esto último, sin test: el proyecto no activa el acceso anónimo) | `lookup.test.ts` (sin cabecera, cabecera mal formada, JWT que no es de persona: no se llama a nadie) y `npm run fn:check` (con el gateway real: sin token, `anon key` y token manipulado dan 401) |
+| **T**ampering (SSRF) | El código de barras se usa para construir la URL de OFF | Host y ruta fijos en el código; el código solo si son 8, 12, 13 o 14 cifras **y** con dígito de control GS1 válido; `consultarOff` vuelve a exigir solo cifras antes de poner nada en una URL; `redirect: 'error'`; del cliente solo se lee `barcode`: nunca URL, host ni ruta | `gtin.test.ts`, `off.test.ts` (rutas tipo `../../etc/passwd`, `?x=1`, `#`: no se llama a `fetch`; host, método, `redirect`), `lookup.test.ts` (`url`, `host`, `path` en el cuerpo se ignoran), `fn:check` |
+| **T**ampering | La caché se **envenena**: OFF lo edita cualquiera, y lo que se guarda lo ven todas las personas (y en la fase 5, el modelo) | **Dos filtros de dos lenguajes.** El de la función se queda con un subconjunto de campos: texto sin saltos de línea ni caracteres de control, de formato, bidireccionales o de ancho cero, sin `<` `>`, con tope de longitud; `image_url` solo de `images.openfoodfacts.org` por https y sin puerto ni credenciales; categorías con el formato exacto de OFF. El de la base de datos (`upsert_global_product`) lo **revalida** todo: si la función tuviera un fallo, rechaza igualmente. `service_role` no puede escribir `products` directamente | `off.test.ts` (una ficha envenenada sale limpia), `escaner_test.sql` (22 casos rechazados en SQL y comprobación de que no entró nada) |
+| **T**ampering | Una nevera compartida pone en un producto **privado** la URL de su servidor como imagen y se entera de cuándo y desde qué IP lo abre cada compañera | `products_image_url_ck`: la imagen de **cualquier** producto, privado o global, solo puede ser de `images.openfoodfacts.org` | `escaner_test.sql` |
+| **T**ampering | Enlazar un elemento a un producto privado de **otra** nevera conociendo su uuid | `create_item` exige que el producto sea global o de la misma nevera, con el mismo mensaje para «no existe» y «no es tuyo» | `escaner_test.sql` |
+| **T**ampering | Dos filas para el mismo producto por escribir el código distinto (el UPC-A de 12 cifras y su EAN-13 con un cero delante son el mismo artículo) | Normalizar antes de buscar y de guardar: 12 cifras → se antepone `0`; 14 cifras con `0` delante → se quita; un GTIN-14 con otro indicador es otro artículo (una caja) y se deja; la normalización **nunca arregla** un código (ni rellena por la izquierda ni corrige el control) | `gtin.test.ts`, `lookup.test.ts` (los tres escriben el mismo código) |
+| **R**epudiation | No saber quién consultó qué | Un registro por petición con `request_id`, `user_id`, resultado, estado y milisegundos; **sin** token, cuerpo ni código de barras (el código dice qué compra la persona) | `lookup.test.ts`; visto en el log del runtime real |
+| **I**nfo disclosure | Un error de OFF o una excepción llega a la app con detalle interno | Código de error propio y mensaje en español sin detalle; el motivo (`http_429`, el mensaje de la base de datos…) va solo al log | `lookup.test.ts` |
 | **I**nfo disclosure | OFF ve de dónde vienen las consultas | La llamada sale **del servidor**: OFF ve la IP de Supabase, no la de la persona. No se mueve al móvil | n/a (decisión de diseño) |
-| **D**oS | Un usuario consulta en bucle; o OFF nos limita y el escáner entero deja de funcionar | Contador atómico por usuario (≈30/min, 500/día); tope global hacia OFF (≈10/min); timeout de 4 s; cuerpo máximo de 256 KB; **caché de faltas** con caducidad de horas; si falla, se degrada a alta manual con el código ya relleno | pendiente |
-| **E**levation | Escribir el catálogo global desde el cliente | Imposible por diseño: `is_household_member(NULL)` es falso, así que ninguna política de escritura admite filas globales. Solo `service_role`, con permisos únicamente sobre `products` | `privilegios_test.sql` |
-| **E**levation | El contenido de OFF (nombres, marcas) se interpreta como instrucción cuando llegue al chat | Nunca se interpola en un prompt: se pasa como datos, recortado y sin saltos de línea (ver LLM01 en la lista de seguridad) | pendiente (fase 5) |
+| **D**oS | Un usuario consulta en bucle | `consume_lookup_quota()`: 30 por minuto y 500 por día **por persona**, con un solo `insert … on conflict do update` (atómico). Cuenta aunque se resuelva desde la caché. Una lectura sucia (código inválido) no gasta cuota | `escaner_test.sql`, `lookup.test.ts` (orden: nada se cuenta antes de validar), `npm run db:carreras` (**dos sesiones a la vez**: 40 consultas dan exactamente 30 permitidas y el contador marca 40) |
+| **D**oS | OFF nos limita y el escáner entero deja de funcionar | `consume_off_slot()`: 10 por minuto entre **todas** las personas (por debajo del límite que recoge `PENDIENTES.md`, unas 15 por IP); timeout de 4 s; cuerpo máximo de 256 KB leído en flujo; **caché de faltas** de 6 horas; ficha caducada (30 días) sigue sirviéndose si OFF falla; si no hay respuesta, la app degrada al alta a mano con el código ya puesto | `escaner_test.sql`, `off.test.ts` (tiempo agotado, respuesta enorme con y sin `content-length`), `lookup.test.ts` |
+| **D**oS | Sin `OFF_USER_AGENT` (o con el valor de ejemplo) la función llamaría a OFF de forma anónima | No llama: sigue sirviendo la caché y degrada lo demás | `lookup.test.ts` |
+| **E**levation | Escribir el catálogo global desde el cliente | Imposible por diseño: `is_household_member(NULL)` es falso, así que ninguna política de escritura admite filas globales. `service_role` solo **lee** `products` y **ejecuta** cinco funciones; ni `anon` ni `authenticated` ejecutan ninguna | `privilegios_test.sql`, `escaner_test.sql` |
+| **E**levation | El contenido de OFF (nombres, marcas) se interpreta como instrucción cuando llegue al chat | Nunca se interpola en un prompt: se pasa como datos, recortado y sin saltos de línea. Los filtros de arriba ya quitan lo que sirve para esconder una instrucción (saltos de línea, caracteres de control y direccionales), pero **el encapsulado en el prompt se hace en la fase 5** | no probado (fase 5) |
 
 ### Ficha del endpoint
 
 - **Nombre:** `lookup-barcode`
 - **Tipo:** Edge Function (Deno)
-- **Método y ruta:** `POST /functions/v1/lookup-barcode`, cuerpo `{ "barcode": "<8–14 dígitos>" }`, máximo 1 KB
+- **Método y ruta:** `POST /functions/v1/lookup-barcode`, cuerpo `{ "barcode": "<8–14 cifras>" }`, máximo 1 KB (también `OPTIONS`, para el preflight de la versión web)
 - **Autenticación:** JWT de una persona con sesión, **verificado dentro de la función**
-- **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función
-- **Entrada validada:** solo dígitos, 8 a 14, dígito de control GS1 correcto
-- **Salida:** `{ name, brand, quantity, unit_family, image_url, source: 'openfoodfacts' }`, nunca el `off_payload` completo
-- **Límites:** ≈30/min y 500/día por persona; ≈10/min globales hacia OFF; timeout 4 s
+- **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función, y solo por `upsert_global_product`
+- **Entrada validada:** solo cifras, 8, 12, 13 o 14 de ellas, dígito de control GS1 correcto, y no una cadena de ceros
+- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, source: "openfoodfacts" } }` o `{ "found": false, "barcode": "…" }`. Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
+- **Límites:** 30/min y 500/día por persona; 10/min globales hacia OFF; timeout 4 s; respuesta de OFF ≤ 256 KB
 - **Riesgos:** SSRF, envenenamiento de la caché, abuso de cuota, filtrado de errores, entrada no confiable hacia el modelo
 - **Controles en servidor:** los de la tabla de arriba
-- **Secretos:** `OFF_USER_AGENT` (con un contacto real) en el entorno de la función. La clave de servicio nunca sale de ahí
-- **Tests automatizados:** pendientes; se escriben con la función
-- **Estado:** `[x] diseño`  `[ ] código`  `[ ] tests`  `[x] inventario`  `[ ] prod`
+- **Secretos:** `OFF_USER_AGENT` (nombre de la app y un contacto **real**; el valor de ejemplo se rechaza) en el entorno de la función. La clave de servicio la inyecta Supabase y no sale de ahí
+- **Tests automatizados:** `npm run test:funciones` (58, sin Deno ni red), `npm run db:test` (`escaner_test.sql`, 60), `npm run db:carreras` y `npm run fn:check` (19, en el runtime de Edge Functions de verdad)
+- **Estado:** `[x] diseño`  `[x] código`  `[x] tests`  `[x] inventario`  `[ ] prod`
+
+**Lo que no está probado:** la cámara en un móvil real; la llamada a OFF desde el runtime con la
+configuración de producción (sí en local, con `supabase functions serve`); y cómo se porta OFF
+con el tráfico de más de una persona.
 
 ---
 

@@ -23,7 +23,21 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "category_shelf_life_reference": {
+            "barcode_misses": {
+                  Row: {
+                    "barcode": string,"missed_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "barcode": string,"missed_at"?: string
+                  }
+                  Update: {
+                    "barcode"?: string,"missed_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"category_shelf_life_reference": {
                   Row: {
                     "category": Database["public"]['Enums']["food_category"],"days": number,"note": string,"recommended_location": Database["public"]['Enums']["storage_location"],"source": string,"updated_at": string
                   }
@@ -183,6 +197,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"lookup_usage": {
+                  Row: {
+                    "clave": string,"n": number,"ventana": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "clave": string,"n"?: number,"ventana": string
+                  }
+                  Update: {
+                    "clave"?: string,"n"?: number,"ventana"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"open_shelf_life_reference": {
                   Row: {
                     "category_tag": string,"days": number,"note": string | null,"source": string,"updated_at": string
@@ -307,6 +335,14 @@ isOneToOne: false
                            },
 "check_household_name":
 { Args: { "p_name": string }; Returns: string
+                           },
+"consume_lookup_quota":
+{ Args: { "p_user_id": string }; Returns: {
+              "permitido": boolean,"reintentar_en": number
+            }[]
+                           },
+"consume_off_slot":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "create_item":
 { Args: { "p_category"?: Database["public"]['Enums']["food_category"],"p_date_kind"?: Database["public"]['Enums']["date_kind"],"p_date_source"?: Database["public"]['Enums']["date_source"],"p_display_unit": Database["public"]['Enums']["measurement_unit"],"p_household_id": string,"p_limit_date"?: string,"p_location"?: Database["public"]['Enums']["storage_location"],"p_name": string,"p_notes"?: string,"p_product_id"?: string,"p_quantity": number,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
@@ -479,6 +515,9 @@ isOneToOne: false
 "is_household_member":
 { Args: { "p_household_id": string }; Returns: boolean
                            },
+"is_recent_barcode_miss":
+{ Args: { "p_barcode": string }; Returns: boolean
+                           },
 "leave_household":
 { Args: { "p_household_id": string }; Returns: undefined
                            },
@@ -530,6 +569,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"record_barcode_miss":
+{ Args: { "p_barcode": string }; Returns: undefined
+                           },
 "record_inventory_event":
 { Args: { "p_item": Omit<Database["public"]['Tables']["inventory_items"]['Row'], Database["public"]['Tables']["inventory_items"]['ComputedFields']>,"p_payload"?: Json,"p_quantity_used"?: number,"p_type": Database["public"]['Enums']["inventory_event_type"] }; Returns: undefined
                            },
@@ -633,6 +675,29 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "households"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"upsert_global_product":
+{ Args: { "p_barcode": string,"p_brand": string,"p_categories_tags": (string)[],"p_image_url": string,"p_name": string,"p_net_quantity": number,"p_payload": Json,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
+              "barcode": string | null,
+"brand": string | null,
+"categories_tags": (string)[] | null,
+"created_at": string,
+"data_source": string,
+"household_id": string | null,
+"id": string,
+"image_url": string | null,
+"name": string,
+"net_quantity": number | null,
+"off_payload": Json | null,
+"open_shelf_life_days": number | null,
+"unit_family": Database["public"]['Enums']["unit_family"] | null,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "products"
         isOneToOne: true
         isSetofReturn: false
       } },

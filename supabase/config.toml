@@ -411,6 +411,14 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# ── lookup-barcode (fase 2) ─────────────────────────────────────────────────
+# El gateway rechaza lo que no lleve un JWT válido, pero la `anon key` TAMBIÉN es
+# un JWT válido y va en cada binario: por eso la función comprueba además, dentro,
+# que el token es de una persona (docs/threat-model.md §4, Spoofing).
+[functions.lookup-barcode]
+enabled = true
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

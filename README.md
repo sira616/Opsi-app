@@ -13,10 +13,11 @@ Gestión de alimentos del hogar con una asistente conversacional integrada.
 ---
 
 > [!NOTE]
-> **Fase 1 completa.** Ya hay una app que se puede usar en desarrollo: entrar, guardar comida,
-> ver qué gastar primero y varias neveras (la tuya y las que compartas). Faltan el escáner,
-> los avisos, la lista de la compra y el chat, y todavía no está publicada. Ver
-> [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
+> **Fases 1 y 2 hechas en local.** Ya hay una app que se puede usar en desarrollo: entrar, guardar
+> comida, ver qué gastar primero, varias neveras (la tuya y las que compartas) y **escanear el código de
+> barras** de lo que compras. El escáner está probado de punta a punta salvo la cámara, que **todavía
+> no se ha probado en un móvil**. Faltan los avisos, la lista de la compra y el chat, y todavía no está
+> publicada. Ver [Estado](#estado) y [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Índice
 
@@ -163,7 +164,7 @@ Ocho piezas, todas colgando de `household_id`:
 |:--:|---|---|
 | **0** · Base | Repos, Expo + Router, Supabase + CLI, esquema, RLS, login, CI | Dos cuentas no pueden verse los datos |
 | **1** · Inventario | Alta manual, acciones, eventos, vista de prioridad, «Consumir primero» | Abrir la leche cambia estado, fecha y posición, y deja evento |
-| **2** · Escáner | Cámara EAN/UPC, `lookup-barcode`, confirmación precargada, fallback manual | Producto conocido al inventario en dos toques |
+| **2** · Escáner ✅ | Cámara EAN/UPC, `lookup-barcode`, confirmación precargada, fallback manual | Producto conocido al inventario en dos toques *(hecho en local; la cámara sin probar en un móvil)* |
 | **3** · Avisos | Token push, `daily-digest` con pg_cron, ajustes de hora | Un solo aviso al día; ninguno si no hay urgencias |
 | **4** · Lista | CRUD, «¿lo añado?» al agotar, marcar comprado → inventario | Terminar los huevos ofrece añadirlos; comprarlos los devuelve al inventario |
 | **5** · Chat | `opsi-chat`, herramientas con RLS, recetas, límites de uso | «¿Qué ceno?» responde con lo que hay; «he terminado el bacon» lo marca |
@@ -202,10 +203,10 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 
 ## Estado
 
-**Fase 0 y fase 1 · completas.** Lo que hay hoy, y lo que se ha probado de verdad:
+**Fases 0, 1 y 2 · hechas.** Lo que hay hoy, y lo que se ha probado de verdad:
 
 - [x] Monorepo con `app/` y `supabase/`, con la CLI de Supabase fijada
-- [x] Esquema con **24 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
+- [x] Esquema con **27 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
 - [x] Alta y login por usuario y contraseña; el alta solo admite usuarios de Opsi
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
 - [x] Vista `inventory_with_priority` con la fecha límite efectiva, contada desde el día del usuario
@@ -214,11 +215,15 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] Ajustes por secciones, con la voz de Opsi ([`docs/VOZ.md`](docs/VOZ.md))
 - [x] Auditoría de seguridad y una primera pasada de arreglos ([`docs/internal/AUDITORIA-2026-09-24.md`](docs/internal/AUDITORIA-2026-09-24.md))
 - [x] CI en verde, con escáner de secretos y puerta de dependencias
-- [ ] Development build con EAS (hace falta para el escáner, los avisos y el almacén cifrado de la sesión)
+- [x] **Escáner de códigos de barras**: pantalla con cámara (EAN-13, EAN-8, UPC-A) y entrada a mano, función `lookup-barcode` que consulta Open Food Facts **solo desde el servidor**, filtra la ficha y la guarda en una caché global; un producto que nadie conoce se recuerda en la nevera. Con límites por persona, caché de faltas y un modelo de amenazas con sus tests ([`docs/threat-model.md`](docs/threat-model.md))
+- [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
+- [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 243 tests pgTAP (8 ficheros) contra Supabase local, y 414 comprobaciones, más 8 de carreras entre dos personas (`npm run db:carreras`) con
-`npm run db:check`, que corre sin Docker. La app, en el navegador con dos cuentas. **Sin
-probar todavía en un móvil.**
+**Probado:** 303 tests pgTAP (9 ficheros) contra Supabase local; 478 comprobaciones sin Docker
+(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 58 tests de la
+lógica de la función de búsqueda (`npm run test:funciones`) y 19 contra el runtime de Edge Functions de
+verdad (`npm run fn:check`). La función, además, **contra Open Food Facts de verdad**. La app, en el
+navegador con dos cuentas. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.
 
 ```bash
 npm install && npm run up && npm run app:web

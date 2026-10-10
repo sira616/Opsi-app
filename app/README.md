@@ -57,16 +57,17 @@ npm run app        # QR para Expo Go en el móvil
 > Desde un **dispositivo físico**, `127.0.0.1` es el propio móvil. Hay que poner la IP de
 > tu ordenador en la red local en `EXPO_PUBLIC_SUPABASE_URL`.
 
-Para el escáner (fase 2) y las notificaciones (fase 3) hará falta una *development
-build*. Cómo generarla, y qué cuesta cada plataforma, en
+Para las notificaciones (fase 3) hará falta una *development build*; el escáner (fase 2) no. Cómo generarla, y qué cuesta cada plataforma, en
 [`../docs/NATIVA.md`](../docs/NATIVA.md).
 
 Qué hace falta para cada cosa, **comprobado el 2026-10-10** contra la lista de módulos que trae
 Expo Go para este SDK (`node_modules/expo/bundledNativeModules.json`):
 
-- **El escáner** (`expo-camera`): el módulo **viene incluido en Expo Go**, así que se puede
-  prototipar sin *development build*. Lo que no he hecho es escanear un código de verdad en un
-  móvil: está comprobado que el módulo está, no que el escáner funcione allí.
+- **El escáner** (`expo-camera`): el módulo **viene incluido en Expo Go**, así que no hace falta
+  *development build*. La pantalla (`escanear`) y el alta están hechas y probadas en el navegador con la
+  entrada a mano. Lo que no he hecho es escanear un código con la **cámara** de un móvil: está
+  comprobado que el módulo está, no que el escáner funcione allí. Sin cámara (en el navegador, o si no
+  das el permiso) se escribe el código.
 - **Las notificaciones push** y el **almacén cifrado de la sesión** para una build real: sí piden
   *development build*. Que `expo-notifications` venga en Expo Go no significa que las push
   remotas funcionen en él (sin verificar).

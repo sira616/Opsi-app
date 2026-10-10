@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-10** (sesión 25)
+> Última actualización: **2026-10-10** (sesión 26)
 
 ---
 
@@ -31,6 +31,12 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
+**2026-10-10 (sesión 26)** — **La fase 2 (el escáner) está implementada y verificada en local**,
+salvo lo que toca la cámara de un móvil real, que **no se ha probado**: la función `lookup-barcode`
+(con Open Food Facts de verdad), la pantalla de escanear con entrada a mano y el alta que se rellena
+con la ficha. Ver [D-32 a D-34](#d-32--el-escáner-open-food-facts-solo-desde-el-servidor-y-service_role-sin-escrituras-directas--2026-10-10)
+y la [sesión 26](#2026-10-10-sesión-26--el-escáner-fase-2).
+
 **2026-09-25 (sesión 23)** — **La fase 1 está completa y ampliada**: inventario, acciones,
 «Consumir primero», alta manual, detalle con conservación tras abrir, y ahora **neveras**
 ([D-21](#d-21--neveras-una-privada-por-persona-y-las-compartidas-que-quiera--2026-09-25)): una
@@ -41,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **26 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **27 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **8 ficheros pgTAP, 243 tests**, contra pgTAP real · `db:check`: **414 comprobaciones** en PGlite · `db:carreras`: 8, con dos sesiones a la vez |
+| Tests | **9 ficheros pgTAP, 303 tests** contra pgTAP real · `db:check`: **478 comprobaciones** en PGlite · `db:carreras`: 11, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -644,6 +650,79 @@ Activado a la vez, todo comprobado leyéndolo de vuelta desde GitHub: aviso priv
 vulnerabilidades (`SECURITY.md` ya lo daba como vía y no llevaba a ningún sitio), escaneo de
 secretos y protección de pushes (rechaza un push que contenga una clave reconocible), y alertas y
 actualizaciones de seguridad de Dependabot.
+
+### D-32 · El escáner: Open Food Facts solo desde el servidor, y `service_role` sin escrituras directas · 2026-10-10
+
+La app no llama nunca a Open Food Facts (OFF). Llama a la Edge Function `lookup-barcode`, que
+mira primero la caché global (`products`), y solo si falta pregunta a OFF, filtra la respuesta y la
+guarda. Es la decisión **D-08** (`service_role` solo en el servidor) llevada a código, con tres
+cambios sobre lo previsto:
+
+- **`service_role` ya no puede escribir en `products`.** [D-27](#d-27--service_role-solo-con-lo-que-usa--2026-10-08)
+  le dejaba `SELECT`, `INSERT` y `UPDATE`. Ahora solo `SELECT`, y **ejecuta cinco funciones**
+  (`consume_lookup_quota`, `consume_off_slot`, `is_recent_barcode_miss`, `record_barcode_miss`,
+  `upsert_global_product`). La última es la **única vía de escritura** al catálogo global y
+  **revalida** todo lo que la función ya había filtrado. Razón: la clave salta la RLS, y con
+  `INSERT` directo un fallo de la función (o de una dependencia suya) escribiría lo que quisiera
+  en un catálogo que ve todo el mundo. Dos filtros en dos lenguajes no fallan por la misma razón.
+- **`off_payload` ya no es la respuesta cruda.** El comentario de la tabla decía que se guardaba
+  entera «para reprocesar»; el modelo de amenazas decía «solo un subconjunto». Manda la segunda:
+  se guarda lo ya filtrado. Reprocesar se paga con una llamada más a OFF.
+- **Los límites son una función de la base de datos, no un servicio.** 30 por minuto y 500 por día
+  por persona, y 10 por minuto hacia OFF entre todas. Un `insert … on conflict do update` es
+  atómico y ya está ahí; `npm run db:carreras` lo demuestra con dos sesiones a la vez.
+
+**Descartado:** llamar a OFF desde el móvil (OFF vería la IP de cada persona, no habría un solo
+sitio donde limitar y filtrar, y el filtro viviría en un binario que cualquiera puede modificar);
+un limitador externo tipo Redis (otra pieza que montar y vigilar para lo que hace una fila);
+guardar la respuesta cruda (superficie de envenenamiento y de datos que no se usan).
+
+**Coste asumido:** las constantes (120 caracteres de nombre, 80 de marca, 40 categorías, el
+dominio de las imágenes) están en dos sitios, TypeScript y SQL. Si cambia una, hay que cambiar la
+otra o la función empieza a fallar con 22023. Los tests de las dos lo señalan.
+
+### D-33 · Un producto que nadie conoce se recuerda en la nevera, no en el catálogo global · 2026-10-10
+
+Cuando OFF no conoce un código, el alta sigue a mano con el código ya puesto, y **al guardar se
+crea un producto privado de esa nevera** (código y nombre; la cantidad no, porque lo que se pone al
+dar de alta es cuánto se compra y no cuánto trae cada envase). La próxima vez que se escanee, la
+app lo encuentra **antes** de llamar a la función: una lectura normal, sin gastar cuota.
+
+El catálogo global solo lo escribe `lookup-barcode` desde OFF. Si lo pudieran escribir las personas,
+cualquiera podría envenenar la ficha de un producto para todas las demás.
+
+Tres cierres que salen de que ahora el producto se enlaza de verdad (hasta aquí ningún cliente
+mandaba `p_product_id`, así que nadie había mirado qué pasaba):
+
+- `create_item` exige que el producto sea **global o de la misma nevera**. La clave foránea solo
+  comprobaba que existiera: con el uuid de un producto privado ajeno se podía enlazar un elemento.
+- `products_image_url_ck`: la imagen de **cualquier** producto solo puede ser de
+  `images.openfoodfacts.org`. La ficha del elemento pinta `image_url` tal cual; sin esto, quien
+  comparta una nevera podría poner la URL de su servidor y enterarse de cuándo y desde qué IP la
+  abre cada compañera.
+- El producto privado no guarda la imagen que escribió nadie: no hay forma de subir una.
+
+**Coste:** cada nevera teclea una vez cada producto que OFF no tiene; no se comparten entre
+neveras. Es el precio de no confiar en lo que escribe una persona para todas las demás.
+
+### D-34 · Códigos de barras: GTIN con control válido, normalizado, en dos copias y sin lector en la web · 2026-10-10
+
+- **Qué se acepta:** 8, 12, 13 o 14 cifras con el dígito de control GS1 correcto, y no una cadena de
+  ceros (que cuadra el control y es lo que sale de una lectura vacía). Un código de 9, 10 u 11 cifras
+  no existe y no se «arregla» rellenando.
+- **Normalización:** 12 cifras → se antepone `0`; 14 con `0` delante → se quita; un GTIN-14 con otro
+  indicador es una caja, otro artículo, y se deja. Así el UPC-A de un envase importado y su EAN-13 son
+  la misma fila de la caché. (El modelo de amenazas ponía como ejemplo `12345678905`, de 11 cifras,
+  que ni es un código: el caso real es el de 12.)
+- **Dos copias** del mismo fichero (`supabase/functions/_shared/gtin.ts` y `app/src/shared/lib/gtin.ts`),
+  porque Metro no sigue rutas fuera de `app/`, Deno no entiende los alias de la app y los enlaces
+  simbólicos no valen en Windows. `npm run check:gtin` falla en la CI si se separan.
+- **Formatos que lee la cámara:** EAN-13, EAN-8 y UPC-A. Quedan fuera UPC-E (hay que expandirlo a 12
+  cifras) e ITF-14 (las cajas, no la unidad).
+- **En la versión web no hay lector**, solo entrada a mano. Según la documentación de la librería
+  que `expo-camera` usa en la web, descarga un módulo WASM de un CDN en ejecución (no lo he
+  comprobado aquí) y eso es código que no controlamos corriendo en la página. La entrada a mano
+  existe en todas las plataformas: es también la vía de quien no da permiso a la cámara.
 
 ## 3. Convenciones
 
@@ -1542,3 +1621,59 @@ que el módulo está; no que el escáner funcione en un móvil.)
 **Se aprendió:** (1) Git Bash convierte `rama:.fichero` en una lista de rutas y el `cat-file` falla:
 usar `git ls-tree`. (2) Una afirmación de un documento («el repo es privado») que lleva tres semanas
 equivocada es peor que no afirmar nada: se comprueba con la API, no se supone.
+
+### 2026-10-10 (sesión 26) · El escáner (fase 2)
+
+**Cómo fue.** Se pidió arreglar la PR que no se podía fusionar y seguir hasta tener el escáner
+implementado. La PR era la **#4 de Dependabot** (CLI de Supabase 2.117 → 2.120): fallaba un solo paso,
+«Los tipos generados siguen al día», porque la 2.120 deja de formatear el TypeScript y añade
+`ComputedFields: never`. No era un fallo de la subida sino del fichero generado: se regeneró con la
+2.120 en la propia rama de Dependabot, pasó la CI y se fusionó. La #6 (licencia y documentos) se
+fusionó antes, y de paso se borró el último artefacto de gitleaks que el flujo viejo había vuelto a crear.
+
+**Hecho** ([D-32](#d-32--el-escáner-open-food-facts-solo-desde-el-servidor-y-service_role-sin-escrituras-directas--2026-10-10),
+[D-33](#d-33--un-producto-que-nadie-conoce-se-recuerda-en-la-nevera-no-en-el-catálogo-global--2026-10-10),
+[D-34](#d-34--códigos-de-barras-gtin-con-control-válido-normalizado-en-dos-copias-y-sin-lector-en-la-web--2026-10-10)):
+
+- Migración `20261010100000_escaner`: dos tablas cerradas (`lookup_usage`, `barcode_misses`), cinco
+  funciones solo para `service_role`, la restricción de imagen y el cierre de `create_item`.
+- Edge Function `lookup-barcode`, partida en lo que habla con el mundo (`index.ts`) y lo que decide
+  (`_shared/lookup.ts`, `off.ts`, `gtin.ts`), que no sabe nada de Deno y se prueba con `node --test`.
+- App: pantalla `escanear` (cámara con `expo-camera` y entrada a mano), el alta se rellena con la ficha
+  y enlaza el producto, y un producto desconocido se recuerda en la nevera.
+- CI: dos pasos nuevos en el trabajo sin Docker (`check:gtin`, `test:funciones`), `fn:check` en el de
+  Supabase real y un caso nuevo en `db:carreras`.
+
+**Verificado aquí, y con qué:**
+
+| Qué | Cómo | Resultado |
+|---|---|---|
+| Lógica de la función | `npm run test:funciones`, sin Deno ni red | **58 tests** |
+| Base de datos real | `npm run db:test` contra Supabase local | **303 tests** en 9 ficheros (60 nuevos) |
+| El mismo esquema sin Docker | `npm run db:check` en PGlite | **478 comprobaciones** |
+| Cuota con dos sesiones solapadas | `npm run db:carreras` | **11**: 20 + 20 consultas dan exactamente 30 permitidas |
+| La función en el runtime de Edge Functions de verdad | `npm run fn:check` | **19**: sin token, `anon key` y token manipulado dan 401; códigos inválidos 400; caché; 429 con `Retry-After` |
+| Open Food Facts de verdad | El parser contra la API (3 productos: uno existe, otro con litros, uno que da 404) y una llamada **de extremo a extremo** por la función con `OFF_USER_AGENT` puesto | Se guarda, la segunda vez sale de la caché; un código desconocido se anota como falta y la segunda vez ni se pregunta |
+| La app | `typecheck` y `lint` limpios; **en el navegador**: escribir un código del catálogo → alta rellena con nombre y cantidad → guardar → el elemento queda enlazado al producto; un código desconocido → alta con aviso → al guardar se crea el producto privado → al escanearlo otra vez lo reconoce la nevera | Funciona |
+
+**Sin verificar, y es lo importante:** **nada de lo que toca la cámara**. `expo-camera` viene en Expo Go
+(comprobado que el módulo está), pero no se ha leído un código con un móvil. Tampoco: cómo se comporta
+OFF con más de una persona, ni la llamada a OFF con la configuración de producción (no hay despliegue),
+ni la rama `is_anonymous` de la verificación de la sesión (no se activa el acceso anónimo).
+
+**Se aprendió:**
+
+1. **Una función en `FROM` con argumentos que no dependen de la fila se ejecuta una vez** y su
+   resultado se repite. El primer test de la cuota llamaba treinta veces y contaba una: pasaba «30
+   permitidas» y fallaba «la 31 no». La llamada va en la lista de columnas.
+2. **Los códigos del seed son EAN-13 válidos**, y mis tests de la función usaban los mismos: en la base
+   real el catálogo ya los tenía y «no ha entrado nada» daba 2. Los tests de escritura usan códigos
+   fuera del seed.
+3. **Docker se quedó colgado** mientras corría un `db reset` con la pila entera y 0,4 GB de RAM libres:
+   el motor dejó de responder y hubo que reiniciar Docker Desktop. Para probar la función basta
+   `supabase start -x studio,imgproxy,realtime,storage-api,mailpit,postgres-meta,logflare,vector,supavisor`.
+4. **Los tipos de rutas de Expo Router (`typedRoutes`) se generan en local** (`app/.expo/types`, ignorado
+   por git) y la CI no los tiene: una ruta nueva no tipa en local hasta que arranca el servidor de
+   desarrollo, y en la CI no se nota. Se comprobó el `typecheck` sin ese fichero, como lo ve la CI.
+5. El `typecheck` pasa con `Href` como `string` sin los tipos generados: **no demuestra que una ruta
+   exista**. Eso solo se ve en el navegador.

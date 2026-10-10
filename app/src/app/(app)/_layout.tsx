@@ -79,6 +79,11 @@ function Puerta() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="alta" options={hoja} />
+      {/* La cámara necesita la pantalla entera: una hoja deja el visor a medias. */}
+      <Stack.Screen
+        name="escanear"
+        options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+      />
       <Stack.Screen name="elemento/[id]" options={hoja} />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
