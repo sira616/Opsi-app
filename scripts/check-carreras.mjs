@@ -101,6 +101,7 @@ async function limpiar() {
     delete from public.households
      where id in (select household_id from public.household_members where user_id = '${USUARIO}');
     delete from auth.users where id = '${USUARIO}';
+    delete from public.lookup_usage where clave like 'u:${USUARIO}:%';
   `);
 }
 
@@ -198,6 +199,40 @@ try {
   comprobar('quedan 400, no −200', estadoB.restante === 400, `quedan: ${estadoB.restante}`);
   const usos = await eventos(b, ['quantity_used']);
   comprobar('un solo uso en el historial', usos === 1, `usos registrados: ${usos}`);
+
+  // ── C · La cuota del escáner, gastada desde dos sesiones a la vez ─────────
+  // Treinta consultas por minuto. Si el contador se leyera y luego se escribiera,
+  // dos consultas simultáneas verían el mismo número y se colarían las dos; con
+  // el `insert … on conflict do update` la segunda espera a la primera.
+  console.log('\n  Dos sesiones gastan a la vez la cuota del minuto (30): 20 consultas cada una');
+  await psql(`delete from public.lookup_usage where clave like 'u:${USUARIO}:%';`);
+  // Las dos tienen que caer en el MISMO minuto: si el reloj está a punto de
+  // cambiar, se espera a que cambie.
+  const segundos = new Date().getSeconds();
+  if (segundos >= 45) await dormir((62 - segundos) * 1000);
+
+  const veinte =
+    `select count(*) filter (where (t.q).permitido) || '/' || count(*) ` +
+    `from (select public.consume_lookup_quota('${USUARIO}') as q from generate_series(1, 20)) as t;`;
+  const comoFuncion = (retener) =>
+    `begin; set local role service_role; ${veinte} ${retener ? `select pg_sleep(${RETENCION});` : ''} commit;`;
+
+  const primeraC = psql(comoFuncion(true));
+  await dormir(ESPERA_SEGUNDA_MS);
+  const segundaC = psql(comoFuncion(false));
+  const [resC1, resC2] = [await primeraC, await segundaC];
+
+  const permitidas = (r) => Number((r.salida.split('\n')[0] ?? '').split('/')[0]);
+  comprobar('la primera pasa sus 20', permitidas(resC1) === 20, `respuesta: ${resC1.error || resC1.salida}`);
+  comprobar(
+    'la segunda solo pasa 10: las otras 10 se pasan del cupo',
+    permitidas(resC2) === 10,
+    `respuesta: ${resC2.error || resC2.salida}`,
+  );
+  const contadas = await psql(
+    `select coalesce(sum(n), 0) from public.lookup_usage where clave = 'u:${USUARIO}:m';`,
+  );
+  comprobar('el contador del minuto marca 40: ninguna consulta se perdió', Number(contadas.salida) === 40, `marca: ${contadas.salida}`);
 } catch (error) {
   fallos.push('la comprobación terminó con un error');
   console.error(rojo(`\n${error.message}`));

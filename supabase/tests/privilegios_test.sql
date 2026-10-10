@@ -141,9 +141,10 @@ select ok(
 -- ══════════════════════════════════════════════════════════════════════════
 --
 -- Salta la RLS, así que lo único que la acota son sus permisos de tabla. Hoy solo
--- necesita el catálogo global de productos (lookup-barcode, fase 2). Cada función
--- nueva que necesite otra tabla lo pide por escrito en una migración, con el
--- permiso concreto: este test es lo que obliga a hacerlo a la vista.
+-- necesita LEER el catálogo global de productos (lookup-barcode, fase 2); todo lo
+-- demás lo hace ejecutando funciones concretas (ver `escaner_test.sql`). Cada
+-- función nueva que necesite otra tabla lo pide por escrito en una migración, con
+-- el permiso concreto: este test es lo que obliga a hacerlo a la vista.
 
 select is(
   (select count(*)
@@ -157,13 +158,17 @@ select is(
   'service_role no tiene ningún permiso sobre ninguna tabla salvo el catálogo de productos'
 );
 
+-- Solo LEER. Escribir el catálogo global lo hace `upsert_global_product`, que
+-- revalida nombre, marca, imagen y categorías (ver `escaner_test.sql`): con
+-- INSERT directo, un fallo de la Edge Function escribiría lo que quisiera en un
+-- catálogo que ve todo el mundo.
 select ok(
   has_table_privilege('service_role', 'public.products', 'SELECT')
-    and has_table_privilege('service_role', 'public.products', 'INSERT')
-    and has_table_privilege('service_role', 'public.products', 'UPDATE')
+    and not has_table_privilege('service_role', 'public.products', 'INSERT')
+    and not has_table_privilege('service_role', 'public.products', 'UPDATE')
     and not has_table_privilege('service_role', 'public.products', 'DELETE')
     and not has_table_privilege('service_role', 'public.products', 'TRUNCATE'),
-  'y sobre products puede leer, insertar y actualizar, pero no borrar ni vaciar'
+  'y sobre products solo puede leer: ni insertar, ni actualizar, ni borrar ni vaciar'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
