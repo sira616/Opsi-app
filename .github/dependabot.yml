@@ -35,6 +35,13 @@ updates:
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
       - dependency-name: typescript
+      # ESLint 10 rompe el lint de la app: `eslint-plugin-react`, que trae
+      # `eslint-config-expo`, todavía llama a una función que ESLint 10 quitó
+      # (`context.getFilename is not a function`). Lo demostró en rojo la primera PR
+      # que Dependabot abrió con esa subida. Se salta la versión mayor hasta que
+      # Expo suba su configuración; las menores y los parches siguen entrando.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
 
   # ── Las acciones de la CI ────────────────────────────────────────────────
   # Van pinadas a un SHA completo (un tag como `@v4` se puede mover y cambiar lo
