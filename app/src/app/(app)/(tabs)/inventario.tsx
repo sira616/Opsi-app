@@ -21,7 +21,7 @@ import {
 } from '@/shared/ui/FiltroInventario';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
-import { BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
+import { Barcode, BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
 import { tabBarClearance,makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
@@ -87,6 +87,15 @@ function Inventario({ nevera }: { nevera: Nevera }) {
           <View style={styles.pildoraHueco}>
             <PildoraNevera />
           </View>
+          <Link href="/escanear" asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Escanear un código de barras"
+              style={styles.escanear}
+            >
+              <Barcode size={22} color={c.brandInk} weight="bold" />
+            </Pressable>
+          </Link>
           <Link href="/alta" asChild>
             <Pressable accessibilityRole="button" accessibilityLabel="Añadir alimento" style={styles.add}>
               <Text style={styles.addIcon}>+</Text>
@@ -229,6 +238,16 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
   },
   addIcon: { color: c.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
+  // El gemelo del «+», en tono suave: escanear es la forma rápida de añadir y no
+  // debe pesar más que el botón principal.
+  escanear: {
+    width: touchTarget,
+    height: touchTarget,
+    borderRadius: radius.pill,
+    backgroundColor: c.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filtro: { marginTop: space.md },
   content: { paddingHorizontal: space.xl, paddingBottom: tabBarClearance, gap: space.lg },
   sinResultados: { gap: space.md, paddingVertical: space.xxl, alignItems: 'flex-start' },

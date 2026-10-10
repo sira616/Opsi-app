@@ -105,8 +105,8 @@ export type ItemDetail = PriorityItem & {
   date_from_label: string | null;
   date_from_opening: string | null;
   date_from_thaw: string | null;
-  /** El producto de catálogo, si lo tiene. Un alta a mano no lo tiene, y ese
-   *  es hoy el camino principal: null es lo normal, no una anomalía. */
+  /** El producto de catálogo, si lo tiene. Un alta a mano de algo sin código no
+   *  lo tiene: null es lo normal, no una anomalía. */
   product_id: string | null;
 };
 
@@ -330,6 +330,11 @@ export type NewItem = {
   dateKind: DateKind | null;
   dateSource: DateSource | null;
   category: Categoria;
+  /**
+   * El producto del catálogo al que se enlaza (el escaneado, o el privado que se
+   * acaba de crear). Null en un alta a mano de algo sin código.
+   */
+  productId?: string | null;
 };
 
 /**
@@ -354,6 +359,7 @@ export async function createItem(item: NewItem): Promise<void> {
       p_date_kind: item.dateKind,
       p_date_source: item.dateSource,
       p_category: item.category,
+      p_product_id: item.productId ?? null,
     });
 
   if (error) throw error;

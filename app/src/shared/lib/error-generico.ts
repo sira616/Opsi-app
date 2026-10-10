@@ -24,7 +24,10 @@ export const ERROR_GENERICO =
   'Algo ha fallado de nuestra parte. Prueba otra vez en un momento; si sigue igual, ' +
   'cierra la app y ábrela de nuevo.';
 
-export function errorSinTraducir(origen: 'base de datos' | 'sesión', error: unknown): string {
+export function errorSinTraducir(
+  origen: 'base de datos' | 'sesión' | 'catálogo',
+  error: unknown,
+): string {
   if (__DEV__) {
     // Es la única llamada a la consola de toda la app, y solo existe en desarrollo:
     // en un build de producción `__DEV__` es falso y el bloque se descarta.

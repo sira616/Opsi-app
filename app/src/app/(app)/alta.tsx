@@ -1,12 +1,29 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CalendarBlank, MapPin, Scales, Sparkle, Tag } from 'phosphor-react-native';
+import { Barcode, CalendarBlank, MapPin, Scales, Sparkle, Tag } from 'phosphor-react-native';
 
-import { createItem, type DateKind, type DateSource, type StorageLocation } from '@/api/inventory';
+import { codigoDeRuta, crearProductoPrivado, idDeRuta } from '@/api/catalogo';
+import {
+  createItem,
+  fetchProducto,
+  type DateKind,
+  type DateSource,
+  type NewItem,
+  type ProductoCatalogo,
+  type StorageLocation,
+} from '@/api/inventory';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
@@ -23,7 +40,7 @@ import {
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
-import { familyOf, toBase, type MeasurementUnit } from '@/shared/lib/units';
+import { familyOf, toBase, unidadSugerida, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -92,7 +109,72 @@ const ATAJOS: [string, number][] = [
   ['1 mes', 30],
 ];
 
+/**
+ * La cáscara: averigua QUÉ se va a dar de alta y le pasa el formulario ya servido.
+ *
+ * Lo que trae el escáner llega por la ruta, que es entrada de fuera (un enlace
+ * puede abrir esta pantalla): se acepta solo con la forma exacta de un código de
+ * barras válido y de un uuid, y NADA más se lee de ahí. El nombre y la cantidad
+ * no viajan por la ruta: se piden a la base de datos por el id, de modo que lo que
+ * se rellena es siempre lo que la RLS deja ver.
+ *
+ * Esperar a la ficha ANTES de montar el formulario (y no rellenarlo después con un
+ * efecto) es lo que evita pisar lo que la persona ya haya escrito, y deja el
+ * formulario con un estado inicial en lugar de corregirlo al segundo render.
+ */
 export default function AltaManual() {
+  const c = useTheme();
+  const params = useLocalSearchParams<{ codigo?: string; producto?: string }>();
+  const codigo = codigoDeRuta(params.codigo);
+  const productoId = idDeRuta(params.producto);
+
+  const fichaQ = useQuery({
+    queryKey: [...queryKeys.inventario, 'producto', productoId],
+    queryFn: () => fetchProducto(productoId as string),
+    enabled: productoId !== null,
+    // Una ficha del catálogo casi no cambia: no se vuelve a pedir en cada apertura.
+    staleTime: 30 * 60_000,
+  });
+
+  if (productoId !== null && fichaQ.isPending) {
+    return (
+      <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.ground, justifyContent: 'center' }}>
+        <ActivityIndicator color={c.brand} />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <Formulario
+      codigo={codigo}
+      productoId={productoId}
+      ficha={fichaQ.data ?? null}
+      fichaFallo={fichaQ.isError}
+    />
+  );
+}
+
+/** El contenido del envase, listo para el formulario: «1 L» → 1 l, «330 ml» → 330 ml. */
+function cantidadInicial(ficha: ProductoCatalogo | null): { quantity: string; unit: MeasurementUnit } {
+  if (!ficha?.unit_family || !ficha.net_quantity) return { quantity: '1', unit: 'unit' };
+  const sugerida = unidadSugerida(ficha.unit_family, ficha.net_quantity);
+  return {
+    quantity: String(Math.round(sugerida.amount * 100) / 100).replace('.', ','),
+    unit: sugerida.unit,
+  };
+}
+
+function Formulario({
+  codigo,
+  productoId,
+  ficha,
+  fichaFallo,
+}: {
+  codigo: string | null;
+  productoId: string | null;
+  ficha: ProductoCatalogo | null;
+  fichaFallo: boolean;
+}) {
   const styles = useStyles();
   const t = useType();
   const c = useTheme();
@@ -102,9 +184,10 @@ export default function AltaManual() {
   // consecuencias, y se enseña en la propia pantalla.
   const { activa } = useNeveraActual();
 
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [unit, setUnit] = useState<MeasurementUnit>('unit');
+  const inicial = cantidadInicial(ficha);
+  const [name, setName] = useState(ficha?.name ?? '');
+  const [quantity, setQuantity] = useState(inicial.quantity);
+  const [unit, setUnit] = useState<MeasurementUnit>(inicial.unit);
   const [location, setLocation] = useState<StorageLocation>('pantry');
 
   // La categoría se propone a partir del nombre y solo se «fija» cuando el
@@ -127,8 +210,25 @@ export default function AltaManual() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Si el alta falla DESPUÉS de crear el producto privado (red, validación), el
+  // reintento reutiliza el que ya existe en lugar de crear otro igual.
+  const privadoCreado = useRef<string | null>(null);
+
   const mutation = useMutation({
-    mutationFn: createItem,
+    mutationFn: async (item: NewItem) => {
+      let enlazado = productoId;
+      // Un código que nadie conocía: se recuerda en ESTA nevera, para que la
+      // próxima vez se reconozca sin teclear.
+      if (!enlazado && codigo) {
+        privadoCreado.current ??= await crearProductoPrivado({
+          householdId: item.householdId,
+          barcode: codigo,
+          name: item.name,
+        });
+        enlazado = privadoCreado.current;
+      }
+      await createItem({ ...item, productId: enlazado });
+    },
     // La nevera sale de lo que se mandó, no de la activa de este momento: es la
     // que hay que refrescar aunque algo la cambiara mientras se guardaba.
     async onSuccess(_creado, guardado) {
@@ -202,6 +302,50 @@ export default function AltaManual() {
             <Text style={styles.backText}>Cancelar</Text>
           </Pressable>
           <Text style={t.title}>¿Qué has traído?</Text>
+          {/* De dónde salen los datos. Tres casos y solo tres: un producto
+              reconocido, un código que nadie conoce, o ningún código. */}
+          {productoId ? (
+            <View style={styles.escaneado}>
+              <Barcode size={18} color={c.brandInk} weight="duotone" />
+              <View style={styles.escaneadoTexto}>
+                <Text style={styles.escaneadoTitulo} numberOfLines={2}>
+                  {ficha
+                    ? `${ficha.name}${ficha.brand ? ` · ${ficha.brand}` : ''}`
+                    : 'No he podido leer la ficha'}
+                </Text>
+                {ficha ? (
+                  <Text style={t.caption}>
+                    {ficha.data_source === 'openfoodfacts'
+                      ? 'Datos de Open Food Facts. Revisa la cantidad y la fecha: lo que ponga el envase manda.'
+                      : 'Un producto que ya guardaste en esta nevera.'}
+                  </Text>
+                ) : fichaFallo ? (
+                  <Text style={t.caption}>Puedes rellenarlo a mano; el producto queda enlazado.</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : codigo ? (
+            <View style={styles.escaneado}>
+              <Barcode size={18} color={c.brandInk} weight="duotone" />
+              <View style={styles.escaneadoTexto}>
+                <Text style={styles.escaneadoTitulo}>No conozco este código</Text>
+                <Text style={t.caption}>
+                  Ponle nombre y lo recordaré en esta nevera: la próxima vez lo reconozco sin
+                  teclear.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Escanear un código de barras"
+              onPress={() => router.replace('/escanear')}
+              style={styles.escanear}
+            >
+              <Barcode size={18} color={c.brandInk} weight="bold" />
+              <Text style={styles.escanearTexto}>Escanear un código de barras</Text>
+            </Pressable>
+          )}
           {/* Dónde va a caer. Es texto y no un botón: cambiar de nevera se hace
               desde el inventario, y aquí solo hace falta saber a cuál se guarda. */}
           <View style={styles.destino}>
@@ -238,7 +382,7 @@ export default function AltaManual() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Leche entera"
-                autoFocus
+                autoFocus={!productoId}
                 returnKeyType="next"
               />
             </View>
@@ -502,6 +646,28 @@ const useStyles = makeStyles((c) => ({
   destino: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 },
   destinoText: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 13, color: c.inkMuted },
   content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
+
+  escaneado: {
+    flexDirection: 'row',
+    gap: space.sm + 2,
+    alignItems: 'flex-start',
+    backgroundColor: c.brandSoft,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  escaneadoTexto: { flex: 1, gap: 2 },
+  escaneadoTitulo: { fontFamily: fonts.semibold, fontSize: 14, color: c.brandInk },
+  escanear: {
+    minHeight: touchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    alignSelf: 'flex-start',
+    backgroundColor: c.brandSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.lg,
+  },
+  escanearTexto: { fontFamily: fonts.semibold, fontSize: 14, color: c.brandInk },
 
   nombreFila: { flexDirection: 'row', gap: space.md, alignItems: 'flex-end' },
   avatar: {

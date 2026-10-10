@@ -59,3 +59,22 @@ export function formatQuantity(base: number, unit: MeasurementUnit): string {
   const text = rounded.toLocaleString('es-ES', { maximumFractionDigits: 2 });
   return unit === 'unit' ? `${text} ud.` : `${text} ${spec(unit).label}`;
 }
+
+/**
+ * La unidad más natural para enseñar una cantidad en unidad base, con la cantidad
+ * ya convertida: 1000 ml → «1 l», 330 ml → «330 ml», 500 g → «500 g», 1500 g →
+ * «1,5 kg». Solo sube a la unidad grande cuando el resultado es un número limpio
+ * (hasta dos decimales): 1250 ml se queda en «1250 ml» antes que «1,25 l» a medias.
+ * Para rellenar el alta con el contenido de un envase escaneado.
+ */
+export function unidadSugerida(
+  family: UnitFamily,
+  base: number,
+): { unit: MeasurementUnit; amount: number } {
+  if (family === 'count') return { unit: 'unit', amount: base };
+  const [pequena, grande] = family === 'mass' ? (['g', 'kg'] as const) : (['ml', 'l'] as const);
+  const enGrande = fromBase(base, grande);
+  const limpio = Math.abs(enGrande * 100 - Math.round(enGrande * 100)) < 1e-9;
+  if (base >= 1000 && limpio) return { unit: grande, amount: enGrande };
+  return { unit: pequena, amount: base };
+}
