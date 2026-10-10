@@ -37,7 +37,7 @@ export default function CrearCuenta() {
     // Se comprueba aquí además de en el servidor para no gastar un viaje de
     // red en decir algo que ya se sabe. El servidor sigue mandando.
     if (!esUsuarioValido(usuario)) {
-      setError(problemaUsuario ?? 'Ese usuario no vale.');
+      setError(problemaUsuario ?? 'Ese usuario no vale. Letras sin acentos, números y guion bajo.');
       return;
     }
     if (password.length < MIN_PASSWORD) {
@@ -66,8 +66,8 @@ export default function CrearCuenta() {
             <Text style={styles.wordmark}>Opsi</Text>
             <Text style={t.title}>Crear cuenta</Text>
             <Text style={styles.tagline}>
-              Solo usuario y contraseña. El correo lo añades luego, en ajustes, si
-              quieres poder recuperarla.
+              Solo usuario y contraseña. El correo lo añades luego en ajustes, si quieres
+              poder recuperarla.
             </Text>
           </View>
 

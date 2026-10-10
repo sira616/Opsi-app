@@ -2,7 +2,15 @@ import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { Basket, ChatCircleDots, GearSix, ListChecks } from 'phosphor-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
-import { fonts, useAspecto } from '@/shared/theme/tokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  barra,
+  conAlpha,
+  fonts,
+  sombraFlotante,
+  useAspecto,
+  type Palette,
+} from '@/shared/theme/tokens';
 
 /**
  * Las cuatro secciones de Opsi.
@@ -25,33 +33,53 @@ import { fonts, useAspecto } from '@/shared/theme/tokens';
  * —sin buscar un sustituto— porque Phosphor trae seis pesos del mismo dibujo.
  */
 /**
- * El fondo de la barra.
+ * El cuerpo de la píldora.
  *
- * Cristal suave SOLO en iOS. En Android el desenfoque en tiempo real es caro y
- * se nota en gama media, así que ahí va un color casi opaco: la barra se ve
- * igual de bien y no cuesta fotogramas.
+ * Son dos capas, y cada una está donde está por un motivo:
  *
- * Y una regla que no se salta: el desenfoque va DETRÁS de los iconos, nunca
- * sobre texto. La translucidez baja el contraste, y en esta app el contraste
- * no se negocia.
+ *   · **Abajo, el color y la sombra.** La sombra tiene que ir en una vista con
+ *     fondo —iOS no sabe calcularla sobre una transparente— y no puede llevar
+ *     `overflow: hidden`, que la recortaría contra el borde de la píldora.
+ *   · **Arriba, el desenfoque**, y ese sí se recorta a la forma.
+ *
+ * La translucidez es corta a propósito: el velo ya tapa la mayor parte de lo
+ * que hay detrás, así que la barra se lee sólida y el desenfoque solo se nota
+ * cuando algo pasa por debajo. Con más transparencia, el contraste de los
+ * iconos pasaría a depender de lo que hubiera en la lista en ese momento, y
+ * eso en esta app no se negocia.
+ *
+ * En Android no hay desenfoque: en tiempo real es caro y se nota en gama
+ * media. Allí el velo sube a casi opaco y la barra se ve igual de bien.
  */
-function FondoBarra({ esquema, ground }: { esquema: 'light' | 'dark'; ground: string }) {
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView
-        intensity={70}
-        tint={esquema === 'dark' ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
-        style={StyleSheet.absoluteFill}
-      />
-    );
-  }
+function FondoBarra({ c, oscuro }: { c: Palette; oscuro: boolean }) {
+  const conDesenfoque = Platform.OS !== 'android';
+  const velo = conDesenfoque ? (oscuro ? 0.68 : 0.7) : 0.97;
+
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: ground, opacity: 0.97 }]} />
+    <View
+      style={[
+        StyleSheet.absoluteFill,
+        estilos.cuerpo,
+        { backgroundColor: conAlpha(c.surface, velo), borderColor: c.border },
+        sombraFlotante(oscuro),
+      ]}
+    >
+      {conDesenfoque ? (
+        <BlurView
+          intensity={oscuro ? 40 : 28}
+          tint={oscuro ? 'dark' : 'light'}
+          style={[StyleSheet.absoluteFill, estilos.desenfoque]}
+        />
+      ) : null}
+    </View>
   );
 }
 
 export default function TabsLayout() {
   const { colores: c, esquema } = useAspecto();
+  const insets = useSafeAreaInsets();
+  const oscuro = esquema === 'dark';
+
   return (
     <Tabs
       screenOptions={{
@@ -62,13 +90,32 @@ export default function TabsLayout() {
         // inventario se vea correr por debajo al desplazar.
         tabBarStyle: {
           position: 'absolute',
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: c.border,
+          // `start`/`end` mandan sobre `left`/`right` en React Native, y el
+          // navegador ya los deja a 0. Hay que sobrescribir ESOS; poner solo
+          // `left`/`right` deja la barra pegada a los bordes.
+          start: barra.margen,
+          end: barra.margen,
+          left: barra.margen,
+          right: barra.margen,
+          bottom: insets.bottom + barra.margen,
+          height: barra.alto,
+          // El navegador mete el área segura DENTRO de la barra. Aquí ya está
+          // contada en `bottom`, y sumarla otra vez empujaría los iconos hacia
+          // arriba dentro de la píldora, descentrados.
+          paddingTop: 0,
+          paddingBottom: 0,
+          paddingHorizontal: 0,
+          borderTopWidth: 0,
           backgroundColor: 'transparent',
+          // La sombra la pinta el fondo, que sí tiene color. Dejar aquí la
+          // elevación de Android dibujaría un rectángulo bajo la píldora.
           elevation: 0,
         },
-        tabBarBackground: () => <FondoBarra esquema={esquema} ground={c.ground} />,
+        tabBarBackground: () => <FondoBarra c={c} oscuro={oscuro} />,
         tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11 },
+        // El realce del toque también es una píldora: cuadrado, se sale por
+        // las esquinas redondas de la barra.
+        tabBarItemStyle: { borderRadius: barra.radio },
       }}
     >
       <Tabs.Screen
@@ -110,3 +157,13 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const estilos = StyleSheet.create({
+  cuerpo: {
+    borderRadius: barra.radio,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  // El desenfoque va recortado a la píldora; la capa de abajo NO puede
+  // llevar este recorte porque se llevaría por delante la sombra.
+  desenfoque: { borderRadius: barra.radio, overflow: 'hidden' },
+});

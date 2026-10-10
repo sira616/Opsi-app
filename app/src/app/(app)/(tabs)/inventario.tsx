@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { Nevera } from '@/api/household';
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
+import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { AvisoInvitaciones } from '@/features/neveras/AvisoInvitaciones';
+import { PildoraNevera } from '@/features/neveras/PildoraNevera';
 import { describeDbError } from '@/shared/lib/db-errors';
 import type { Palette } from '@/shared/theme/tokens';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -37,15 +41,31 @@ function grupos(c: Palette): Grupo[] {
   ];
 }
 
+/**
+ * «Consumir primero» de la nevera activa.
+ *
+ * La pantalla de verdad está en `Inventario`, y esta cáscara solo le da la
+ * nevera con `key` por su id. Es a propósito: al cambiar de nevera la pantalla
+ * se monta de cero, y con ella se van el filtro por pasillo —una categoría de
+ * la nevera anterior que quizá no existe en la nueva, y dejaría un «Por ahí no
+ * sale nada» sin explicación— y la posición del scroll.
+ */
 export default function ConsumirPrimero() {
+  const { activa } = useNeveraActual();
+  return <Inventario key={activa.id} nevera={activa} />;
+}
+
+function Inventario({ nevera }: { nevera: Nevera }) {
   const styles = useStyles();
   const t = useType();
   const c = useTheme();
   const router = useRouter();
 
+  // La clave lleva el id de la nevera: sin él, la caché de una nevera se serviría
+  // como la de otra durante el minuto que dura fresca.
   const { data, error, isPending, isFetching, refetch } = useQuery({
-    queryKey: queryKeys.priorityList,
-    queryFn: fetchPriorityList,
+    queryKey: queryKeys.priorityList(nevera.id),
+    queryFn: () => fetchPriorityList(nevera.id),
   });
 
   const [filtro, setFiltro] = useState<Filtro>(FILTRO_VACIO);
@@ -62,6 +82,11 @@ export default function ConsumirPrimero() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.wordmark}>Opsi</Text>
+          {/* Con el hueco sobrante para sí: el nombre de la nevera cede ante el
+              logo y el «+», que tienen ancho fijo. */}
+          <View style={styles.pildoraHueco}>
+            <PildoraNevera />
+          </View>
           <Link href="/alta" asChild>
             <Pressable accessibilityRole="button" accessibilityLabel="Añadir alimento" style={styles.add}>
               <Text style={styles.addIcon}>+</Text>
@@ -71,7 +96,7 @@ export default function ConsumirPrimero() {
         <Text style={t.title}>Consumir primero</Text>
         <Text style={t.bodySmall}>
           {todos.length === 0
-            ? 'Nada guardado todavía'
+            ? 'Aún no hay nada guardado'
             : filtrando
               ? `${items.length} de ${todos.length}`
               : `${items.length} ${items.length === 1 ? 'alimento' : 'alimentos'}` +
@@ -79,6 +104,8 @@ export default function ConsumirPrimero() {
                   ? ` · ${urgent} ${urgent === 1 ? 'pide' : 'piden'} atención hoy`
                   : ' · nada urgente hoy')}
         </Text>
+
+        <AvisoInvitaciones />
 
         {todos.length > 0 ? (
           <View style={styles.filtro}>
@@ -99,10 +126,10 @@ export default function ConsumirPrimero() {
 
         {!isPending && todos.length > 0 && items.length === 0 ? (
           <View style={styles.sinResultados}>
-            <Text style={styles.emptyTitle}>Nada con ese filtro</Text>
+            <Text style={styles.emptyTitle}>Por ahí no sale nada</Text>
             <Text style={t.bodySmall}>
-              Tienes {todos.length} {todos.length === 1 ? 'alimento' : 'alimentos'} guardados, pero
-              ninguno encaja con lo que has pedido.
+              Tienes {todos.length} {todos.length === 1 ? 'guardado' : 'guardados'}, pero ninguno
+              encaja con este filtro. Quítalo y vuelven todos.
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -127,16 +154,16 @@ export default function ConsumirPrimero() {
                 <BowlFood size={26} color={c.frost} weight="duotone" />
               </View>
             </View>
-            <Text style={styles.emptyTitle}>Tu despensa está vacía</Text>
+            <Text style={styles.emptyTitle}>Aquí no hay nada. Tu nevera está en modo monje.</Text>
             <Text style={t.bodySmall}>
-              Da de alta lo primero y aparecerá aquí, ordenado por lo que conviene gastar antes.
+              Añade lo primero que pilles. Lo que corra más prisa se pone arriba del todo.
             </Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push('/alta')}
               style={styles.emptyButton}
             >
-              <Text style={styles.emptyButtonText}>Añadir un alimento</Text>
+              <Text style={styles.emptyButtonText}>Añadir alimento</Text>
             </Pressable>
           </View>
         ) : null}
@@ -145,7 +172,7 @@ export default function ConsumirPrimero() {
           <View style={styles.allGood}>
             <Confetti size={20} color={c.brand} weight="fill" />
             <Text style={styles.allGoodText}>
-              Nada corre prisa hoy. Buen momento para cocinar sin agobios.
+              Hoy no corre prisa nada. Cena lo que te apetezca.
             </Text>
           </View>
         ) : null}
@@ -190,7 +217,8 @@ export default function ConsumirPrimero() {
 const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
   header: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.md, gap: space.xs },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm },
+  headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
+  pildoraHueco: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
   wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
   add: {
     width: touchTarget,

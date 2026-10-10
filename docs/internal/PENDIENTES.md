@@ -19,26 +19,23 @@
 
 ## 1. Sin verificar 🔴
 
-Lo más importante del documento. **Nada de lo construido se ha ejecutado nunca contra un
-Supabase real**, porque el contenedor donde trabajo no tiene daemon de Docker.
+**Actualizado 2026-09-24.** Hasta hoy esta sección decía que nada se había ejecutado contra un
+Supabase real. Ya no es cierto: Docker funciona y `db:reset`, `db:test`, `db:lint`, `db:check` y
+`types` corren en verde (24 migraciones, **8 ficheros pgTAP con 241 tests** contra pgTAP real,
+409 comprobaciones en PGlite). Lo que queda sin verificar:
 
 | | Qué está sin verificar | Riesgo concreto |
 |:--:|---|---|
-| 🔴 | `db:start`, `db:reset`, `db:test` | Las 10 migraciones solo se han aplicado sobre PGlite (Postgres 18 en WebAssembly). El proyecto fija la 17 |
-| 🔴 | **pgTAP real** | Los 3 ficheros de `supabase/tests/` se han ejecutado con *dobles* de las funciones de pgTAP, no con pgTAP |
-| 🔴 | Los `insert into auth.users` de los tests | Mi `auth.users` es un doble mínimo. Si el real tiene columnas NOT NULL que los tests no rellenan, **fallarán los tres ficheros**. Arreglo de una línea, pero hay que verlo |
-| 🟠 | La CI | `.github/workflows/ci.yml` no ha corrido nunca. El primer push dirá si el YAML y los pasos son correctos |
-| 🟠 | `npm run types` | Nunca ejecutado: necesita Docker. **`app/src/lib/database.types.ts` no existe todavía**, así que las consultas del cliente van sin tipar |
-| 🟡 | Las versiones de Expo salen de `bundledNativeModules.json` | Las resolví de la lista que trae el propio paquete `expo`, porque el proxy bloquea la API de `expo install`. `npx expo install --fix` desde `app/` lo confirmará |
+| 🔴 | **Nada nativo** | Todo lo visual se ha visto solo en el navegador (web, ancho de móvil). El desenfoque real de iOS, la sombra de la barra en iOS y Android, el área segura de un móvil con barra gestual y cómo se pinta cada fila del inventario en nativo (en web el enlace que la envuelve la apila) están sin ver en un dispositivo |
+| 🔴 | **La CI** | `.github/workflows/ci.yml` existe. La auditoría de seguridad la da en rojo en las 26 ejecuciones (falla pgTAP) y este documento decía «nunca ha corrido». **No lo he comprobado yo**: mirarlo en GitHub es lo primero de la lista de abajo |
+| 🟠 | **Aceptar, rechazar y cancelar invitaciones desde la interfaz con clics reales** | Invitar y aceptar se probaron en el navegador con dos cuentas; rechazar y cancelar solo por SQL (pgTAP). La lógica está probada, la pantalla no |
+| 🟠 | **Las carreras de las funciones de neveras** | Crear/crear y aceptar/crear con dos sesiones a la vez las probó a mano el agente que las escribió (la segunda espera y ve la pertenencia ya confirmada). No hay test automático |
+| 🟠 | **La build de desarrollo (D5)** | Escáner, notificaciones y el almacén cifrado de la sesión no funcionan en Expo Go |
+| 🟡 | Las versiones de Expo salen de `bundledNativeModules.json` | Expo avisa de que un paquete puede necesitar actualización. `npx expo install --check` desde `app/` lo dice |
 
-**Cómo se cierra esto**, y es un solo rato delante del ordenador:
-
-```bash
-npm run dev          # levanta Supabase y aplica migraciones + seed
-npm run db:test      # el veredicto de verdad
-npm run types        # crea los tipos; hay que hacer commit del fichero
-```
-
+**Ya cerrado, por si se buscaba aquí:** los `insert into auth.users` de los tests funcionan con el
+`auth.users` real; `npm run types` corre y `app/src/lib/database.types.ts` existe (y desde hoy
+`types` no puede pisarlo con un error: ver la bitácora, sesión 23).
 ---
 
 ## 2. Huecos del backend 🟠
@@ -94,10 +91,12 @@ esconderlas en una vista interna aparte.
 Obliga a que todo producto del catálogo global declare `data_source = 'openfoodfacts'`. Si
 algún día entra otra fuente, hay que tocar la restricción. Hoy es correcto y evita basura.
 
-### ⚪ `user_settings.timezone` no se valida
+### ✅ ~~`user_settings.timezone` no se valida~~ · resuelto 2026-09-24
 
-Un `CHECK` no admite subconsultas, así que no se contrasta contra `pg_timezone_names`.
-Hoy lo valida solo la aplicación, que todavía no existe. Un trigger lo resolvería.
+Un trigger (`20260924150000_zona_horaria_valida`) la contrasta con `pg_timezone_names` al
+escribirla. Sin él, una zona inventada rompía `today_for_user()` y la vista de prioridad de
+esa persona, y en la fase 3 abortaría el resumen diario de todos. Probado en
+`supabase/tests/alta_test.sql`.
 
 ---
 
@@ -111,6 +110,14 @@ Nueva función `today_for_user()`, que lee `user_settings.timezone` y cae a
 
 Hay un test que lo comprueba de verdad: con el ajuste en `Pacific/Kiritimati` (UTC+14) la
 función devuelve un día distinto que con Madrid, así que no es una tautología.
+
+**Volvió a romperse y se arregló el 2026-09-24.** `20260921180000_categorias` tuvo que recrear
+la vista y copió la definición anterior a este arreglo: durante días la vista volvió a usar
+`current_date` (UTC) y nadie lo notó, porque ese test comprobaba la función y no la vista. Entre
+medianoche y las 2 de la madrugada en España, lo que vencía hoy se enseñaba como que vencía
+mañana. `20260924130000` la devuelve a `today_for_user()` y `prioridad_zona_horaria_test.sql`
+la comprueba **a través de la vista**, con dos zonas extremas (UTC+14 y UTC−11) para que falle
+a cualquier hora del día, no solo de madrugada.
 
 ### 🟠 Q3 · El campo de conservación de Open Food Facts sin confirmar
 
@@ -203,11 +210,26 @@ tú.
 
 ## 7. Lo siguiente, en orden
 
-1. **Arrancar la app de verdad**: `npm run dev`, luego `npm run --workspace app start` y
-   crear una cuenta desde Expo Go. Si la pantalla pinta tu hogar, la fase 0 funciona de
-   punta a punta y se cierra casi toda la sección 1.
-2. **`npm run types`** y commit del fichero: quita el typado a ciegas del cliente.
-3. **Generar el logo** con el prompt de `DISENO.md` y meter `icon.png` y `splash.png` en
-   `app/assets`, que sigue vacío.
-4. **La fase 2**: escáner de códigos de barras y la Edge Function `lookup-barcode`. Ahí
-   sí hace falta la development build de EAS.
+Actualizado 2026-09-24, tras la auditoría de seguridad (`AUDITORIA-2026-09-24.md`, con la lista
+completa y su porqué). Lo de **antes del escáner**:
+
+1. **A1 · Cortafuegos de Windows (minutos, es tuyo).** El stack local escucha en `0.0.0.0` y
+   `POST /pg/query` ejecuta SQL como `postgres` **sin clave** desde cualquier dispositivo de tu
+   Wi-Fi (comprobado por la IP de la LAN). No dejes la pila levantada fuera de casa
+   (`npm run db:stop`) y deja abierto el 54321 y el 8081 solo a la IP de tu móvil.
+2. **CI en verde (horas).** Es la red de seguridad de todo lo que viene: sin ella las Edge
+   Functions nacen sin nada que las vigile. Ver M7 de la auditoría.
+3. **A4 · Decidir cómo se recupera una cuenta (decisión tuya).** Con un SMTP real, el cambio de
+   correo no funciona: `double_confirm_changes` pide confirmar también el correo sintético, que
+   no recibe nada. Hay que decidirlo antes de construir más encima.
+4. **Una sola development build (M2 + P2).** `expo-secure-store` (sesión cifrada, `allowBackup:
+   false`), `expo-camera` y `expo-notifications` juntos: añadirlos uno a uno obliga a
+   reconstruir tres veces.
+5. **La fase 2: el escáner y `lookup-barcode`**, con los controles de la sección P1 de la auditoría
+   (verificar al usuario dentro de la función, normalizar el GTIN, acotar los campos de Open
+   Food Facts, tope por usuario y global). El contenido de Open Food Facts es entrada no confiable.
+
+**Ya hecho de la lista anterior:** arrancar la app de verdad (login, neveras, alta, aviso de
+invitaciones, probado con dos cuentas), `npm run types` y su fichero, y la primera pasada de
+seguridad (privilegios por defecto, alta estricta, zona horaria, guarda del seed; ver la sesión 23
+de la bitácora). **Sigue pendiente** el logo y `icon.png`/`splash.png` en `app/assets`.

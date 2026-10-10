@@ -22,10 +22,25 @@ declare
   v_household uuid;
   v_user      uuid;
 begin
-  -- Tu hogar. Si hay más de uno (no debería en el MVP), coge el más antiguo.
+  -- Solo en el Supabase local. Este script escribe como `postgres` en «la nevera
+  -- privada de la primera persona que encuentre»: pegado por error en el SQL
+  -- Editor de un proyecto de la nube, llenaría de comida de ejemplo la cuenta de
+  -- alguien real. La base local trae el secreto JWT por defecto de la CLI; la de
+  -- la nube, otro. Misma guarda que el seed de desarrollo.
+  if coalesce(current_setting('app.settings.jwt_secret', true), '')
+       is distinct from 'super-secret-jwt-token-with-at-least-32-characters-long'
+  then
+    raise notice 'Demo omitida: esto no es el Supabase local.';
+    return;
+  end if;
+
+  -- Tu nevera privada. Con neveras compartidas hay más de una, y «la más
+  -- antigua» ya no es una forma fiable de elegir: se pide la personal, que es
+  -- una por persona. Si hay varias personas en la base, la de la primera.
   select h.id, m.user_id into v_household, v_user
   from public.households h
   join public.household_members m on m.household_id = h.id
+  where h.kind = 'personal'
   order by h.created_at
   limit 1;
 

@@ -21,7 +21,7 @@ insert into auth.users (
 )
 values
   ('00000000-0000-0000-0000-000000000000', '3333cccc-3333-4333-8333-333333333333',
-   'authenticated', 'authenticated', 'clara@opsi.test', '',
+   'authenticated', 'authenticated', 'clara@usuarios.opsi.local', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
 select set_config(

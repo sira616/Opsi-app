@@ -40,6 +40,37 @@ export function Proximamente({ icon, title, phase, what, ready }: Props) {
   );
 }
 
+type NotaProps = {
+  /** En qué fase llega: «Fase 3». O «Pendiente» cuando no hay fase asignada. */
+  fase: string;
+  /** Qué hará, en una o dos frases. */
+  que: string;
+  /** Lo que YA funciona de eso, si funciona algo. Nunca relleno. */
+  ya?: string;
+};
+
+/**
+ * Lo mismo, pero dentro de una pantalla que sí existe.
+ *
+ * `Proximamente` ocupa la pantalla entera y vale para una pestaña que todavía
+ * no está. Esto es para lo contrario: un ajuste suelto que se ve, se puede
+ * tocar y todavía no tiene efecto. Sin esta nota el interruptor miente, y un
+ * control que finge funcionar es peor que uno que falta.
+ *
+ * Deliberadamente NO lleva el color de marca: es un apunte al margen, no una
+ * novedad que celebrar.
+ */
+export function NotaProximamente({ fase, que, ya }: NotaProps) {
+  const styles = useStyles();
+  return (
+    <View style={styles.nota}>
+      <Text style={styles.notaFase}>{fase}</Text>
+      <Text style={styles.notaQue}>{que}</Text>
+      {ya ? <Text style={styles.notaYa}>{ya}</Text> : null}
+    </View>
+  );
+}
+
 const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
   content: {
@@ -77,4 +108,20 @@ const useStyles = makeStyles((c) => ({
     marginTop: space.sm,
   },
   readyText: { flex: 1, fontSize: 13, lineHeight: 19, color: c.brandInk },
+
+  nota: {
+    gap: space.xs,
+    backgroundColor: c.surfaceAlt,
+    borderRadius: radius.sm + 2,
+    padding: space.md,
+  },
+  notaFase: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: c.inkFaint,
+  },
+  notaQue: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
+  notaYa: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: c.brandInk },
 }));

@@ -208,12 +208,29 @@ export const radius = { sm: 8, md: 12, lg: 14, pill: 999 } as const;
 export const touchTarget = 44;
 
 /**
+ * La barra de pestañas: una píldora que flota, separada de los bordes.
+ *
+ * Las medidas viven aquí y no en el layout de las pestañas porque las usan
+ * dos sitios que tienen que cuadrar: la propia barra y el hueco que dejan al
+ * final las pantallas que se desplazan. Cambiar el alto en un solo sitio y
+ * que la última fila quede medio tapada es el fallo clásico.
+ *
+ * `radio` es la mitad del alto: eso es lo que hace que los extremos sean
+ * semicírculos y no un rectángulo con las esquinas limadas.
+ */
+export const barra = { alto: 62, margen: 14, radio: 31 } as const;
+
+/**
  * Lo que hay que dejar libre al final de una lista para que la barra de
  * pestañas no tape la última fila. La barra flota sobre el contenido —es lo
  * que permite verlo correr por debajo— y eso significa que ya no reserva su
  * propio espacio.
+ *
+ * Se mide desde el área segura, que es donde acaba el contenido de las
+ * pantallas: alto de la píldora, su separación de abajo, y un respiro para
+ * que la última tarjeta no quede lamiendo el cristal.
  */
-export const tabBarClearance = 96;
+export const tabBarClearance = barra.alto + barra.margen + space.xl;
 
 /**
  * Sombra única del sistema: muy suave. La jerarquía la dan el color y el
@@ -228,6 +245,39 @@ export function elevation(dark: boolean) {
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   } as const;
+}
+
+/**
+ * La sombra de lo que flota. Hoy solo la barra de pestañas.
+ *
+ * Es la única excepción a `elevation()`, y tiene motivo: una píldora
+ * suspendida sobre una lista que corre por debajo necesita despegarse de
+ * ella. Con la sombra de una tarjeta parece pegada al fondo, y entonces la
+ * lista se ve pasar por dentro de la barra en vez de por debajo.
+ */
+export function sombraFlotante(dark: boolean) {
+  return {
+    shadowColor: '#000',
+    shadowOpacity: dark ? 0.5 : 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
+  } as const;
+}
+
+/**
+ * Un color de la paleta con transparencia.
+ *
+ * Todos los tokens son hex de seis cifras, así que basta con pegarles el
+ * canal alfa. Existe para no escribir `rgba(255, 255, 255, .88)` a mano en
+ * una pantalla: eso deja de seguir al tema en cuanto alguien cambia la
+ * paleta.
+ */
+export function conAlpha(hex: string, alpha: number): string {
+  const canal = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${hex}${canal}`;
 }
 
 /**

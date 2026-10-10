@@ -1,12 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
 import { Redirect, Stack } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { fetchHousehold } from '@/api/household';
+import { NeveraActivaProvider, useNeveraActiva } from '@/features/neveras/NeveraActiva';
+import { alturaHojaSelector } from '@/features/neveras/SelectorNevera';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { queryKeys } from '@/shared/lib/query';
 import { useSession } from '@/shared/lib/session';
 import { Button } from '@/shared/ui/Button';
 import { makeStyles, space, useTheme, useType } from '@/shared/theme/tokens';
@@ -16,31 +15,48 @@ import { makeStyles, space, useTheme, useType } from '@/shared/theme/tokens';
  * Esto solo evita enseñar pantallas vacías a quien no ha entrado. Si alguien
  * se saltara este layout, seguiría sin poder leer una sola fila.
  *
- * Aquí SÍ se declaran las hojas modales, porque es este Stack el que tiene por
- * hijas a `(tabs)`, `alta` y `elemento/[id]`. Declararlas en el layout raíz no
- * hacía nada: desde allí solo existe `(app)` entera.
+ * El proveedor de la nevera activa envuelve al `Stack` y no al revés, porque
+ * es lo que decide si hay algo que enseñar: sin lista de neveras no se sabe ni
+ * qué inventario pedir. Va con `key` por persona, para que un cambio de cuenta
+ * lo monte de cero en lugar de arrastrar la elección de la anterior.
  */
 export default function AppLayout() {
   const { session, loading } = useSession();
 
-  // Comprueba que la sesión corresponde a un usuario que todavía existe en la
-  // base. Ver SesionHuerfana, más abajo, para por qué hace falta.
-  const hogar = useQuery({
-    queryKey: queryKeys.household,
-    queryFn: fetchHousehold,
-    enabled: Boolean(session),
-    retry: false,
-  });
-
   if (loading) return null;
   if (!session) return <Redirect href="/entrar" />;
-  if (hogar.isPending) return <Cargando />;
+
+  return (
+    <NeveraActivaProvider key={session.user.id}>
+      <Puerta />
+    </NeveraActivaProvider>
+  );
+}
+
+/**
+ * Deja pasar solo cuando se sabe en qué nevera se está, y monta las pantallas.
+ *
+ * La comprobación es la misma de siempre, ahora con `my_households()` en lugar
+ * del hogar único: si la lista llega vacía, la sesión apunta a alguien que ya
+ * no existe (ver SesionHuerfana); si no llega, es un fallo de red (ver
+ * NoConecta). Detrás de esta puerta, `useNeveraActual()` nunca devuelve null.
+ *
+ * Aquí SÍ se declaran las hojas modales, porque es este Stack el que tiene por
+ * hijas a `(tabs)`, `alta`, `elemento/[id]`, `cambiar-nevera` y las de
+ * `nevera/`. Declararlas en el layout raíz no hacía nada: desde allí solo
+ * existe `(app)` entera.
+ */
+function Puerta() {
+  const { neveras, activa, cargando, error, reintentar } = useNeveraActiva();
+  const { height } = useWindowDimensions();
+
+  if (cargando) return <Cargando />;
 
   // Un fallo de red NO es una sesión huérfana. Confundirlos mandaría a cerrar
   // sesión a quien solo tiene el servidor apagado, y perdería su sesión buena.
-  if (hogar.isError) return <NoConecta mensaje={describeDbError(hogar.error)} onReintentar={() => void hogar.refetch()} />;
+  if (error) return <NoConecta mensaje={describeDbError(error)} onReintentar={reintentar} />;
 
-  if (!hogar.data) return <SesionHuerfana />;
+  if (!activa) return <SesionHuerfana />;
 
   // Sin `as const`: con él, el array de alturas queda de solo lectura y el
   // tipo de las opciones de navegación no lo admite.
@@ -51,11 +67,22 @@ export default function AppLayout() {
     sheetCornerRadius: 24,
   };
 
+  // El selector no necesita casi toda la pantalla: mide lo que la lista pide,
+  // con un mínimo para que una sola nevera no deje una hoja ridícula y un
+  // máximo que es el de las demás hojas.
+  const hojaSelector: ComponentProps<typeof Stack.Screen>['options'] = {
+    ...hoja,
+    sheetAllowedDetents: [Math.min(0.92, Math.max(0.4, alturaHojaSelector(neveras.length) / height))],
+  };
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="alta" options={hoja} />
       <Stack.Screen name="elemento/[id]" options={hoja} />
+      <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
+      <Stack.Screen name="nevera/nueva" options={hoja} />
+      <Stack.Screen name="nevera/[id]/editar" options={hoja} />
     </Stack>
   );
 }
@@ -113,8 +140,8 @@ function SesionHuerfana() {
           que borra también los usuarios.
         </Text>
         <Text style={t.bodySmall}>
-          Cierra sesión y crea la cuenta otra vez. Tarda diez segundos y no se pierde nada
-          que no se hubiera borrado ya.
+          Cierra sesión y crea la cuenta otra vez. Tarda 10 segundos y no se pierde nada que
+          no se hubiera borrado ya.
         </Text>
         <Button label="Cerrar sesión" onPress={() => void signOut()} />
       </View>

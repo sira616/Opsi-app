@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { supabase } from './supabase';
@@ -39,16 +40,58 @@ function useAppStateRefresh() {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Quién era el usuario de la última sesión que vimos. Es una referencia y no
+  // estado porque solo sirve para comparar dentro del listener: cambiarla no
+  // debe repintar nada.
+  const usuarioAnterior = useRef<string | null>(null);
 
   useAppStateRefresh();
 
   useEffect(() => {
     let active = true;
 
+    /**
+     * Anota quién es ahora y, si ya no es la misma persona, tira la caché.
+     *
+     * ── Por qué hay que limpiarla ───────────────────────────────────────────
+     *
+     * La caché de TanStack Query es de la APP, no de la sesión, y aguanta
+     * `staleTime` (60 s) con lo que trajo la cuenta anterior. Al cerrar sesión
+     * y entrar con otra —en desarrollo, `syreta` y luego `compi`— quedaban a la
+     * vista la lista de neveras y el inventario de la primera. No es solo feo:
+     * es enseñar a una persona la comida de otra en el mismo móvil, que es lo
+     * que la RLS impide en el servidor y que aquí se hacía desde la memoria. Y
+     * la lista de neveras decide cuál está «activa», así que una cuenta nueva
+     * podía arrancar con la nevera de la anterior seleccionada.
+     *
+     * ── Qué cuenta como «cambiar de persona» ────────────────────────────────
+     *
+     * Se compara el id del usuario, NO el evento. `SIGNED_IN` también salta al
+     * volver a la app y al refrescar un token de la misma cuenta, y limpiar ahí
+     * tiraría lo cargado a cada vuelta a primer plano. Se limpia solo cuando:
+     *
+     *   · había alguien y ahora no (cerrar sesión, sesión revocada), o
+     *   · había alguien y ahora es otra persona (un cambio directo).
+     *
+     * Pasar de nadie a alguien no limpia: ya se limpió al salir, y en el
+     * arranque en frío no hay nada que limpiar. Y `clear()` solo toca la caché
+     * de consultas: la sesión guardada en el móvil es cosa de Supabase y ni se
+     * mira.
+     */
+    function alCambiarLaSesion(next: Session | null) {
+      const antes = usuarioAnterior.current;
+      const ahora = next?.user.id ?? null;
+      usuarioAnterior.current = ahora;
+      if (antes !== null && antes !== ahora) queryClient.clear();
+    }
+
     // La sesión guardada se lee del disco, así que tarda. Hasta que llega,
     // loading se queda en true y nadie redirige a ningún sitio.
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
+      alCambiarLaSesion(data.session);
       setSession(data.session);
       setLoading(false);
     });
@@ -56,6 +99,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Una sola suscripción para todo: login, logout, refresco del token y
     // cambios hechos en otra pantalla. La UI no tiene que enterarse de cuál.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+      alCambiarLaSesion(next);
       setSession(next);
       setLoading(false);
     });
@@ -64,7 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<SessionState>(
     () => ({

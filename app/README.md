@@ -10,10 +10,10 @@ El **cliente móvil**: React Native + Expo (TypeScript) con Expo Router.
 ```
 ├── src/
 │   ├── app/            Rutas (Expo Router): la carpeta es el mapa de pantallas
-│   ├── features/       Un módulo por dominio: inventory, scanner, shopping, chat, settings
-│   ├── components/     UI reutilizable y sin lógica de dominio
-│   ├── lib/            Cliente de Supabase, TanStack Query, tipos generados, utilidades
-│   └── theme/          Tokens de color, tipografía y espaciado
+│   ├── api/            Las llamadas al servidor, una por función o consulta, ya tipadas
+│   ├── features/       Lo de cada dominio: ajustes, elemento, neveras (y más adelante scanner, chat)
+│   ├── shared/         Lo que usan varios dominios: ui/ (piezas), lib/ (utilidades), theme/ (tokens)
+│   └── lib/            Solo los tipos generados de la base de datos (database.types.ts)
 └── assets/             Iconos, splash, fuentes
 ```
 
@@ -69,7 +69,8 @@ correo — por eso se puede probar la app entera hoy sin montar nada.
 
 - [x] **Fase 0** — Expo + TypeScript + Expo Router, cliente de Supabase, alta y login
       con correo y contraseña, rutas protegidas. Falta la development build (D5)
-- [x] **Fase 1** — Alta manual, «Consumir primero» y detalle con las seis acciones
+- [x] **Fase 1** — Alta manual, «Consumir primero», detalle con las seis acciones y **neveras**
+      (privada + compartidas, con selector en el inicio). Solo probada en el navegador
 - [ ] **Fase 2** — Pantalla de cámara EAN-13/EAN-8/UPC, confirmación precargada, fallback manual
 - [ ] **Fase 3** — Permiso y registro del token push, pantalla de ajustes de aviso
 - [ ] **Fase 4** — Lista de la compra, marcar comprado, paso a inventario

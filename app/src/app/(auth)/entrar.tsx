@@ -45,7 +45,7 @@ export default function Entrar() {
             <Text style={styles.wordmark}>Opsi</Text>
             <Text style={t.title}>Entrar</Text>
             <Text style={styles.tagline}>
-              Sabe lo que tienes. Sabe cuándo usarlo.
+              Sé lo que tienes. Y cuándo usarlo.
             </Text>
           </View>
 

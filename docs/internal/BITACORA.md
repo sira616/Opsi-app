@@ -5,7 +5,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-09-21** (sesión 7)
+> Última actualización: **2026-09-25** (sesión 23)
 
 ---
 
@@ -30,26 +30,29 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
-**2026-09-21 (sesión 5)** — Fase 0 cerrada salvo la app, y **el backend de la fase 1 está
-hecho**: acciones y vista de prioridad. Sigue sin haber una sola pantalla.
+**2026-09-25 (sesión 23)** — **La fase 1 está completa y ampliada**: inventario, acciones,
+«Consumir primero», alta manual, detalle con conservación tras abrir, y ahora **neveras**
+([D-21](#d-21--neveras-una-privada-por-persona-y-las-compartidas-que-quiera--2026-09-25)): una
+privada por persona más las compartidas que quiera, con nombre e icono y selector en el inicio.
+Ajustes está reorganizado por secciones y la app habla con la voz de `docs/VOZ.md`. Tras la
+auditoría de seguridad, una **primera pasada** de arreglos ya está aplicada. Lo siguiente es la
+fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.md`.
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **10 migraciones**, 8 tablas, 10 tipos enumerados, RLS en todas |
-| Seguridad | `is_household_member()` + 21 políticas + trigger de hogar personal |
-| Auth | Usuario y contraseña; el correo es opcional y solo sirve para recuperarla |
-| Fase 1 | 6 acciones RPC + vista `inventory_with_priority` con el tope de 24 h |
-| CI | `.github/workflows/ci.yml`, 3 trabajos. **Sin ejecutar todavía** |
-| Tests | 3 ficheros pgTAP (76 aserciones) + `npm run db:check` (117 comprobaciones) |
-| App Expo | D1–D4 más **alta manual y «Consumir primero»**. Estructura alineada con psique ([D-18](#d-18--convenciones-de-psique-no-su-código--2026-09-21)) |
-| Fase 1 | **Completa**: backend, alta manual, «Consumir primero» y detalle con las seis acciones |
+| Esquema | **24 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
+| Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
+| Tests | **8 ficheros pgTAP, 241 tests**, contra pgTAP real · `db:check`: **409 comprobaciones** en PGlite |
+| App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
+| Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
 ### Verificado vs. no verificado
 
 | | |
 |---|---|
-| ✅ **Verificado aquí** | Las 10 migraciones aplican · el aislamiento entre hogares funciona, **también a través de la vista** · el tope de 24 h gana a la fecha reanudada · las 6 acciones dejan su evento · los 3 ficheros pgTAP se ejecutan enteros |
-| ⚠️ **Sin verificar** | Nada contra Supabase real (**sin daemon de Docker aquí**) · la CI nunca ha corrido · el campo de conservación de Open Food Facts (ver [D-15](#d-15--conservación-tras-apertura-producto--categoría--nada--2026-09-21-cierra-q3)) |
+| ✅ **Verificado aquí** | `db:reset` (24 migraciones y los 3 seeds) · `db:test` (241) · `db:lint` sin avisos · `db:check` (409) · `types` · en la app: `typecheck`, `lint` y contraste WCAG AA · **en el navegador (web, ancho de móvil) con `syreta` y `compi`**: crear una compartida con nombre e icono, cambiar a ella desde el inicio, dar de alta un alimento y ver en la base que cae en LA elegida y no en la privada, que al volver a la privada no aparece, invitar, ver el aviso en el inicio de la otra cuenta, aceptar (añade, no saca de la propia), el tope de 2 con su mensaje, la gestión como miembro y como privada, renombrar y cambiar el icono |
+| ⚠️ **Sin verificar** | **Nada nativo** (desenfoque de iOS, área segura, filas del inventario en nativo) · rechazar y cancelar invitaciones **desde la interfaz** (sí por pgTAP) · las carreras de las funciones de neveras (solo a mano) · la CI, que la auditoría da en rojo y yo no he comprobado · dispositivos físicos |
 
 ### Tres fallos que cazó `db:check` esta sesión
 
@@ -468,6 +471,71 @@ fuera de las dos cajas.
 hay que ver al abrir la app; buscar algo concreto es la excepción. Y solo se ofrecen los
 pasillos que existen en tu inventario: enseñar «Pescado» sin tener ninguno es prometer una
 lista vacía.
+
+### D-21 · Neveras: una privada por persona y las compartidas que quiera · 2026-09-25
+
+*Decidida por el usuario; sustituye a «un hogar por persona» del MVP. Los detalles de
+implementación y de migración de datos están en la sesión 22.*
+
+Cada persona tiene **una nevera privada** que no se comparte nunca, y puede **crear neveras
+compartidas** con nombre e icono, invitar por nombre de usuario y cambiar entre todas desde el
+inicio. **Aceptar una invitación añade una nevera; no saca de ninguna.** El límite es de
+**neveras por persona**: 2 ahora (la tuya y una compartida) y 5 con un plan de pago que aún no
+existe. Vive en `user_settings.household_limit`, y el cliente no puede escribirlo.
+
+**Alternativas descartadas:**
+
+- *Compartir tu propia nevera* (lo que había): invitar a alguien enseñaba TODO lo de tu
+  privada, y «la mía» y «la compartida» eran la misma para quien invitaba. Además aceptar te
+  movía y dejabas la tuya.
+- *Solo nombre e icono, sin selector*: dejaba sin resolver que una persona no puede estar en dos
+  sitios.
+
+**Lo que costó, y conviene tener presente:** «el hogar del usuario» dejó de existir. Solo
+`create_item` lo daba por hecho en el servidor (con un `limit 1` sin `order by`: con dos
+pertenencias caía en una nevera al azar y en silencio), pero **todo cliente tiene que acotar por
+`household_id`**: `inventory_items`, `inventory_with_priority` e `inventory_events` devuelven ahora
+las neveras de la persona **mezcladas**. Hay un test que lo documenta.
+
+### D-22 · Los privilegios por defecto nacen cerrados · 2026-09-25
+
+Supabase concede todo a `anon`, `authenticated` y `service_role` sobre cada tabla nueva. Ya pasó
+una vez (fase 0: `authenticated` con INSERT/UPDATE/DELETE sobre todo) y se arregló **por
+disciplina**, tabla a tabla. Ahora es estructural: `auto_expose_new_tables = false` en
+`config.toml` y `alter default privileges` en `20260924140000`. Una tabla nueva nace sin permisos
+para nadie y cada migración concede lo que quiere. Incluye a `service_role`, porque en la nube
+nueva también lo exige (proyectos nuevos desde 2026-05-30, todos el 2026-10-30).
+
+**Lo que NO cubre:** las funciones (PUBLIC conserva EXECUTE por omisión y quitarlo globalmente
+rompería a pgTAP y a las extensiones que se instalen después) y los objetos que cree
+`supabase_admin`, cuyos permisos por defecto no se pueden cambiar desde `postgres`. Para las
+funciones, lo que hace cumplir la regla es `privilegios_test.sql`: falla si `anon` puede ejecutar
+algo que no sea `dominio_sintetico()`. **Salieron dos cosas que la auditoría no vio**: `anon`
+podía ejecutar `touch_updated_at()` y había permisos sobre dos secuencias. Ambas cerradas.
+
+### D-23 · El alta solo admite usuarios de Opsi · 2026-09-25
+
+`handle_new_user` sacaba el nombre visible de `raw_user_meta_data`, que escribe el cliente: con
+un `signUp` directo se podía tener la cuenta «admin». Ahora **solo se admiten correos sintéticos**
+(`usuario@usuarios.opsi.local`, 3–20 de `[a-z0-9_]`), **el nombre sale del correo**, y hay diez
+nombres reservados. Añadir un correo real después sigue funcionando (es un UPDATE, no un alta).
+**Coste asumido:** una cuenta creada desde el dashboard con un correo real se rechaza.
+**Sigue pendiente:** captcha o alta por Edge Function (30 altas por IP cada 5 minutos, sin
+fricción) y comprobar contraseñas filtradas. Antes de publicar.
+
+### D-24 · La zona horaria se valida en el servidor · 2026-09-25
+
+Un trigger contrasta `user_settings.timezone` con `pg_timezone_names`. Sin él, una zona inventada
+rompía `today_for_user()` y, en la fase 3, un solo usuario abortaría el resumen diario de todos.
+
+### D-25 · Los tipos los escribe un script, no una redirección · 2026-09-25
+
+`npm run types` era `supabase gen types … > app/src/lib/database.types.ts`. El `>` vacía el
+fichero **antes** de que la CLI arranque: cuando falló (Postgres todavía levantándose), lo que quedó
+dentro fue el mensaje de error, y `tsc` reventó en toda la app con «';' expected» cuya causa —un
+`types` fallido de dos días antes— no se parecía en nada al síntoma. `scripts/gen-types.mjs`
+genera a memoria, comprueba que sea de verdad un fichero de tipos y solo entonces lo sustituye. Si
+algo falla, el anterior queda intacto.
 
 ## 3. Convenciones
 
@@ -1096,3 +1164,175 @@ peticiones por minuto y por IP** para leer un producto, no 100. Eso convierte la
 global (`products` con `household_id IS NULL`) de optimización en requisito, y empuja a
 importar el volcado del subconjunto español antes de publicar en vez de tirar de la API en
 vivo. Se sube la prioridad del pendiente de Open Food Facts de 🟡 a 🟠.
+
+### 2026-09-24 (sesión 22) · Neveras: una privada por persona y las compartidas que quieras
+
+**El modelo cambia en el servidor.** Antes (`20260922110000`, que nunca se desplegó) cada
+persona pertenecía a exactamente un hogar y aceptar una invitación la **movía**: quien
+entraba en la nevera del piso dejaba la suya. Ahora cada persona tiene **una nevera
+privada** que no se comparte nunca, y además puede crear y pertenecer a neveras compartidas,
+con nombre e icono. Aceptar una invitación **añade** una pertenencia y no saca a nadie de
+nada. Tres migraciones nuevas, sin tocar las existentes: `20260924100000_neveras_esquema`,
+`…110000_neveras_rpc` y `…120000_create_item_con_hogar`.
+
+**Decisiones, con su porqué:**
+
+- **El invariante pasa de «siempre exactamente un hogar» a «siempre al menos uno: la
+  privada».** No lo mantiene un trigger sino la construcción: nada del cliente escribe
+  `household_members`, y ninguna función deja salir de una privada, echar de ella,
+  traspasarla ni invitar. La RLS no cambia una línea: siempre fue verdadera para N
+  pertenencias. Lo que se rompe con N no es la base de datos sino el código que da por hecho
+  «EL hogar del usuario».
+- **Dos límites distintos, y no se mezclan.** `user_settings.household_limit` (2, con
+  `CHECK 1..10`) es cuántas neveras puede tener una persona, la privada incluida, y es lo que
+  en el futuro podrá depender de un plan. `households.member_limit` es cuánta gente cabe en
+  UNA nevera: 1 en la personal, 5 en la compartida, tope técnico que el plan no controla. Un
+  `CHECK` impone la coherencia con `kind`. Guardar el límite de personas en una columna y no en
+  una constante ya venía de antes; se aplica igual al de neveras: subirlo a alguien es un
+  `UPDATE`, no un despliegue.
+- **Los iconos, en una tabla y no en un `CHECK … IN (…)`.** Una sola definición, ampliable con un
+  `INSERT` (el `CHECK` obliga a reescribirlo entero y bloquea `households`), legible por la app
+  para pintar el selector, y la clave foránea la hace cumplir el motor aunque alguien escriba
+  sin pasar por las funciones. Dieciséis claves, todas verificadas contra
+  `phosphor-react-native` 3.0.6. **La clave es el nombre del icono en snake_case**
+  (`users_three` → `UsersThree`), así el mapa clave → componente de la app es mecánico y
+  `db:check` lo comprueba contra `node_modules`. Por omisión, una casa para la privada y un
+  grupo de gente para las compartidas.
+- **La trampa de los permisos, y por qué revocar una columna no bastaba.** `20260922120000`
+  concedió `INSERT` sobre `user_settings` **a nivel de tabla**, y un permiso de tabla cubre
+  también las columnas que se añadan después. Con la política `user_settings_insert`, cualquier
+  cliente podía escribir `insert … (user_id, username, household_limit) values (…, 10)` y
+  regalarse cinco neveras. Se quita el permiso de tabla y se concede columna a columna, sin
+  `household_limit`; `username` sí entra en el `INSERT` (es `NOT NULL` y lo necesita quien no
+  tiene fila) pero sigue fuera del `UPDATE`. Comprobado en la base real como `authenticated`:
+  `UPDATE`, `UPSERT … DO UPDATE` e `INSERT` nombrando la columna dan 42501.
+- **`households` sin `UPDATE` de ningún tipo, y sin política.** Estaba `update (name)`, lo que
+  dejaba que cualquier miembro renombrara una compartida. Ahora renombrar y cambiar el icono
+  es de `update_household`, que solo admite el dueño y no puede tocar `kind` ni `member_limit`.
+  Es `SECURITY DEFINER` porque la tabla no tiene `UPDATE`: es la única vía.
+- **`create_item` ya no adivina la nevera.** Tenía `select household_id from household_members
+  limit 1`, sin `order by`: con dos pertenencias, el alimento caía en una nevera al azar, en
+  silencio y con «Guardado» en pantalla. Ordenar la consulta habría elegido siempre la privada
+  y no se podría guardar nada en la compartida, así que la nevera pasa a ser un parámetro
+  obligatorio (`p_household_id`, el primero: sin valor por omisión, que sería la adivinanza con
+  otra forma) y se comprueba que es de quien llama. Se borró la firma antigua; dejarla viva
+  seguiría eligiendo al azar.
+- **Salir siendo la única persona deja la nevera huérfana, y es lo único que hay.** No se
+  implementa «borrar nevera». Sin esta salida, quien tiene una compartida a la que ya no va no
+  podría liberar su plaza en el límite. Al quedar sin nadie se cancelan las invitaciones
+  pendientes: aceptar una metería a alguien en una nevera sin dueño. Sigue sin borrarse por lo
+  mismo de antes: es irreversible, sorprendente, y el historial es inmutable.
+- **`household_member_names` vale también para la privada.** Es lo único que se aparta de
+  «solo compartidas»: el historial de un elemento de tu privada necesita resolver quién hizo cada
+  cosa, y devolverte tu propio nombre no filtra nada. Negarlo obliga a la app a un caso aparte
+  solo para esa pantalla.
+- **Orden de cerrojos: ajustes de la persona → nevera → invitación.** Siempre ese, en las cuatro
+  funciones que bloquean, que es lo único que impide que dos se esperen entre sí. Comprobado con
+  dos sesiones reales de la misma persona: crear/crear y aceptar/crear; la segunda espera y luego
+  ve la pertenencia ya confirmada, y el tope no se salta.
+- **El tope de neveras de quien invitas no se mira al invitar**, sino al aceptar. Mirarlo
+  revelaría algo de la otra cuenta y además cambia con el tiempo.
+
+**El reparto de lo que ya había.** «Todas son personales», con una excepción que solo puede
+darse en una base de desarrollo: un hogar con más de una persona no puede ser personal. Se
+queda como está, con su inventario y sus miembros, y pasa a **compartido** (5 plazas, o las que
+ya tuviera si eran más; si se llamaba «Mi casa» se renombra, para no tener dos iguales en el
+selector). Cada persona que se queda sin privada recibe una nueva y vacía, y lo mismo quien no
+tuviera hogar. Las invitaciones pendientes a un hogar que se queda personal se cancelan. Probado
+sobre datos del modelo viejo (pareja, trío con nombre propio, huérfanos, usuario sin hogar,
+uno solo como `member`, uno sin fila de ajustes): todos acaban con exactamente una privada y ninguno
+supera su tope. La migración termina con una comprobación que revienta si no fuera así.
+
+**Contrato de errores para la app.** Los mensajes van en español y se enseñan tal cual. Los casos
+que la app debe distinguir llevan además un `hint` estable, en `error.hint`:
+
+| `hint` | SQLSTATE | Cuándo |
+|---|---|---|
+| `limite_neveras` | `P0001` | La persona ya tiene tantas neveras como su `household_limit`: al crear y al aceptar |
+| `nevera_llena` | `P0001` | No queda plaza: al invitar (contando invitaciones sin responder) y al aceptar |
+| `nevera_personal` | `P0001` | Se intenta compartir, invitar, echar, traspasar o abandonar la privada |
+| `debe_traspasar` | `P0001` | El dueño de una compartida con más gente quiere salir sin traspasar |
+
+`invite_to_household` **sigue devolviendo como resultado** lo que depende de la otra cuenta
+(`desconocida`, `ya_es_miembro`, `ya_invitada`) y no añade ningún `outcome`: «nevera personal»
+habla de TU nevera, así que es excepción con su hint y no sirve para enumerar.
+
+**Auditoría de «un solo hogar».** Solo `create_item` tenía el `limit 1`. Las seis acciones,
+`require_item`, `record_inventory_event` y `shelf_life_for_item` parten de un `item_id` que ya
+lleva su hogar, y `today_for_user` y `handle_new_user` no dependen de él. Las vistas y las
+políticas pasan por `is_household_member()`, que vale para N. Lo que sí se rompía y se
+reescribe: `household_member_names` y `household_sent_invitations` usaban una subconsulta de una
+fila (con dos pertenencias, «more than one row returned») y todas las de invitaciones asumían el
+hogar único. **La consecuencia para el cliente:** `inventory_items`, `inventory_with_priority`,
+`inventory_events` y `shopping_list_items` devuelven ahora las filas de TODAS tus neveras
+mezcladas; cada consulta tiene que filtrar por `household_id`. El script de demo de Studio
+elegía «el hogar más antiguo»: ahora pide la personal.
+
+**Verificado:** `db:reset`, `db:lint` y `types` en verde. `db:test`: `domain_constraints`,
+`inventory_actions` (con la firma nueva de `create_item`, cambio mecánico) y `rls_isolation`
+pasan; `household_sharing_test` falla entero por aserciones del modelo viejo (la firma antigua
+de `invite_to_household`, `household_member_names()`, el `UPDATE` de `member_limit` sobre una
+personal, «un hogar nuevo admite dos personas», el `UPDATE` de `name`) y lo reescribe otra
+sesión. `db:check`: 1 fallo de 244, ese mismo fichero. Probados a mano como `authenticated`
+sobre Postgres real: crear compartida, tope, aceptar sin salir de la propia, salir/echar/traspasar,
+huérfanas, `create_item` con nevera propia y ajena, los tres 42501 de `household_limit` y las dos
+carreras de arriba.
+
+**Queda abierto, y no es de esta sesión:** `inventory_with_priority` volvió a `current_date` sin
+que nadie lo notara. `20260921140000` la había pasado a `today_for_user()` (Q9), pero
+`20260921180000` la recreó copiando la definición anterior a ese arreglo. La base real lo
+confirma: la vista usa la fecha del servidor (UTC) y no la del usuario, así que entre medianoche
+y las 2 de la madrugada en España un elemento que vence hoy se enseña como que vence mañana.
+Arreglarlo es recrear la vista con `today_for_user()`.
+
+**Y en la documentación:** `docs/GLOSARIO.md` sigue diciendo que en el MVP hay un hogar por
+usuario y `supabase/README.md` lista `households` con política de `update`; ambos han quedado
+viejos.
+
+### 2026-09-25 (sesión 23) · Cerrar las neveras, y la primera pasada de seguridad
+
+**Cómo fue.** El orquestador de las neveras cayó dos veces por el límite de sesión (429) con
+casi todo hecho, y se remató directamente, sin árbol de agentes, que es lo que más gasta. Antes
+de continuar apareció **el equipo reiniciado**: Docker Desktop parado, y un `db:reset` interrumpido
+que dejó la base recreada pero **vacía** (sin ni la tabla de migraciones). Se arrancó Docker una
+sola vez y se repitió.
+
+**Lo que estaba roto y nadie sabía:**
+
+- **`tsc` fallaba en toda la app.** `database.types.ts` contenía un mensaje de error en vez de
+  TypeScript ([D-25](#d-25--los-tipos-los-escribe-un-script-no-una-redirección--2026-09-25)).
+- **La vista de prioridad usaba otra vez `current_date`.** `20260921180000` la recreó copiando una
+  definición anterior a `today_for_user()` y el arreglo se perdió sin que ningún test fallara,
+  porque el test comprobaba la función y no la vista. Entre medianoche y las 2 en España, lo que
+  vencía hoy se enseñaba como que vencía mañana. `20260924130000` la devuelve, y
+  `prioridad_zona_horaria_test.sql` la prueba **a través de la vista** con UTC+14 y UTC−11 (falla
+  a cualquier hora, no solo de madrugada). Comprobado: con la vista vieja fallan 2 aserciones.
+- **`db:check` esperaba una sola cuenta de desarrollo** y desde que hay dos falló, sin que nada
+  estuviera roto. Ahora comprueba cada cuenta por nombre.
+
+**Lo hecho:**
+
+- **`household_sharing_test.sql` reescrito para el modelo nuevo: 96 aserciones**, con el ciclo
+  entero (crear, tope, invitar, aceptar, rechazar, cancelar, caducar, traspasar, salir, echar,
+  huérfana, plan de pago, ritmo de invitaciones, permisos). Lo de conservación, que no tenía
+  nada que ver, se separó a `conservacion_test.sql`. **Con prueba de mutación**: dándole al cliente
+  permiso de escribir su límite, el test correspondiente se pone en rojo.
+- **Frontend de neveras**: «Mis neveras» en Ajustes (lista, recuento «Tienes 1 de 2» y crear con
+  su tope explicado), una pantalla de gestión por nevera (miembros, invitar, salir; en una privada
+  solo nombre e icono y una nota de por qué no hay más), aviso «Te han invitado a «X»» en el
+  inicio, y los textos de aceptar y salir ya para el modelo nuevo. Salir siendo la única persona
+  deja la nevera huérfana: es la única forma de liberar plaza, porque no existe «borrar nevera».
+- **Primera pasada de seguridad**, con su test cada una: D-22, D-23, D-24 y la **guarda del seed**
+  (las cuentas con contraseña conocida solo se siembran si la base tiene el secreto JWT por
+  defecto de la CLI; sin él, o con otro, no se crea ninguna: comprobado en `db:check`). Ya estaba
+  hecho el vaciado de la caché al cerrar sesión (M3). Los tests de privilegios y de alta también
+  llevan prueba de mutación: abriendo un agujero a propósito, se ponen en rojo.
+
+**Se aprendió:** los clics por coordenadas en el navegador integrado son poco fiables con la
+ventana detrás de otra (las capturas llegan con un paso de retraso y a veces en mosaico). Lo que
+funciona es leer el DOM, rellenar con `form_input` y **comprobar el resultado en la base**, no en
+la pantalla.
+
+**Queda, en este orden** (detalle y porqué en `AUDITORIA-2026-09-24.md` y `PENDIENTES.md` §7):
+cortafuegos (A1, tuyo), CI en verde, decidir la recuperación de cuenta (A4), una sola development
+build con almacén cifrado + cámara + notificaciones, y entonces `lookup-barcode`.
