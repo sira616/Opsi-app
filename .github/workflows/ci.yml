@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lanzarla a mano desde la pestaña Actions, sin tener que empujar nada.
+  workflow_dispatch:
+
+# Permisos mínimos para TODO el workflow. Cada trabajo pide solo lo que necesita
+# por encima de esto, y por defecto no escribe en el repositorio ni en las PR: si
+# un paso de aquí se viera comprometido (una acción de terceros, una dependencia),
+# lo máximo que puede hacer con el token es leer.
+permissions:
+  contents: read
 
 # Un push nuevo cancela la ejecución anterior de la misma rama: no tiene
 # sentido gastar minutos validando un commit ya superado.
@@ -11,16 +20,33 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # LTS vigente. Node 20 salió de soporte en abril de 2026.
+  NODE_VERSION: 24
+
+# ── Las acciones van pinadas a un SHA completo, con la versión en el comentario ──
+# Un tag como `@v4` lo puede mover quien mantiene la acción (o quien se haga con
+# su cuenta) y cambiar lo que corre aquí sin que cambie ningún fichero del repo.
+# Un SHA no se puede mover. Dependabot actualiza el SHA y el comentario a la vez
+# (ver .github/dependabot.yml), así que pinar no significa quedarse atrás.
+#
+#   actions/checkout          3d3c42e5aac5ba805825da76410c181273ba90b1   v7.0.1
+#   actions/setup-node        949feb2413d6458794dcd2491c4babbbce0c15c1   v7.1.0
+#   gitleaks/gitleaks-action  e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e   v3.0.0
+
 jobs:
   # ── Rápido y sin Docker: da señal en segundos ───────────────────────────
   esquema:
     name: Esquema (sin Docker)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Aplicar migraciones y comprobar aislamiento
@@ -35,11 +61,14 @@ jobs:
   base-de-datos:
     name: Base de datos (Supabase real)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
 
@@ -53,6 +82,12 @@ jobs:
 
       - name: Tests pgTAP
         run: npm run db:test
+
+      # Lo que pgTAP no puede probar: pgTAP corre en UNA transacción y una carrera
+      # necesita DOS sesiones solapadas. Dos personas actuando a la vez sobre el
+      # mismo elemento (terminar y tirar, o gastar más de lo que queda).
+      - name: Carreras entre dos personas
+        run: npm run db:carreras
 
       # Q2: los tipos se versionan y aquí se comprueba que siguen al día. Es
       # más rápido que regenerarlos en cada trabajo, y caza el despiste de
@@ -74,15 +109,18 @@ jobs:
         if: always()
         run: npm run db:stop
 
-  # ── La app, cuando exista ───────────────────────────────────────────────
+  # ── La app ───────────────────────────────────────────────────────────────
   app:
     name: App (typecheck y lint)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Typecheck y lint
@@ -93,3 +131,44 @@ jobs:
           fi
           npm run --workspace app typecheck
           npm run --workspace app lint
+
+  # ── Secretos y dependencias ──────────────────────────────────────────────
+  # Las dos puertas son BLOQUEANTES: un aviso nuevo o una clave en el historial
+  # impiden el merge. No se confía en que alguien lo mire.
+  seguridad:
+    name: Secretos y dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # gitleaks lo usa para saber qué commits trae una PR.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Historial descargado entero para que gitleaks pueda recorrer COMMIT A
+          # COMMIT: una clave subida y borrada dentro de la misma PR sigue publicada,
+          # y mirando solo el resultado final no se vería.
+          #
+          # Ojo con lo que NO hace: en una PR escanea los commits de esa PR, y en un
+          # push a main los del push. No vuelve a recorrer todo el historial en cada
+          # ejecución. La pasada completa se hizo a mano y se repite con el comando
+          # de la cabecera de .gitleaks.toml.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Escáner de secretos (gitleaks)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      # Falla ante cualquier aviso alto o crítico SIN exención vigente. Las
+      # exenciones están en docs/security-waivers.json, con motivo y fecha límite.
+      - name: Avisos de dependencias
+        run: npm run check:audit

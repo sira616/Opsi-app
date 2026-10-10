@@ -1,0 +1,18 @@
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "paquete": "braces",
+    "gravedad": "high",
+    "motivo": "Denegación de servicio por agotamiento de pila con patrones anidados muy profundos. Lo usa micromatch dentro de Metro, el empaquetador de Expo, para resolver los patrones de ficheros del propio proyecto: corre en el ordenador de quien programa y en la CI, con patrones que escribe este mismo repositorio. Nada de app/src lo importa y no va dentro de la app instalada. NO hay versión corregida publicada: la 3.0.3 que usamos es la última.",
+    "hasta": "2026-11-07",
+    "quitar_cuando": "braces publique una versión corregida, o se suba de SDK de Expo y Metro deje de depender de la rama 3.x."
+  },
+  {
+    "id": "GHSA-86w9-cpqp-85rv",
+    "paquete": "node-forge",
+    "gravedad": "high",
+    "motivo": "La verificación de firmas RSA PKCS#1 v1.5 acepta elementos anidados de más. Lo usan @expo/cli y @expo/code-signing-certificates, que son herramientas de línea de comandos (certificados y firma de actualizaciones OTA). Opsi no usa actualizaciones OTA: no tiene expo-updates ni sección `updates` en app.json, y ninguna comprobación de firmas de la app pasa por esta librería. NO hay versión corregida publicada: la 1.4.0 que usamos es la última.",
+    "hasta": "2026-11-07",
+    "quitar_cuando": "node-forge publique una versión corregida. Revisar de nuevo si algún día se añade expo-updates: entonces deja de valer este motivo."
+  }
+]
