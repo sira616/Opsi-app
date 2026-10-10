@@ -234,4 +234,14 @@ Detalles en [`docs/SETUP.md`](docs/SETUP.md).
 - [`docs/SETUP.md`](docs/SETUP.md) — levantar el entorno local y desplegar
 - [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) — decisiones técnicas en detalle
 - [`docs/GLOSARIO.md`](docs/GLOSARIO.md) — estados, tipos de fecha y vocabulario del dominio
+- [`docs/VOZ.md`](docs/VOZ.md) — cómo habla Opsi
+- [`docs/security-inventory.md`](docs/security-inventory.md) · [`docs/threat-model.md`](docs/threat-model.md) — qué hay expuesto y qué amenazas se han pensado
 - [`supabase/README.md`](supabase/README.md) · [`app/README.md`](app/README.md) — reglas de cada mitad
+
+## Licencia y seguridad
+
+Código con **todos los derechos reservados**: se publica para poder leerlo y comprobarlo, no para
+reutilizarlo. Ver [`LICENSE`](LICENSE). Los componentes de terceros conservan sus licencias
+([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)).
+
+Para avisar de un fallo de seguridad, **sin abrir un issue público**, ver [`SECURITY.md`](SECURITY.md).

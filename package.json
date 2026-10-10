@@ -1,6 +1,7 @@
 {
   "name": "opsi",
   "private": true,
+  "license": "UNLICENSED",
   "version": "0.0.0",
   "description": "Opsi — gestión de alimentos del hogar. Monorepo: app/ (Expo) + supabase/ (Postgres, Auth, Edge Functions).",
   "workspaces": [

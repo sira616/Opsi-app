@@ -8,6 +8,37 @@ Cómo comprobé las cosas: catálogo de la base local (`pg_default_acl`, `pg_cla
 
 ---
 
+## Estado a 2026-10-10
+
+> **Este informe es público**, como todo el repositorio. Se escribió creyendo que era privado.
+> Describe el estado del **2026-09-24**; esta tabla dice qué ha cambiado desde entonces. Todo lo
+> que figura como cerrado está comprobado por un test o por una lectura directa, no por haberlo
+> escrito en un documento.
+
+| Hallazgo | Estado | Cómo |
+|---|---|---|
+| **A1** · La pila local escucha en toda la red | **Abierto** | Es de tu sistema (cortafuegos); solo afecta al entorno de desarrollo |
+| **A2** · Privilegios por defecto | **Cerrado** | `alter default privileges` + `privilegios_test.sql` |
+| **A3** · Seed con contraseña conocida | **Cerrado** | Guarda por el secreto JWT local, probada en `db:check` |
+| **A4** · Recuperación de cuenta | **Abierto** | Decisión pendiente |
+| **A5** · Borrado de cuenta | **Abierto** | Antes de publicar |
+| **M1** · Alta abierta y de fiar | **Parcial** | Trigger estricto hecho; captcha o alta por Edge Function, pendiente |
+| **M2** · Sesión sin cifrar | **Abierto** | Necesita `expo-secure-store` en una build real |
+| **M3** · Caché al cerrar sesión | **Cerrado** | `session.tsx` la vacía al cambiar de persona |
+| **M4** · Cambiar contraseña | **Abierto** | |
+| **M5** · Zona horaria sin validar | **Cerrado** | Trigger + `alta_test.sql` |
+| **M6** · Enlace de recuperación | **Abierto** | Depende de A4 |
+| **M7** · CI | **Cerrado** | En verde; puertas de secretos y dependencias; `main` protegida |
+| **M8** · Copias de seguridad y monitorización | **Abierto** | Antes de publicar |
+| **P1–P5** · Fases siguientes | **Diseño** | STRIDE de `lookup-barcode` escrito en `docs/threat-model.md` |
+
+**Hallazgos posteriores** (no estaban en este informe): una **carrera** en las acciones sobre un
+elemento, cerrada con `for update` y comprobada con dos sesiones reales; `service_role` con
+permisos de más (`TRUNCATE` y otros), cerrado; y los errores de la base de datos llegaban crudos a
+la pantalla, cerrado. Y que el **repositorio es público**, ver arriba.
+
+---
+
 ## 1. Resumen ejecutivo
 
 1. **La base de datos está bien en lo esencial.** `anon` no puede leer ni ejecutar nada salvo `dominio_sintetico()` (12 endpoints de tabla y vista probados, todo 401/42501); 12 de 12 tablas con RLS; la vista es `security_invoker`; toda función `SECURITY DEFINER` fija `search_path`; un usuario no ve ajustes, tokens ni miembros de otro. Los permisos explícitos de `20260922120000` cubren todo lo que existe.
@@ -75,7 +106,7 @@ Lo asumido y justificado en la bitácora (mínimo de 10 caracteres sin reglas de
   - `POST /pg/query` con `select current_user, current_setting('is_superuser'), (select count(*) from auth.users)` respondió `[{"usuario":"postgres","superuser":"off","usuarios":2}]`. Es SQL arbitrario con el rol `postgres`: no es superusuario, pero es dueño de las tablas (sin `FORCE RLS`, así que salta la RLS), es miembro de `service_role` y tiene permisos sobre `auth.*`.
   - Studio (`54323`, 307 por la LAN) y su proxy `pg-meta` (200, probado en `127.0.0.1`) responden sin login; Mailpit (`54324`) responde por la LAN y mostraría todos los correos, incluidos los enlaces de recuperación (ahora tiene 0 mensajes); el puerto `54322` acepta conexión TCP por la LAN.
   - En `127.0.0.1`, `/mcp` responde `405` a GET (acepta POST) sin clave.
-- La red activa (`Livebox7-…`) está clasificada como **Pública** y hay reglas de entrada **permitidas en el perfil Público** para «Docker Desktop Backend» y «Node.js JavaScript Runtime».
+- La red activa (el nombre de la red doméstica) está clasificada como **Pública** y hay reglas de entrada **permitidas en el perfil Público** para «Docker Desktop Backend» y «Node.js JavaScript Runtime».
 - Además, la app en el móvil habla con la API por **HTTP** plano por la LAN: la contraseña de la cuenta de prueba viaja sin cifrar.
 
 **Escenario realista.** Wi-Fi de casa con un invitado, un aparato IoT comprometido, o el portátil en la cafetería/universidad con la pila levantada (Docker la deja corriendo al cerrar la tapa). Cualquiera puede leer o reescribir `auth.users` (cambiar el hash de una cuenta y entrar), vaciar tablas, o leer los correos de Mailpit. Los datos son de desarrollo, así que el daño directo es pequeño; el riesgo real es que es la máquina que va a tener el `supabase login`, la clave de Anthropic en `supabase/.env` y, cuando se enlace la nube, credenciales de verdad.
@@ -320,7 +351,7 @@ Y en `daily-digest`, procesar por usuario con `try/catch`, no en una consulta gl
 
 **Qué pasa (verificado con `gh api`).**
 - 26 ejecuciones, **0 en verde**. El trabajo «Base de datos (Supabase real)» falla en «Tests pgTAP»: en la última (`26105e6`), `rls_isolation_test.sql` falla los casos 4, 22 y 23. Los otros dos trabajos (esquema con PGlite, typecheck y lint) sí pasan. `PENDIENTES.md` dice que el CI «no ha corrido nunca»: está desactualizado.
-- Todas las ejecuciones son `push` a `main`; cero `pull_request`. La protección de rama devuelve 403 («Upgrade to GitHub Pro»): no se puede exigir CI verde en repositorio privado gratuito.
+- Todas las ejecuciones son `push` a `main`; cero `pull_request`. [**Corrección 2026-10-10:** el repositorio es público desde su creación y la protección de rama SÍ está disponible; hoy está activa. No sé qué vio esta auditoría.] La protección de rama devolvía 403 («Upgrade to GitHub Pro»): no se puede exigir CI verde en repositorio privado gratuito.
 - Faltan: `permissions: contents: read` en el workflow (hoy usa los permisos por defecto), `npm audit --omit=dev --audit-level=high`, escaneo de secretos (gitleaks), Dependabot (las alertas están **desactivadas**) y `db:lint`/advisors. Las acciones van fijadas por etiqueta, no por SHA (Node 20 ya da aviso de retirada).
 - Sospecho que el arreglo de los tres casos rojos es `20260922120000` (sin commitear; su cabecera describe justo «ni el dueño puede reescribir un evento»), pero no lo verifiqué: no ejecuté `db:test`.
 
@@ -574,7 +605,7 @@ La anon key local es un JWT HS256 firmado con el secreto público por defecto de
 - **Auth.** Registro anónimo desactivado (verificado en `/auth/v1/settings`); JWT de 1 h; rotación de refresh con intervalo de reutilización de 10 s; mínimo de 10 con `password_requirements` vacío (verificado: 422 `weak_password`); sin OAuth, teléfono ni SMS; error de credenciales uniforme; `signOut()` global por defecto en supabase-js.
 - **Secretos.** Cero coincidencias en el historial de todas las ramas para 12 patrones (JWT, `sk-ant-`, `sb_secret_`, AKIA, `ghp_`, clave privada, `ANTHROPIC_API_KEY=`, `SERVICE_ROLE_KEY=`, token de Expo, Slack, cadena `postgres://usuario:clave@`); solo se versionaron los `.env.example`; `.env` ignorado; el cliente solo lee `EXPO_PUBLIC_SUPABASE_URL` y la anon key; la clave del móvil no lleva más. En el árbol solo hay JWT de demo local (ignorados).
 - **Cliente.** Cero `console.*` en `app/src`; sin `WebView`, `eval` ni `dangerouslySetInnerHTML`; las consultas usan el constructor de PostgREST sin interpolar cadenas (cero `.or(`/plantillas); los enlaces profundos no ejecutan acciones (`useLocalSearchParams` solo para `id`); las redirecciones son fijas; los mensajes de error del servidor se muestran tal cual solo cuando los escribió una función propia.
-- **Repositorio privado.** Y la documentación es honesta con lo que falta, que es la mitad de lo difícil.
+- **Repositorio privado.** [**Corrección 2026-10-10: era falso.** Es público desde su creación, el 2026-09-19.] Y la documentación es honesta con lo que falta, que es la mitad de lo difícil.
 - **Restricciones de dominio en la base** (checks de fechas/origen, unidades, tamaños de nombre y notas, formato de usuario): están donde deben estar.
 - **Realtime, Storage y Vault vacíos:** un punto de partida limpio; las políticas de Storage se escriben con el bucket.
 - **Seed del catálogo global (`01_products.sql`):** solo datos ficticios con `data_source = 'openfoodfacts'`.
