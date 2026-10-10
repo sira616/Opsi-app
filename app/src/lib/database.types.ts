@@ -273,14 +273,14 @@ isOneToOne: false
                   ]
                 },"user_settings": {
                   Row: {
-                    "auto_add_to_shopping_list": boolean,"created_at": string,"digest_enabled": boolean,"digest_hour": number,"household_limit": number,"locale": string,"push_token": string | null,"push_token_updated_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"username": string
+                    "auto_add_to_shopping_list": boolean,"created_at": string,"digest_enabled": boolean,"digest_hour": number,"digest_minute": number,"household_limit": number,"locale": string,"push_token": string | null,"push_token_updated_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"username": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"username": string
+                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"username": string
                   }
                   Update: {
-                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"username"?: string
+                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"username"?: string
                   }
                   Relationships: [
                     

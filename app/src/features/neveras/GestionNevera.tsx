@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Nevera } from '@/api/household';
-import { Accion, Bloque, Nota, Section } from '@/features/ajustes/ui';
+import { Accion, Bloque, Section } from '@/features/ajustes/ui';
 import { useNevera } from '@/features/ajustes/nevera/datos';
 import { InvitacionesEnviadas } from '@/features/ajustes/nevera/InvitacionesEnviadas';
 import { Invitar } from '@/features/ajustes/nevera/Invitar';
@@ -15,6 +15,7 @@ import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { Info } from '@/shared/ui/Info';
 import { describirNevera } from './datos';
 import { useNeveraActual } from './NeveraActiva';
 
@@ -88,7 +89,15 @@ function Gestion({ nevera }: { nevera: Nevera }) {
             <Text accessibilityRole="header" style={t.title} numberOfLines={2}>
               {nevera.name}
             </Text>
-            <Text style={t.bodySmall}>{describirNevera(nevera)}</Text>
+            <View style={styles.describir}>
+              <Text style={[t.bodySmall, styles.describirTexto]}>{describirNevera(nevera)}</Text>
+              {!esCompartida ? (
+                <Info
+                  titulo="Nevera privada"
+                  texto="Esta nevera es solo tuya: no se comparte ni se deja. Para compartir, crea una compartida y cambia entre las dos desde el inicio."
+                />
+              ) : null}
+            </View>
           </View>
         </View>
 
@@ -104,9 +113,7 @@ function Gestion({ nevera }: { nevera: Nevera }) {
         {cargando ? <ActivityIndicator color={c.brand} /> : null}
         <ErrorNote message={error ? describeDbError(error) : null} />
 
-        {!esCompartida ? (
-          <Nota texto="Esta nevera es solo tuya: no se comparte ni se deja. Para compartir, crea una compartida y cambia entre las dos desde el inicio." />
-        ) : (
+        {esCompartida ? (
           <>
             <Section title="Quién está">
               {miembros.length > 0 ? (
@@ -119,7 +126,14 @@ function Gestion({ nevera }: { nevera: Nevera }) {
               ) : null}
             </Section>
 
-            <Section title="Invitar">
+            <Section
+              title="Invitar"
+              info={
+                limite !== null
+                  ? `Caben ${limite} personas en esta nevera, contando las invitaciones que aún no han contestado.`
+                  : undefined
+              }
+            >
               <Bloque>
                 {soyQuienLleva ? (
                   <Invitar
@@ -133,12 +147,6 @@ function Gestion({ nevera }: { nevera: Nevera }) {
                     Invitar y sacar gente es cosa de quien lleva la nevera. Tú siempre puedes irte.
                   </Text>
                 )}
-                {limite !== null ? (
-                  <Text style={t.caption}>
-                    Caben {limite} personas en esta nevera, contando las invitaciones que aún no han
-                    contestado.
-                  </Text>
-                ) : null}
               </Bloque>
 
               {enviadas.length > 0 ? (
@@ -167,7 +175,7 @@ function Gestion({ nevera }: { nevera: Nevera }) {
               </Section>
             ) : null}
           </>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -188,6 +196,8 @@ const useStyles = makeStyles((c) => ({
   volverTexto: { fontSize: 14.5, fontWeight: '600', color: c.inkMuted },
   cabecera: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   cabeceraTexto: { flex: 1, minWidth: 0, gap: 2 },
+  describir: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  describirTexto: { flexShrink: 1 },
   icono: {
     width: 64,
     height: 64,

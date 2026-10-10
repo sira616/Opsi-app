@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-10** (sesión 26)
+> Última actualización: **2026-10-10** (sesión 27)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **27 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **28 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **9 ficheros pgTAP, 303 tests** contra pgTAP real · `db:check`: **478 comprobaciones** en PGlite · `db:carreras`: 11, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
+| Tests | **9 ficheros pgTAP, 305 tests** contra pgTAP real · `db:check`: **482 comprobaciones** en PGlite · `db:carreras`: 11, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -723,6 +723,40 @@ neveras. Es el precio de no confiar en lo que escribe una persona para todas las
   que `expo-camera` usa en la web, descarga un módulo WASM de un CDN en ejecución (no lo he
   comprobado aquí) y eso es código que no controlamos corriendo en la página. La entrada a mano
   existe en todas las plataformas: es también la vía de quien no da permiso a la cámara.
+
+### D-35 · Lo que explica va detrás de una «i», y lo que tiene opciones sube desde abajo · 2026-10-10
+
+*Salió de una lista de cambios del frontend de quien mantiene el repositorio.*
+
+Cuatro reglas para que una pantalla se lea de un vistazo, con dos piezas nuevas que las cumplen
+(`shared/ui/Info.tsx` y `shared/ui/HojaInferior.tsx`):
+
+- **Un texto que explica pero no hace falta para decidir va detrás de una «i» pequeña**, junto a lo
+  que explica. Está todo, y se lee cuando se busca. Se mudaron así: las frases de cada fila de Ajustes,
+  de dónde sale la fecha límite, lo que dura algo una vez abierto, y qué es cada opción del alta.
+- **Lo que protege a alguien NO se esconde:** los errores, la instrucción cuando algo está caducado
+  y el aviso de no volver a congelar lo descongelado se quedan a la vista. Y la procedencia
+  «De Open Food Facts» también, corta, porque la licencia ODbL pide citarla donde se usen sus datos.
+- **Un recuadro de aviso no tiene color.** El naranja era de «prioridad media» y de lo orientativo,
+  y el verde de «salió bien»; con cajas de colores una pantalla se lee como una pantalla de alarmas.
+  Ahora `Nota` es siempre neutra y el tono lo da un icono pequeño. La tarjeta de «una vez abierto» dejó
+  de ser naranja. **Se dejan** los avisos de «llega en la fase 3», a petición expresa.
+- **Lo que tiene varias opciones propias aparece al tocarlo, en una hoja que sube desde abajo:** las
+  fracciones de «Usar», lo que se puede hacer con una persona de la nevera (los tres puntos «⋯», con la
+  confirmación dentro de la propia hoja) y el reloj del aviso. Antes eran dos botones por cada
+  compañero y un bloque entero de fracciones siempre a la vista.
+
+**El reloj de la hora del aviso** es un selector de ruedas como el de iOS, hecho con `ScrollView` y no
+con el selector nativo: ese solo existe en el móvil y la app se mira también en el navegador. Para
+poder elegir *8:30* y no solo *las 8* hubo que **guardar los minutos**: la migración
+`20261010120000_hora_de_aviso_con_minutos` añade `user_settings.digest_minute` (0 a 59, por omisión 0, con
+permiso de escritura por columna). Una columna aparte y no «minutos del día» para que `digest_hour`
+siga significando lo que significa y el índice parcial que ya existe sobre ella siga sirviendo.
+La hora se guarda al pulsar «Listo», no a cada vuelta de rueda.
+
+**Coste:** una explicación detrás de una «i» la lee menos gente. Es el cambio que se pidió, y lo que
+no se puede esconder está en la segunda regla. **Sin verificar en un móvil:** las ruedas con el dedo
+(en el navegador se probó con la rueda del ratón), la animación de la hoja y el lector de pantalla.
 
 ## 3. Convenciones
 
@@ -1677,3 +1711,31 @@ ni la rama `is_anonymous` de la verificación de la sesión (no se activa el acc
    desarrollo, y en la CI no se nota. Se comprobó el `typecheck` sin ese fichero, como lo ve la CI.
 5. El `typecheck` pasa con `Href` como `string` sin los tipos generados: **no demuestra que una ruta
    exista**. Eso solo se ve en el navegador.
+
+### 2026-10-10 (sesión 27) · Cinco cambios del frontend
+
+**Cómo fue.** Con la fase 2 ya fusionada, se pasó la lista de cambios del frontend. Había una
+ambigüedad real en «quitar los avisos de colores y los textos descriptivos», y se preguntó antes de
+tocar nada: la respuesta fue dejar los «próximamente», quitar lo que no aporta de primeras y **mover**
+lo útil a una «i» pequeña. Está decidido en [D-35](#d-35--lo-que-explica-va-detrás-de-una-i-y-lo-que-tiene-opciones-sube-desde-abajo--2026-10-10).
+
+**Hecho:**
+
+1. Avisos y textos descriptivos fuera de la vista, con su «i»: detalle del elemento, tarjeta de
+   «una vez abierto» (ya neutra), alta, y todas las filas de Ajustes.
+2. «Usar» es un solo botón; las fracciones y la cantidad exacta suben en una hoja desde abajo.
+3. En la gestión de una nevera compartida, cada persona lleva unos tres puntos con sus opciones.
+4. «Invitar» con icono, cabecera, botón con avión de papel e iniciales en las listas.
+5. La hora del aviso, con un reloj de ruedas (y minutos, ver D-35).
+
+**Verificado aquí:** `typecheck` y `lint` limpios; `db:test` (**305**, 2 nuevos) y `db:check` (**482**);
+y **en el navegador** con las cuentas de desarrollo: la hoja de «Usar» (usar ½ deja 0,5 l, cierra la hoja y
+lo anota en el historial), el menú «⋯» con su confirmación dentro de la hoja, el reloj (girar las ruedas,
+«Listo», y la fila `11:07` guardada en la base de datos), y el alta con la ficha caída.
+
+**Sin verificar:** nada de lo anterior en un móvil. En concreto las ruedas con el dedo, el desplazamiento
+con imán de cada rueda en Android, la animación de las hojas y el lector de pantalla.
+
+**Se aprendió:** (1) cuando una petición admite dos lecturas con consecuencias distintas, preguntar una
+vez cuesta menos que rehacer: aquí cambió qué se quitaba y qué se mudaba. (2) El puerto 8081 lo tenía un
+`expo start` que no era mío: se usó en lugar de arrancar otro y no se tocó.
