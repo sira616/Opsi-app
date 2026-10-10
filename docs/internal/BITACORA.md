@@ -1,11 +1,12 @@
 # Bitácora interna de Opsi
 
-> **Documento de trabajo. No publicar.**
-> Vive en `docs/internal/`, que se excluirá si el repositorio deja de ser privado.
+> **Documento de trabajo, y PÚBLICO.** El repositorio lo es desde su creación (2026-09-19) y
+> esta carpeta con él. No contiene claves ni datos personales, y no debe contenerlos: lo que
+> se escriba aquí lo puede leer cualquiera, sin sesión.
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-08** (sesión 24)
+> Última actualización: **2026-10-10** (sesión 25)
 
 ---
 
@@ -591,6 +592,58 @@ límite**: pasada, la puerta vuelve a fallar. No hay exenciones permanentes.
 
 **Descartado:** `npm audit fix --force` (bajaría Expo cuarenta versiones) y `audit-ci` (una
 dependencia nueva para lo que hacen cincuenta líneas).
+
+### D-30 · Licencia: todos los derechos reservados · 2026-10-10
+
+*Elegida por Claude a petición del usuario («elige la licencia necesaria»). Es la parte que más
+conviene que confirme quien tiene los derechos.*
+
+El repositorio es público desde el primer día y no tenía `LICENSE`, lo que en la práctica ya era
+«todos los derechos reservados» sin decirlo. Ahora `LICENSE` lo dice, en español y en inglés: se
+publica para **leerlo**, no para reutilizarlo; se permite estudiarlo, ejecutarlo en local para
+comprobarlo y lo que las condiciones de GitHub dan a cualquier usuario (verlo y bifurcarlo ahí).
+`"license": "UNLICENSED"` en los dos `package.json`, que es lo que npm entiende por propietario.
+
+**Por qué esta y no otra:**
+
+- **Es la reversible.** Abrir el código más adelante es posible; cerrarlo una vez que alguien lo ha
+  bifurcado bajo una licencia abierta, no.
+- Hay **planes de pago** previstos, y MIT o Apache permitirían a cualquiera montar un servicio con
+  este código. AGPL lo impediría, pero es una licencia con peso propio y roza con las tiendas de
+  aplicaciones.
+- **Nada la limitaba:** el inventario de las dependencias de producción (195 entradas) no tiene
+  ninguna copyleft (`THIRD_PARTY_NOTICES.md`).
+
+**Alternativas, por si se prefiere otra:** una abierta permisiva (MIT/Apache-2.0) si se quiere que
+se reutilice; o *source-available* (PolyForm Shield o BSL) si se quiere dejarlo a la vista pero
+vetando que se use para competir. Ninguna cuesta nada de cambiar **hoy**: 0 forks, 0 estrellas.
+
+**Lo que sí obliga y no es opcional:** Open Food Facts publica sus datos bajo **ODbL**, que pide
+atribución y *compartir igual* una base derivada que se publique. La caché global de `products`
+lo es. Mientras no se ofrezca a terceros no se activa; si algún día se abre, hay que revisarlo.
+
+### D-31 · `main` protegida y las funciones de seguridad de GitHub activadas · 2026-10-10
+
+`main` exige **pull request** y que pasen los **cuatro** trabajos de la CI (`Esquema (sin Docker)`,
+`Base de datos (Supabase real)`, `App (typecheck y lint)`, `Secretos y dependencias`), con la rama
+al día, **también para administradores**, sin empujes forzados y sin borrar la rama. Sin
+aprobaciones obligatorias: quien mantiene el repositorio es una sola persona y no podría aprobar
+sus propias PR.
+
+**Por qué para administradores también:** ya había **otro escritor en `main`**: una sesión de
+Claude empujó directamente el 29/09 (el autor del commit es «Claude»). **No sé con qué
+credenciales entró.** Si es con las de quien mantiene el repositorio, una protección que el
+propietario puede saltarse no la frena; y si es con otras, esta regla tampoco estorba. Por eso
+se aplica también a los administradores.
+
+**Coste asumido:** ni quien mantiene el repositorio puede empujar directo a `main`, y **si se
+renombra un trabajo de la CI hay que actualizar la protección**, o las PR se quedan esperando un
+check que ya no existe.
+
+Activado a la vez, todo comprobado leyéndolo de vuelta desde GitHub: aviso privado de
+vulnerabilidades (`SECURITY.md` ya lo daba como vía y no llevaba a ningún sitio), escaneo de
+secretos y protección de pushes (rechaza un push que contenga una clave reconocible), y alertas y
+actualizaciones de seguridad de Dependabot.
 
 ## 3. Convenciones
 
@@ -1441,3 +1494,51 @@ CI; y no se ha probado nada en un móvil real.
 decirlo. (2) Una tabla recién escrita con las cosas que yo creía saber del catálogo (`service_role`)
 estaba mal: el inventario obliga a mirar, y mirar encontró un fallo que la auditoría no vio. (3)
 Antes de abrir una PR, `git fetch` y mirar si `main` se ha movido.
+
+### 2026-10-10 (sesión 25) · Qué había público, y cerrar el repositorio
+
+**Cómo fue.** Se pidió: arreglar los documentos, comprobar qué había subido que no debiera,
+proteger `main`, activar el aviso privado y elegir licencia. Al empezar, las dos PR del bloque previo
+**ya estaban fusionadas por quien mantiene el repositorio**, pero en un orden que dejó el trabajo
+fuera de `main`: la #1 entró en `main` y la #2, apilada sobre ella, acabó en la rama de la #1, que
+ya no iba a ninguna parte. Hizo falta una PR más (#3) para subirlo. **Lección:** con ramas
+apiladas se fusiona de abajo arriba, o se retargetan antes de fusionar.
+
+**Lo que había público** (comprobado con `curl` sin sesión, con `git grep` sobre todas las ramas y
+con la API de GitHub):
+
+- **El repositorio es público desde su creación**: el evento `PublicEvent` es del 2026-09-19 a las
+  05:15:23, el mismo segundo que `created_at`. Los documentos que decían «no publicar» y «se excluirá
+  si el repositorio deja de ser privado» **llevaban tres semanas públicos**. La auditoría de
+  2026-09-24 decía que la protección de rama no estaba disponible («Upgrade to GitHub Pro»), lo que
+  solo pasa en repos privados: o se equivocó o cambió algo que no puedo ver.
+- **Ninguna clave real, nunca.** Patrones sobre todo el historial y gitleaks sobre las 47
+  revisiones. Ningún `.env`, ni certificados, ni claves, ni ficheros sueltos.
+- **Datos personales: uno.** 22 commits llevan el correo personal de quien mantiene el repositorio
+  en sus metadatos (3 llevan el de GitHub, que no revela nada). No hay forma de quitarlos sin
+  reescribir la historia: se descartó, ver abajo. Para los commits nuevos se usa el correo de GitHub
+  en la configuración local de este repositorio.
+- **En los ficheros:** ninguna ruta local ni correo. Sí un fragmento del nombre de la red Wi-Fi en la
+  auditoría (retirado), y `192.168.1.42` como IP de ejemplo en las guías del móvil (es una dirección
+  privada, no se toca).
+- Había 3 **artefactos de la CI** (el informe de gitleaks) descargables por cualquiera con cuenta
+  de GitHub: borrados, y el trabajo ya no los sube.
+- 0 forks, 0 estrellas, 0 vigilantes, 1 colaborador, sin webhooks ni claves de despliegue.
+
+**Por qué no se reescribe la historia:** quitar el correo de 22 commits obliga a un `force-push` que
+cambia todos los SHA, invalida las PR y la protección de `main` lo prohíbe a propósito. Y el correo ya
+lleva tres semanas público: lo único que se gana es que no siga en el historial «oficial», no que
+desaparezca. Lo que sí sirve: en GitHub, *Settings → Emails → Keep my email addresses private* y
+*Block command line pushes that expose my email*, que son ajustes de la **cuenta**, no del repositorio.
+
+**Hecho:** licencia ([D-30](#d-30--licencia-todos-los-derechos-reservados--2026-10-10)), protección
+de `main` y funciones de seguridad ([D-31](#d-31--main-protegida-y-las-funciones-de-seguridad-de-github-activadas--2026-10-10)),
+documentos corregidos (cabeceras de «no publicar», estado de la auditoría, README, lo de Expo Go).
+
+**Comprobado y cambia el plan:** `expo-camera` **viene incluido en Expo Go** para el SDK 57. El README
+decía lo contrario. La cuenta de EAS **deja de estar en el camino crítico de la fase 2**. (Comprobado
+que el módulo está; no que el escáner funcione en un móvil.)
+
+**Se aprendió:** (1) Git Bash convierte `rama:.fichero` en una lista de rutas y el `cat-file` falla:
+usar `git ls-tree`. (2) Una afirmación de un documento («el repo es privado») que lleva tres semanas
+equivocada es peor que no afirmar nada: se comprueba con la API, no se supone.

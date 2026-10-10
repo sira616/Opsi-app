@@ -1,10 +1,11 @@
 # Pendientes de Opsi
 
-> **Documento interno de trabajo. No publicar.**
+> **Documento de trabajo, y público** (el repositorio lo es desde 2026-09-19): no escribir aquí
+> nada que no pueda leer cualquiera.
 > Todo lo que se ha quedado sin pulir, sin verificar o decidido a medias. La
 > [bitácora](BITACORA.md) cuenta **qué se decidió y por qué**; esto cuenta **qué falta**.
 >
-> Última revisión: **2026-09-21** (tras el alta manual y «Consumir primero»)
+> Última revisión: **2026-10-10**
 
 ## Cómo leerlo
 
@@ -210,38 +211,44 @@ tú.
 
 ## 7. Lo siguiente, en orden
 
-Actualizado 2026-10-08. El **bloque previo a la fase 2** está hecho (ver la sesión 24 de la
-bitácora): la PR #1 está en verde, la carrera de las acciones está cerrada, los errores ya no
-llegan crudos, la CI tiene puertas de seguridad, y hay inventario de superficie y modelo de
-amenazas. Lo que queda **antes del escáner**, y es casi todo vuestro:
+Actualizado 2026-10-10. **Cerrado esta sesión** (ver la sesión 25 de la bitácora): el repositorio se
+revisó entero —no hay ninguna clave real—, `main` está protegida, el aviso privado de
+vulnerabilidades y el escaneo de secretos están activos, y hay licencia
+([D-30](BITACORA.md#d-30--licencia-todos-los-derechos-reservados--2026-10-10)).
 
-1. **Decidir si el repositorio es público.** Lo es, y los documentos internos asumían que no
-   (`docs/internal/` dice «se excluirá si el repositorio deja de ser privado»). Cualquiera
-   puede leer, sin iniciar sesión, la bitácora, el informe de auditoría con los puntos débiles
-   que encontró, y las cuentas de desarrollo (`syreta`, `compi`). No hay claves reales: se
-   comprobó con gitleaks sobre las 47 revisiones. Pero es el mapa de dónde apretar. Si no
-   debe ser público, es un clic; si debe serlo, hay que decidir qué de `docs/internal/` sale.
-2. **Proteger `main`.** Hoy se puede empujar directamente, y **otra sesión de Claude lo hizo
-   el 29/09** sin pasar por ninguna PR. En un repositorio público la protección de ramas es
-   gratuita: exigir PR y que los cuatro trabajos de la CI estén en verde.
-3. **A1 · Cortafuegos de Windows.** El stack local escucha en toda la red y el endpoint de SQL
-   de `pg-meta` no pide clave. No dejes la pila levantada fuera de casa (`npm run db:stop`).
-4. **A4 · Decidir cómo se recupera una cuenta.** Con un SMTP real, el cambio de correo no
-   funciona (`double_confirm_changes` pide confirmar también el sintético, que no recibe nada).
-5. **Activar el aviso privado de vulnerabilidades** en GitHub (Settings → Security). `SECURITY.md`
-   ya lo da como vía y, mientras esté apagado, no lleva a ningún sitio.
-6. **Una sola development build (M2 + P2).** `expo-secure-store`, `expo-camera` y
-   `expo-notifications` juntos. Antes, comprobar si `expo-camera` en Expo Go basta para
-   prototipar el escáner: el README da por hecho que no, y está sin verificar.
-7. **La fase 2: el escáner y `lookup-barcode`**, con su tabla STRIDE ya escrita en
-   `docs/threat-model.md`. Licencia (`LICENSE`): sigue sin haber una, y en un repositorio
-   público eso significa «todos los derechos reservados».
+**Decisiones tuyas, de GitHub (ajustes de la cuenta, no del repositorio):**
+
+1. **Esconder tu correo personal.** 22 commits lo llevan y la historia no se toca (ver la
+   bitácora). Settings → Emails → *Keep my email addresses private* y *Block command line pushes that
+   expose my email*, para que no vuelva a pasar desde ningún equipo. En este repositorio ya se usa
+   el correo de GitHub en local.
+2. **Confirmar la licencia.** Es la que más conviene que mires: «todos los derechos reservados»,
+   la reversible. Si prefieres otra, es un fichero.
+3. **Decidir si `docs/internal/` debe ser público.** Lo es desde el primer día y sigue en la
+   historia aunque se quite. No tiene claves ni datos personales. La auditoría es la más sensible
+   (lista debilidades que aún no se han cerrado): antes de la primera publicación en las tiendas, o
+   se mueve a un repositorio privado, o se acepta.
+
+**Del sistema, vuestro:**
+
+4. **A1 · Cortafuegos de Windows.** El stack local escucha en toda la red y el endpoint de SQL de
+   `pg-meta` no pide clave. No dejes la pila levantada fuera de casa (`npm run db:stop`).
+5. **Reserva DHCP** en el router para que la IP del portátil no cambie (cambió el 8/10 y rompió la
+   conexión del móvil).
+6. **A4 · Decidir cómo se recupera una cuenta.** Con un SMTP real, el cambio de correo no funciona.
+
+**Para la fase 2:**
+
+7. **El escáner ya se puede prototipar en Expo Go**: `expo-camera` viene incluido (comprobado en
+   `bundledNativeModules.json`; falta verificarlo con un móvil). La cuenta de EAS y la
+   *development build* solo hacen falta para las push (fase 3) y para el almacén cifrado de la sesión.
+8. **`lookup-barcode`**, con su tabla STRIDE ya escrita en `docs/threat-model.md`.
 
 **Pendiente de mantenimiento:** las dos exenciones de `docs/security-waivers.json` (`braces` y
-`node-forge`, sin versión corregida) **caducan el 2026-11-07** y la CI fallará ese día si nadie
-las revisa. Es a propósito.
+`node-forge`, sin versión corregida) **caducan el 2026-11-07** y la CI fallará ese día si nadie las
+revisa. Es a propósito. Y **si se renombra un trabajo de la CI hay que actualizar la protección de
+`main`**, o las PR se quedan esperando un check que ya no existe.
 
-**Sigue pendiente además:** el logo y `icon.png`/`splash.png` en `app/assets`; una reserva DHCP
-en el router para que la IP del portátil no cambie (cambió el 8/10 y rompió la conexión del móvil);
-y que `eas.json` define `EXPO_PUBLIC_SUPABASE_URL` como `127.0.0.1` en la build de desarrollo, que
-en un móvil físico es el propio móvil.
+**Sigue pendiente además:** el logo y `icon.png`/`splash.png` en `app/assets` (ya hay un
+`icon.png`; falta revisarlo); y que `eas.json` define `EXPO_PUBLIC_SUPABASE_URL` como `127.0.0.1` en la
+build de desarrollo, que en un móvil físico es el propio móvil.

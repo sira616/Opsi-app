@@ -61,9 +61,17 @@ Para el escáner (fase 2) y las notificaciones (fase 3) hará falta una *develop
 build*. Cómo generarla, y qué cuesta cada plataforma, en
 [`../docs/NATIVA.md`](../docs/NATIVA.md).
 
-El escáner de códigos y las notificaciones push **no funcionan en Expo Go**: requieren una
-*development build*. El **login sí**, porque con contraseña no hay que volver de ningún
-correo — por eso se puede probar la app entera hoy sin montar nada.
+Qué hace falta para cada cosa, **comprobado el 2026-10-10** contra la lista de módulos que trae
+Expo Go para este SDK (`node_modules/expo/bundledNativeModules.json`):
+
+- **El escáner** (`expo-camera`): el módulo **viene incluido en Expo Go**, así que se puede
+  prototipar sin *development build*. Lo que no he hecho es escanear un código de verdad en un
+  móvil: está comprobado que el módulo está, no que el escáner funcione allí.
+- **Las notificaciones push** y el **almacén cifrado de la sesión** para una build real: sí piden
+  *development build*. Que `expo-notifications` venga en Expo Go no significa que las push
+  remotas funcionen en él (sin verificar).
+- **El login** funciona en Expo Go, porque con contraseña no hay que volver de ningún correo:
+  por eso se puede probar la app entera hoy sin montar nada.
 
 ## Estado por fases
 
