@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { CircleHalf, Moon, Sun } from 'phosphor-react-native';
 
-import { fonts, makeStyles, radius, space, touchTarget, useAspecto, useTheme, useType, type Aspecto } from '@/shared/theme/tokens';
+import { fonts, makeStyles, radius, space, touchTarget, useAspecto, useTheme, type Aspecto } from '@/shared/theme/tokens';
 import { Section } from './ui';
 
 const ASPECTOS: { valor: Aspecto; etiqueta: string }[] = [
@@ -20,7 +20,6 @@ const ASPECTOS: { valor: Aspecto; etiqueta: string }[] = [
  */
 export function SeccionAspecto() {
   const styles = useStyles();
-  const t = useType();
   const c = useTheme();
   const { aspecto, setAspecto } = useAspecto();
 
@@ -44,11 +43,6 @@ export function SeccionAspecto() {
           );
         })}
       </View>
-      <Text style={t.caption}>
-        {aspecto === 'system'
-          ? 'Sigue el ajuste de tu teléfono.'
-          : 'Fijo, aunque tu teléfono cambie.'}
-      </Text>
     </Section>
   );
 }
