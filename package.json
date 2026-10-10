@@ -31,6 +31,6 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
-    "supabase": "^2.117.0"
+    "supabase": "^2.120.0"
   }
 }
