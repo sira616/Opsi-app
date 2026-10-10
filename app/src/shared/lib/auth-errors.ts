@@ -8,6 +8,7 @@
  * too weak" que no dice cuánto.
  */
 import { esFalloDeRed, mensajeSinConexion } from './conexion';
+import { errorSinTraducir } from './error-generico';
 
 export function describeAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -51,9 +52,23 @@ export function describeAuthError(error: unknown): string {
   if (lower.includes('for security purposes') || lower.includes('rate limit')) {
     return 'Has probado demasiadas veces seguidas. Espera un minuto.';
   }
+  // Contraseñas rechazadas por débiles o filtradas: lo puede arreglar la persona.
+  if (lower.includes('weak') || lower.includes('pwned') || lower.includes('easy to guess')) {
+    return 'Esa contraseña es demasiado fácil de adivinar. Elige otra más larga.';
+  }
+  // La sesión se perdió o caducó a mitad de algo (cambiar la contraseña, por ejemplo).
+  if (
+    lower.includes('session missing') ||
+    lower.includes('refresh token') ||
+    lower.includes('session_not_found')
+  ) {
+    return 'Tu sesión ha caducado. Vuelve a entrar.';
+  }
   // El mensaje de red lo escribe conexion.ts, que sabe contra qué URL se
   // estaba intentando conectar. Sin ese dato el aviso no sirve de nada.
   if (esFalloDeRed(message)) return mensajeSinConexion();
 
-  return message;
+  // Lo que no se reconoce se queda en la consola (en desarrollo): enseñar el texto
+  // crudo de GoTrue no ayuda a quien lo lee. Ver error-generico.ts.
+  return errorSinTraducir('sesión', error);
 }

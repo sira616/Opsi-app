@@ -213,10 +213,10 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] **Neveras**: una privada por persona (no se comparte) y compartidas con nombre e icono, con selector en el inicio; se invita por nombre de usuario y aceptar añade. Límite de 2 neveras por persona, previsto 5 con un plan de pago
 - [x] Ajustes por secciones, con la voz de Opsi ([`docs/VOZ.md`](docs/VOZ.md))
 - [x] Auditoría de seguridad y una primera pasada de arreglos ([`docs/internal/AUDITORIA-2026-09-24.md`](docs/internal/AUDITORIA-2026-09-24.md))
-- [ ] CI en verde
+- [x] CI en verde, con escáner de secretos y puerta de dependencias
 - [ ] Development build con EAS (hace falta para el escáner, los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 241 tests pgTAP (8 ficheros) contra Supabase local, y 409 comprobaciones con
+**Probado:** 243 tests pgTAP (8 ficheros) contra Supabase local, y 414 comprobaciones, más 8 de carreras entre dos personas (`npm run db:carreras`) con
 `npm run db:check`, que corre sin Docker. La app, en el navegador con dos cuentas. **Sin
 probar todavía en un móvil.**
 

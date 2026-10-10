@@ -137,6 +137,36 @@ select ok(
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- C2 · service_role: la clave que vivirá en las Edge Functions
+-- ══════════════════════════════════════════════════════════════════════════
+--
+-- Salta la RLS, así que lo único que la acota son sus permisos de tabla. Hoy solo
+-- necesita el catálogo global de productos (lookup-barcode, fase 2). Cada función
+-- nueva que necesite otra tabla lo pide por escrito en una migración, con el
+-- permiso concreto: este test es lo que obliga a hacerlo a la vista.
+
+select is(
+  (select count(*)
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+     join pg_roles r on r.oid = a.grantee
+    where n.nspname = 'public' and c.relkind in ('r', 'p')
+      and r.rolname = 'service_role' and c.relname <> 'products'),
+  0::bigint,
+  'service_role no tiene ningún permiso sobre ninguna tabla salvo el catálogo de productos'
+);
+
+select ok(
+  has_table_privilege('service_role', 'public.products', 'SELECT')
+    and has_table_privilege('service_role', 'public.products', 'INSERT')
+    and has_table_privilege('service_role', 'public.products', 'UPDATE')
+    and not has_table_privilege('service_role', 'public.products', 'DELETE')
+    and not has_table_privilege('service_role', 'public.products', 'TRUNCATE'),
+  'y sobre products puede leer, insertar y actualizar, pero no borrar ni vaciar'
+);
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- D · Funciones: anon solo puede ejecutar la lista blanca
 -- ══════════════════════════════════════════════════════════════════════════
 --

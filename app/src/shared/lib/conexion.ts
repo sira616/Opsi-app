@@ -25,6 +25,14 @@ export function esFalloDeRed(mensaje: string): boolean {
 }
 
 export function mensajeSinConexion(): string {
+  // Las pistas de abajo (`npm run up`, `app/.env`, el cortafuegos) son para quien
+  // programa, y enseñan además la dirección del servidor. Una persona con la app
+  // instalada no tiene nada de eso: solo necesita saber que es la conexión y qué
+  // hacer. En un build de producción `__DEV__` es falso.
+  if (!__DEV__) {
+    return 'No hay conexión con Opsi. Mira que tienes internet e inténtalo de nuevo.';
+  }
+
   const url = env.supabaseUrl;
 
   if (LOOPBACK.test(url)) {

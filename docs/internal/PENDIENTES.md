@@ -27,7 +27,7 @@ Supabase real. Ya no es cierto: Docker funciona y `db:reset`, `db:test`, `db:lin
 | | Qué está sin verificar | Riesgo concreto |
 |:--:|---|---|
 | 🔴 | **Nada nativo** | Todo lo visual se ha visto solo en el navegador (web, ancho de móvil). El desenfoque real de iOS, la sombra de la barra en iOS y Android, el área segura de un móvil con barra gestual y cómo se pinta cada fila del inventario en nativo (en web el enlace que la envuelve la apila) están sin ver en un dispositivo |
-| 🔴 | **La CI** | `.github/workflows/ci.yml` existe. La auditoría de seguridad la da en rojo en las 26 ejecuciones (falla pgTAP) y este documento decía «nunca ha corrido». **No lo he comprobado yo**: mirarlo en GitHub es lo primero de la lista de abajo |
+| ✅ | **La CI** | **Verificada en verde el 2026-10-08**, por primera vez, en la PR #1: los tres trabajos pasan, con los 8 ficheros de pgTAP corriendo en el runner. Hasta entonces llevaba 25 de 26 ejecuciones en rojo. **Ojo:** solo se dispara con `push` a `main` y con pull requests; una rama suelta no la lanza, y una PR con conflictos tampoco |
 | 🟠 | **Aceptar, rechazar y cancelar invitaciones desde la interfaz con clics reales** | Invitar y aceptar se probaron en el navegador con dos cuentas; rechazar y cancelar solo por SQL (pgTAP). La lógica está probada, la pantalla no |
 | 🟠 | **Las carreras de las funciones de neveras** | Crear/crear y aceptar/crear con dos sesiones a la vez las probó a mano el agente que las escribió (la segunda espera y ve la pertenencia ya confirmada). No hay test automático |
 | 🟠 | **La build de desarrollo (D5)** | Escáner, notificaciones y el almacén cifrado de la sesión no funcionan en Expo Go |
@@ -210,26 +210,38 @@ tú.
 
 ## 7. Lo siguiente, en orden
 
-Actualizado 2026-09-24, tras la auditoría de seguridad (`AUDITORIA-2026-09-24.md`, con la lista
-completa y su porqué). Lo de **antes del escáner**:
+Actualizado 2026-10-08. El **bloque previo a la fase 2** está hecho (ver la sesión 24 de la
+bitácora): la PR #1 está en verde, la carrera de las acciones está cerrada, los errores ya no
+llegan crudos, la CI tiene puertas de seguridad, y hay inventario de superficie y modelo de
+amenazas. Lo que queda **antes del escáner**, y es casi todo vuestro:
 
-1. **A1 · Cortafuegos de Windows (minutos, es tuyo).** El stack local escucha en `0.0.0.0` y
-   `POST /pg/query` ejecuta SQL como `postgres` **sin clave** desde cualquier dispositivo de tu
-   Wi-Fi (comprobado por la IP de la LAN). No dejes la pila levantada fuera de casa
-   (`npm run db:stop`) y deja abierto el 54321 y el 8081 solo a la IP de tu móvil.
-2. **CI en verde (horas).** Es la red de seguridad de todo lo que viene: sin ella las Edge
-   Functions nacen sin nada que las vigile. Ver M7 de la auditoría.
-3. **A4 · Decidir cómo se recupera una cuenta (decisión tuya).** Con un SMTP real, el cambio de
-   correo no funciona: `double_confirm_changes` pide confirmar también el correo sintético, que
-   no recibe nada. Hay que decidirlo antes de construir más encima.
-4. **Una sola development build (M2 + P2).** `expo-secure-store` (sesión cifrada, `allowBackup:
-   false`), `expo-camera` y `expo-notifications` juntos: añadirlos uno a uno obliga a
-   reconstruir tres veces.
-5. **La fase 2: el escáner y `lookup-barcode`**, con los controles de la sección P1 de la auditoría
-   (verificar al usuario dentro de la función, normalizar el GTIN, acotar los campos de Open
-   Food Facts, tope por usuario y global). El contenido de Open Food Facts es entrada no confiable.
+1. **Decidir si el repositorio es público.** Lo es, y los documentos internos asumían que no
+   (`docs/internal/` dice «se excluirá si el repositorio deja de ser privado»). Cualquiera
+   puede leer, sin iniciar sesión, la bitácora, el informe de auditoría con los puntos débiles
+   que encontró, y las cuentas de desarrollo (`syreta`, `compi`). No hay claves reales: se
+   comprobó con gitleaks sobre las 47 revisiones. Pero es el mapa de dónde apretar. Si no
+   debe ser público, es un clic; si debe serlo, hay que decidir qué de `docs/internal/` sale.
+2. **Proteger `main`.** Hoy se puede empujar directamente, y **otra sesión de Claude lo hizo
+   el 29/09** sin pasar por ninguna PR. En un repositorio público la protección de ramas es
+   gratuita: exigir PR y que los cuatro trabajos de la CI estén en verde.
+3. **A1 · Cortafuegos de Windows.** El stack local escucha en toda la red y el endpoint de SQL
+   de `pg-meta` no pide clave. No dejes la pila levantada fuera de casa (`npm run db:stop`).
+4. **A4 · Decidir cómo se recupera una cuenta.** Con un SMTP real, el cambio de correo no
+   funciona (`double_confirm_changes` pide confirmar también el sintético, que no recibe nada).
+5. **Activar el aviso privado de vulnerabilidades** en GitHub (Settings → Security). `SECURITY.md`
+   ya lo da como vía y, mientras esté apagado, no lleva a ningún sitio.
+6. **Una sola development build (M2 + P2).** `expo-secure-store`, `expo-camera` y
+   `expo-notifications` juntos. Antes, comprobar si `expo-camera` en Expo Go basta para
+   prototipar el escáner: el README da por hecho que no, y está sin verificar.
+7. **La fase 2: el escáner y `lookup-barcode`**, con su tabla STRIDE ya escrita en
+   `docs/threat-model.md`. Licencia (`LICENSE`): sigue sin haber una, y en un repositorio
+   público eso significa «todos los derechos reservados».
 
-**Ya hecho de la lista anterior:** arrancar la app de verdad (login, neveras, alta, aviso de
-invitaciones, probado con dos cuentas), `npm run types` y su fichero, y la primera pasada de
-seguridad (privilegios por defecto, alta estricta, zona horaria, guarda del seed; ver la sesión 23
-de la bitácora). **Sigue pendiente** el logo y `icon.png`/`splash.png` en `app/assets`.
+**Pendiente de mantenimiento:** las dos exenciones de `docs/security-waivers.json` (`braces` y
+`node-forge`, sin versión corregida) **caducan el 2026-11-07** y la CI fallará ese día si nadie
+las revisa. Es a propósito.
+
+**Sigue pendiente además:** el logo y `icon.png`/`splash.png` en `app/assets`; una reserva DHCP
+en el router para que la IP del portátil no cambie (cambió el 8/10 y rompió la conexión del móvil);
+y que `eas.json` define `EXPO_PUBLIC_SUPABASE_URL` como `127.0.0.1` en la build de desarrollo, que
+en un móvil físico es el propio móvil.
