@@ -2,6 +2,7 @@
   "name": "opsi-app",
   "version": "0.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

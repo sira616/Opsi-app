@@ -161,6 +161,14 @@ jobs:
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # El repositorio es PÚBLICO. Un artefacto lo puede descargar cualquiera con
+          # cuenta de GitHub, y el informe de un hallazgo real llevaría el contexto del
+          # secreto: no se sube. Los comentarios en la PR tampoco: necesitarían un
+          # permiso de escritura que este trabajo no tiene a propósito. El resultado
+          # queda en el log del trabajo y en el resumen, y quien mira un fallo de
+          # esta puerta es quien mantiene el repositorio.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_ENABLE_COMMENTS: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
