@@ -57,6 +57,18 @@ jobs:
       - name: La paleta cumple WCAG AA
         run: npm run check:contrast
 
+      # El código de barras se valida en dos sitios —la Edge Function, que manda, y
+      # la app, que lo repite antes de gastar una consulta— con la misma lógica.
+      # Son dos copias de un fichero; esto falla si alguien toca una sola.
+      - name: Las dos copias de gtin.ts son iguales
+        run: npm run check:gtin
+
+      # La lógica de lookup-barcode (el parser de Open Food Facts, el orden de las
+      # comprobaciones, los límites) sin Deno ni red: el handler recibe sus
+      # dependencias, y los tests cuentan a quién se llama y a quién NO.
+      - name: Pruebas de las Edge Functions
+        run: npm run test:funciones
+
   # ── El veredicto de verdad: Supabase real en Docker ─────────────────────
   base-de-datos:
     name: Base de datos (Supabase real)
@@ -88,6 +100,12 @@ jobs:
       # mismo elemento (terminar y tirar, o gastar más de lo que queda).
       - name: Carreras entre dos personas
         run: npm run db:carreras
+
+      # Lo que los tests de la lógica no ven: `lookup-barcode` corriendo en el runtime
+      # de Edge Functions de Supabase, con el gateway, la base de datos y el JWT de
+      # verdad. No llama a Open Food Facts: ningún caso depende de la red.
+      - name: La función de búsqueda responde en el runtime real
+        run: npm run fn:check
 
       # Q2: los tipos se versionan y aquí se comprueba que siguen al día. Es
       # más rápido que regenerarlos en cada trabajo, y caza el despiste de

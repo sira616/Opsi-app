@@ -25,10 +25,14 @@
     "link": "supabase link",
     "db:check": "node scripts/check-schema.mjs",
     "db:carreras": "node scripts/check-carreras.mjs",
+    "fn:check": "node scripts/check-funcion.mjs",
+    "fn:serve": "supabase functions serve --env-file supabase/functions/.env",
     "check:audit": "node scripts/check-audit.mjs",
     "up": "node scripts/up.mjs",
     "app:tunnel": "npm run --workspace app start -- --tunnel",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:gtin": "node scripts/check-gtin.mjs",
+    "test:funciones": "node --test \"supabase/functions/**/*.test.ts\""
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
