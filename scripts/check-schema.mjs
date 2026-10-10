@@ -613,6 +613,7 @@ async function main() {
     !(await priv(`select has_table_privilege('authenticated', 'public.user_settings', 'INSERT') as ok`)),
   );
   check('el resto de los ajustes sigue editable', await puede('user_settings', 'digest_hour', 'UPDATE'));
+  check('también los minutos de la hora del aviso', await puede('user_settings', 'digest_minute', 'UPDATE'));
   check('el usuario sigue siendo inmutable', !(await puede('user_settings', 'username', 'UPDATE')));
   check(
     'pero se puede INSERTAR, que es lo que necesita quien no tiene fila de ajustes',
