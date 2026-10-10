@@ -11,6 +11,7 @@ La **capa de datos y servidor**: Postgres, Auth, Storage y Edge Functions.
 ├── config.toml     Configuración del proyecto (puertos, auth, seeds)
 ├── migrations/     Esquema versionado. Una migración por cambio, nunca se edita una aplicada
 ├── functions/      Edge Functions (Deno + TypeScript)
+│   ├── _shared/            lo que no habla con Deno: validación del código, filtro de Open Food Facts, el cerebro de cada función (y sus tests)
 │   ├── lookup-barcode/     fase 2 · Open Food Facts con caché
 │   ├── daily-digest/       fase 3 · resumen diario vía pg_cron
 │   ├── opsi-chat/          fase 5 · asistente con tool use
@@ -96,7 +97,8 @@ para desarrollar.
 - [x] **Fase 0** — CLI y entorno local, esquema (7 tablas), RLS en todas, trigger de
       hogar personal y tests. Falta **ejecutarlos con Docker** y montar la CI
 - [ ] **Fase 1** — RPC de acciones, `inventory_events`, vista `inventory_with_priority`
-- [ ] **Fase 2** — `lookup-barcode` + caché de productos
+- [x] **Fase 2** — `lookup-barcode` + caché de productos: hecha y probada en local (sin desplegar). Con
+      `OFF_USER_AGENT` en `supabase/functions/.env` y `npm run fn:serve` busca en Open Food Facts de verdad
 - [ ] **Fase 3** — `daily-digest` + `pg_cron` + tokens push en `user_settings`
 - [ ] **Fase 4** — Tablas y RPC de la lista de la compra
 - [ ] **Fase 5** — `opsi-chat`, herramientas y límites de uso

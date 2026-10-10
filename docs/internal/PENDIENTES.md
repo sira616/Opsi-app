@@ -27,11 +27,12 @@ Supabase real. Ya no es cierto: Docker funciona y `db:reset`, `db:test`, `db:lin
 
 | | Qué está sin verificar | Riesgo concreto |
 |:--:|---|---|
+| 🔴 | **El escáner con la cámara de un móvil** | Todo lo del escáner está verificado en local **salvo la cámara**: la función, la base de datos y el alta, de punta a punta con Open Food Facts de verdad y en el navegador con la entrada a mano. Lo que ninguna prueba ha visto es `expo-camera` leyendo un código en un móvil con Expo Go: permisos, enfoque, linterna, y qué devuelve cada plataforma (en iOS el UPC-A llega como EAN-13 con un cero delante; la normalización lo cubre, pero con un móvil no se ha visto). **Es lo primero que probar:** `npm run up`, abrir la app en el móvil, tocar el icono de código de barras |
 | 🔴 | **Nada nativo** | Todo lo visual se ha visto solo en el navegador (web, ancho de móvil). El desenfoque real de iOS, la sombra de la barra en iOS y Android, el área segura de un móvil con barra gestual y cómo se pinta cada fila del inventario en nativo (en web el enlace que la envuelve la apila) están sin ver en un dispositivo |
 | ✅ | **La CI** | **Verificada en verde el 2026-10-08**, por primera vez, en la PR #1: los tres trabajos pasan, con los 8 ficheros de pgTAP corriendo en el runner. Hasta entonces llevaba 25 de 26 ejecuciones en rojo. **Ojo:** solo se dispara con `push` a `main` y con pull requests; una rama suelta no la lanza, y una PR con conflictos tampoco |
 | 🟠 | **Aceptar, rechazar y cancelar invitaciones desde la interfaz con clics reales** | Invitar y aceptar se probaron en el navegador con dos cuentas; rechazar y cancelar solo por SQL (pgTAP). La lógica está probada, la pantalla no |
 | 🟠 | **Las carreras de las funciones de neveras** | Crear/crear y aceptar/crear con dos sesiones a la vez las probó a mano el agente que las escribió (la segunda espera y ve la pertenencia ya confirmada). No hay test automático |
-| 🟠 | **La build de desarrollo (D5)** | Escáner, notificaciones y el almacén cifrado de la sesión no funcionan en Expo Go |
+| 🟠 | **La build de desarrollo (D5)** | Notificaciones push (fase 3) y el almacén cifrado de la sesión. **El escáner no la necesita**: `expo-camera` viene en Expo Go (por probar, ver arriba) |
 | 🟡 | Las versiones de Expo salen de `bundledNativeModules.json` | Expo avisa de que un paquete puede necesitar actualización. `npx expo install --check` desde `app/` lo dice |
 
 **Ya cerrado, por si se buscaba aquí:** los `insert into auth.users` de los tests funcionan con el
@@ -127,8 +128,10 @@ aparece en su taxonomía ni en el esquema de producto, y el proxy de red me impi
 consultar la API en vivo.
 
 El plan B (tabla por categoría) ya está puesto y hace que el sistema funcione igual.
-**Verificar en la fase 2**, al escribir `lookup-barcode`, y decidir entonces si merece la
-pena parsear su campo de texto libre.
+**Revisado en la fase 2** (2026-10-10): `lookup-barcode` pide a OFF nombre, marca, cantidad, imagen
+y categorías, y **no** ningún campo de conservación; `open_shelf_life_days` se queda en `null` y manda
+la tabla por categoría con las `categories_tags` que sí se guardan. Parsear un campo de texto libre
+sigue sin merecer la pena hasta que se vea qué fichas lo traen.
 
 ### 🟠 Los valores de `open_shelf_life_reference` no tienen fuente autorizada
 
@@ -189,7 +192,7 @@ Supabase con sesión persistida, alta y login con contraseña, y rutas protegida
 | 🟡 | No hay `CLAUDE.md` | Las convenciones están en la bitácora, que es interna. Un `CLAUDE.md` en la raíz las haría efectivas en cada sesión |
 | 🟡 | No hay plantilla de PR ni `CONTRIBUTING.md` | |
 | 🟡 | README sin material visual | Es lo que separa el README «correcto» del «bonito». El GIF de demo no se puede grabar hasta la fase 2. Esqueleto y lista de material en la [bitácora, sección 5](BITACORA.md#5-plantilla-del-readme-final) |
-| ⚪ | Los códigos de barras del seed son ficticios con formato EAN-13 válido | Empiezan por `84000000000xx`. Podrían chocar con un producto real algún día |
+| ⚪ | Los códigos de barras del seed son ficticios con formato EAN-13 válido | Empiezan por `84000000000xx` y **funcionan con el escáner** (se pueden teclear en la pantalla de escanear para probar sin ir a la compra). Podrían chocar con un producto real algún día |
 
 ---
 
@@ -237,12 +240,24 @@ vulnerabilidades y el escaneo de secretos están activos, y hay licencia
    conexión del móvil).
 6. **A4 · Decidir cómo se recupera una cuenta.** Con un SMTP real, el cambio de correo no funciona.
 
-**Para la fase 2:**
+**Fase 2 (el escáner): hecha en local, falta probarla en un móvil** (ver la sesión 26 de la
+bitácora). Lo que queda:
 
-7. **El escáner ya se puede prototipar en Expo Go**: `expo-camera` viene incluido (comprobado en
-   `bundledNativeModules.json`; falta verificarlo con un móvil). La cuenta de EAS y la
-   *development build* solo hacen falta para las push (fase 3) y para el almacén cifrado de la sesión.
-8. **`lookup-barcode`**, con su tabla STRIDE ya escrita en `docs/threat-model.md`.
+7. **Probar la cámara en un móvil con Expo Go.** Es lo único del escáner sin ver. Escanea un
+   producto de verdad (si OFF no lo conoce, se crea uno privado en tu nevera) y uno del seed
+   tecleando `8400000000017`.
+8. **Para que busque en Open Food Facts de verdad en local:** copiar `supabase/.env.example` a
+   `supabase/functions/.env`, poner en `OFF_USER_AGENT` el nombre de la app y **un contacto real**
+   (el valor de ejemplo se rechaza), y servir la función con `npm run fn:serve`. Sin eso solo
+   resuelve lo que ya está en la caché y los códigos que tecleas del seed.
+9. **Desplegar la función** cuando haya proyecto de Supabase en la nube: `supabase secrets set`
+   con `OFF_USER_AGENT`, `supabase functions deploy lookup-barcode`, y repasar la ficha del endpoint
+   del modelo de amenazas (`[ ] prod`).
+10. **Ajustar los límites con uso real** (30/min y 500/día por persona, 10/min hacia OFF): son
+    cifras razonables elegidas sin datos.
+11. **Formatos que el lector no cubre:** UPC-E (hay que expandirlo a 12 cifras) e ITF-14 (cajas).
+    Y **un producto escaneado no se puede corregir** (si OFF trae el nombre mal, se cambia el nombre
+    del elemento, no el del producto).
 
 **Pendiente de mantenimiento:** las dos exenciones de `docs/security-waivers.json` (`braces` y
 `node-forge`, sin versión corregida) **caducan el 2026-11-07** y la CI fallará ese día si nadie las

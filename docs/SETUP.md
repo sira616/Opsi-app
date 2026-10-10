@@ -79,6 +79,10 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 | `npm run db:check` | **Comprueba el esquema sin Docker**, en segundos (ver abajo) |
 | `npm run db:diff` | Genera una migración a partir de cambios hechos en Studio |
 | `npm run types` | Regenera `app/src/lib/database.types.ts` desde el esquema local |
+| `npm run db:carreras` | Dos sesiones a la vez sobre lo mismo (necesita Docker) |
+| `npm run test:funciones` | Los tests de la lógica de las Edge Functions, sin Deno ni red |
+| `npm run fn:check` | `lookup-barcode` en el runtime de Edge Functions de verdad (necesita Supabase levantado) |
+| `npm run fn:serve` | Sirve las Edge Functions con `supabase/functions/.env` (para que busque en Open Food Facts) |
 
 `db:reset` es destructivo y se usa constantemente: en local **la base de datos es
 desechable**. Lo que no esté en una migración o en el seed, se pierde. Es intencionado.
@@ -98,6 +102,20 @@ Tarda segundos y no necesita nada instalado.
 verdad sobre el Supabase de verdad. Las diferencias asumidas a cambio de la rapidez:
 el esquema `auth` es un doble mínimo, PGlite trae Postgres 18 (el proyecto fija la 17)
 y no hay Storage, Realtime ni Edge Functions.
+
+### Probar el escáner
+
+Los códigos del seed (`8400000000017`, `…024`, `…031`…) son EAN-13 válidos y funcionan **sin configurar
+nada**: en la pantalla de escanear, «Escribir el código a mano» y teclear uno. Para que busque en Open
+Food Facts de verdad:
+
+```bash
+cp supabase/.env.example supabase/functions/.env   # y pon en OFF_USER_AGENT un contacto REAL
+npm run fn:serve
+```
+
+Sin un contacto real la función no llama a Open Food Facts (su política de uso lo pide) y solo sirve lo que
+ya está en la caché. La cámara se prueba en un móvil con Expo Go: `expo-camera` viene incluido.
 
 ### Se entra con usuario y contraseña; el correo es opcional
 
@@ -137,7 +155,7 @@ npm run link -- --project-ref <ref>     # el ref sale de la URL del panel
 npx supabase db push
 
 # 4. Cargar los secrets del servidor
-npx supabase secrets set --env-file supabase/.env
+npx supabase secrets set --env-file supabase/functions/.env
 ```
 
 > [!WARNING]
@@ -154,7 +172,8 @@ npx supabase secrets set --env-file supabase/.env
 | URL del proyecto | Ídem | Sí |
 | `project-ref` | `supabase/.temp/` (ignorado) | Es un identificador, no una credencial |
 | **`service_role` key** | Solo en el servidor | **No. Salta toda la RLS** |
-| **`ANTHROPIC_API_KEY`** | `supabase/.env` → `secrets set` | **No** |
+| **`ANTHROPIC_API_KEY`** | `supabase/functions/.env` → `secrets set` | **No** |
+| `OFF_USER_AGENT` | Ídem. Es un nombre y un contacto, no una clave | **No**: lleva un correo o una dirección de contacto real |
 | Access token de la CLI | `supabase login`, fuera del repo | **No** |
 
 La regla corta: **si empieza por `EXPO_PUBLIC_`, dalo por publicado.**
