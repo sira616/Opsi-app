@@ -15,6 +15,8 @@ import {
 } from 'phosphor-react-native';
 
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
+import { agregarLinea } from '@/api/lista';
+import { fetchSettings } from '@/api/settings';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
 import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
@@ -24,8 +26,10 @@ import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity } from '@/shared/lib/units';
+import { Button } from '@/shared/ui/Button';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { HojaInferior } from '@/shared/ui/HojaInferior';
 import { Info } from '@/shared/ui/Info';
 import {
   fonts,
@@ -58,6 +62,11 @@ export default function Detalle() {
 
   const [error, setError] = useState<string | null>(null);
   const [hojaUsar, setHojaUsar] = useState(false);
+  // Lo que se acaba de hacer con la lista al agotarse algo: preguntar, o avisar de
+  // que ya se apuntó (solo si la persona tiene encendido apuntar lo que se acaba).
+  const [lista, setLista] = useState<null | { paso: 'pregunta' } | { paso: 'hecho'; nuevo: boolean }>(
+    null,
+  );
 
   const item = useQuery({
     queryKey: queryKeys.item(id),
@@ -79,10 +88,12 @@ export default function Detalle() {
    * hay que acertar. Cuesta lo mismo: solo se recarga la que está a la vista.
    */
   const act = useMutation({
-    mutationFn: (run: () => Promise<void>) => run(),
-    async onSuccess() {
+    mutationFn: (run: () => Promise<{ state: string } | void>) => run(),
+    async onSuccess(resultado) {
       setError(null);
       setHojaUsar(false);
+      // Se acabó (terminándolo, o usando lo que quedaba): toca ofrecer apuntarlo.
+      if (resultado && resultado.state === 'finished') void alAcabarse();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.item(id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.itemEvents(id) }),
@@ -93,6 +104,44 @@ export default function Detalle() {
       setError(describeDbError(caught));
     },
   });
+
+  const ajustes = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+
+  /**
+   * Algo se acaba de agotar: ofrecer apuntarlo en la lista.
+   *
+   * NADA se apunta solo salvo que la persona lo haya encendido en Ajustes (y el
+   * servidor lo exige: ver `check_shopping_item`). Apagado, que es como viene, se
+   * pregunta. Encendido, se apunta y se dice, sin pedir nada otra vez.
+   */
+  async function alAcabarse() {
+    if (!ajustes.data?.auto_add_to_shopping_list) {
+      setLista({ paso: 'pregunta' });
+      return;
+    }
+    try {
+      setLista({ paso: 'hecho', nuevo: await apuntarEnLista('auto_restock') });
+    } catch (caught) {
+      setLista(null);
+      setError(describeDbError(caught));
+    }
+  }
+
+  /** Apunta lo que se ha acabado, con lo que traía. `false` si ya estaba pendiente. */
+  async function apuntarEnLista(origen: 'manual' | 'auto_restock'): Promise<boolean> {
+    // El elemento recién agotado, tal como se cargó: su nombre y lo que traía no cambian.
+    const e = item.data;
+    if (!e) return false;
+    const nuevo = await agregarLinea({
+      householdId: e.household_id,
+      name: e.name,
+      origen,
+      productId: e.product_id,
+      cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
+    });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
+    return nuevo;
+  }
 
   if (item.isPending) {
     return (
@@ -158,7 +207,7 @@ export default function Detalle() {
    * —«Quieres usar 500 pero solo quedan 300»—, así que taparlo era perder el
    * único dato útil. Es el mismo error que ya se cometió con P0002.
    */
-  function run(fn: () => Promise<void>) {
+  function run(fn: () => Promise<{ state: string } | void>) {
     setError(null);
     act.mutate(fn);
   }
@@ -341,6 +390,43 @@ export default function Detalle() {
 
         <Historial item={data} />
       </ScrollView>
+
+      {/* Al agotarse algo: ofrecer apuntarlo, o decir que ya se apuntó. */}
+      <HojaInferior
+        visible={lista !== null}
+        onClose={() => setLista(null)}
+        titulo={
+          lista?.paso === 'hecho'
+            ? lista.nuevo
+              ? 'Apuntado en la lista'
+              : 'Ya estaba en la lista'
+            : '¿Lo apunto en la lista?'
+        }
+      >
+        <Text style={styles.listaTexto}>
+          {lista?.paso === 'hecho'
+            ? `«${data.name}» está en la lista de la compra.`
+            : `Se te ha acabado «${data.name}». ¿Lo apunto en la lista de la compra?`}
+        </Text>
+        {lista?.paso === 'pregunta' ? (
+          <>
+            <Button
+              label="Apuntarlo"
+              onPress={async () => {
+                try {
+                  setLista({ paso: 'hecho', nuevo: await apuntarEnLista('manual') });
+                } catch (caught) {
+                  setLista(null);
+                  setError(describeDbError(caught));
+                }
+              }}
+            />
+            <Button label="Ahora no" variant="quiet" onPress={() => setLista(null)} />
+          </>
+        ) : (
+          <Button label="Vale" onPress={() => setLista(null)} />
+        )}
+      </HojaInferior>
 
       <HojaUsar
         visible={hojaUsar}
@@ -613,6 +699,8 @@ const useStyles = makeStyles((c) => ({
   actionTextPrimary: { color: c.onBrand },
   actionTextDanger: { color: c.expiry },
   actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
+
+  listaTexto: { fontSize: 15, lineHeight: 22, color: c.inkMuted },
 
   closedNote: {
     padding: space.lg,
