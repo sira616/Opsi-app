@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text } from 'react-native';
 import { makeStyles, radius, touchTarget, useTheme } from '@/shared/theme/tokens';
 
@@ -7,9 +8,11 @@ type Props = {
   variant?: 'primary' | 'quiet';
   loading?: boolean;
   disabled?: boolean;
+  /** Se pinta a la izquierda de la etiqueta. */
+  icon?: ReactNode;
 };
 
-export function Button({ label, onPress, variant = 'primary', loading, disabled }: Props) {
+export function Button({ label, onPress, variant = 'primary', loading, disabled, icon }: Props) {
   const styles = useStyles();
   const c = useTheme();
   const inactive = disabled || loading;
@@ -31,9 +34,12 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
       {loading ? (
         <ActivityIndicator color={primary ? c.ground : c.brand} />
       ) : (
-        <Text style={[styles.label, primary ? styles.labelPrimary : styles.labelQuiet]}>
-          {label}
-        </Text>
+        <>
+          {icon}
+          <Text style={[styles.label, primary ? styles.labelPrimary : styles.labelQuiet]}>
+            {label}
+          </Text>
+        </>
       )}
     </Pressable>
   );
@@ -43,6 +49,8 @@ const useStyles = makeStyles((c) => ({
   base: {
     minHeight: touchTarget + 8,
     borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,

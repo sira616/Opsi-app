@@ -24,6 +24,7 @@ import {
 } from '@/shared/theme/tokens';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { Info } from '@/shared/ui/Info';
 import { TextField } from '@/shared/ui/TextField';
 import { Accion, Bloque, Row, Section, useAjustesStyles } from './ui';
 
@@ -142,10 +143,12 @@ function BloqueCorreo() {
 
       {pendiente ? (
         <View style={styles.pendiente}>
-          <PaperPlaneTilt size={15} color={c.warning} weight="duotone" />
-          <Text style={styles.pendienteText}>
-            Falta confirmar {pendiente}. El correo anterior sigue valiendo hasta entonces.
-          </Text>
+          <PaperPlaneTilt size={15} color={c.inkMuted} weight="duotone" />
+          <Text style={styles.pendienteText}>Falta confirmar {pendiente}</Text>
+          <Info
+            titulo="Falta confirmar"
+            texto="El correo anterior sigue valiendo hasta que confirmes el nuevo."
+          />
         </View>
       ) : null}
 
@@ -293,12 +296,12 @@ const useStyles = makeStyles((c) => ({
   pendiente: {
     flexDirection: 'row',
     gap: space.sm,
-    alignItems: 'flex-start',
-    backgroundColor: c.warningSoft,
+    alignItems: 'center',
+    backgroundColor: c.surfaceAlt,
     borderRadius: radius.sm + 2,
     padding: space.sm,
   },
-  pendienteText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: c.inkMuted },
+  pendienteText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: c.ink },
 
   salir: {
     minHeight: touchTarget,

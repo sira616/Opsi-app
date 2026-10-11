@@ -6,32 +6,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   CaretLeft,
-  ChartPie,
-  ChartPieSlice,
   CheckCircle,
-  CircleHalf,
   Drop,
   ForkKnife,
-  Minus,
   Package,
-  PencilSimple,
   Snowflake,
   Trash,
-  type IconProps,
 } from 'phosphor-react-native';
 
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
+import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
 import { TarjetaConservacion } from '@/features/elemento/TarjetaConservacion';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
-import { formatQuantity, toBase } from '@/shared/lib/units';
+import { formatQuantity } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { TextField } from '@/shared/ui/TextField';
+import { Info } from '@/shared/ui/Info';
 import {
   fonts,
   makeStyles,
@@ -53,35 +48,6 @@ const STATE_LABEL: Record<ItemDetail['state'], string> = {
   discarded: 'Tirado',
 };
 
-/**
- * Las fracciones de «usar cantidad».
- *
- * Son de lo QUE QUEDA, no de lo inicial: «me he bebido la mitad» dicho sobre
- * un brick por la mitad significa la mitad de lo que había, no la mitad del
- * litro original.
- *
- * No hay un botón de «todo»: llegar a cero cierra el elemento, y para eso está
- * «Terminar», que pregunta antes. Una fracción nunca llega a cero, así que
- * ninguna de estas tres puede cerrar nada por accidente.
- */
-const FRACCIONES: { glifo: string; valor: number; icono: (p: IconProps) => React.ReactElement }[] = [
-  { glifo: '½', valor: 1 / 2, icono: (p) => <CircleHalf {...p} /> },
-  { glifo: '⅓', valor: 1 / 3, icono: (p) => <ChartPieSlice {...p} /> },
-  { glifo: '¼', valor: 1 / 4, icono: (p) => <ChartPie {...p} /> },
-];
-
-/**
- * Lo que descuenta una fracción, en unidad base.
- *
- * Se redondea a dos decimales y NO se ajusta al resto exacto. Cuadrar el
- * último tercio con lo que queda parece amable hasta que se ve lo que
- * implica: llegar a cero cierra el elemento, así que un toque en «⅓» lo daría
- * por terminado sin preguntar. Mejor que sobre un poco.
- */
-function cantidadFraccion(restante: number, fraccion: number): number {
-  return Math.round(restante * fraccion * 100) / 100;
-}
-
 export default function Detalle() {
   const styles = useStyles();
   const t = useType();
@@ -91,8 +57,7 @@ export default function Detalle() {
   const queryClient = useQueryClient();
 
   const [error, setError] = useState<string | null>(null);
-  const [usePanel, setUsePanel] = useState(false);
-  const [amount, setAmount] = useState('');
+  const [hojaUsar, setHojaUsar] = useState(false);
 
   const item = useQuery({
     queryKey: queryKeys.item(id),
@@ -117,8 +82,7 @@ export default function Detalle() {
     mutationFn: (run: () => Promise<void>) => run(),
     async onSuccess() {
       setError(null);
-      setUsePanel(false);
-      setAmount('');
+      setHojaUsar(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.item(id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.itemEvents(id) }),
@@ -207,22 +171,6 @@ export default function Detalle() {
     run(() => actions.use(detail.id, cantidadBase));
   }
 
-  function onUse() {
-    const value = Number(amount.replace(',', '.'));
-    if (!Number.isFinite(value) || value <= 0) {
-      setError('Pon una cantidad mayor que cero.');
-      return;
-    }
-    const base = toBase(value, detail.display_unit);
-    if (base > detail.remaining_quantity) {
-      setError(
-        `Solo quedan ${formatQuantity(detail.remaining_quantity, detail.display_unit)}.`,
-      );
-      return;
-    }
-    usar(base);
-  }
-
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -291,7 +239,11 @@ export default function Detalle() {
                 <Action
                   label="Descongelar"
                   icono={<Drop size={20} color={c.frost} weight="duotone" />}
-                  hint="Una vez descongelado, 24 horas para consumirlo. No se vuelve a congelar."
+                  info={{
+                    titulo: 'Descongelar',
+                    texto:
+                      'Una vez descongelado, tienes 24 horas para consumirlo. No se vuelve a congelar.',
+                  }}
                   onPress={() => run(() => actions.thaw(detail.id))}
                   busy={act.isPending}
                 />
@@ -311,87 +263,45 @@ export default function Detalle() {
                   <Action
                     label="Abrir"
                     icono={<Package size={20} color={c.brand} weight="duotone" />}
-                    hint="Muchos alimentos duran menos una vez abiertos. Al abrirlo recalculo la fecha."
+                    info={{
+                      titulo: 'Abrir',
+                      texto:
+                        'Muchos alimentos duran menos una vez abiertos. Al abrirlo recalculo la fecha límite.',
+                    }}
                     onPress={() => run(() => actions.open(detail.id))}
                     busy={act.isPending}
                   />
                 ) : null}
 
-                {/* ── Usar cantidad, con sus fracciones ─────────────────── */}
-                <View style={styles.usarBloque}>
-                  <View style={styles.usarHead}>
-                    <ForkKnife size={18} color={c.brand} weight="duotone" />
-                    <Text style={styles.usarTitulo}>Usar</Text>
-                  </View>
-
-                  <View style={styles.fracciones}>
-                    {FRACCIONES.map(({ glifo, valor, icono }) => {
-                      const base = cantidadFraccion(data.remaining_quantity, valor);
-                      const vacio = base <= 0;
-                      return (
-                        <Pressable
-                          key={glifo}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Usar ${glifo}, ${formatQuantity(base, data.display_unit)}`}
-                          accessibilityState={{ disabled: vacio || act.isPending }}
-                          disabled={vacio || act.isPending}
-                          onPress={() => usar(base)}
-                          style={({ pressed }) => [
-                            styles.fraccion,
-                            pressed && styles.pressed,
-                            (vacio || act.isPending) && styles.fraccionApagada,
-                          ]}
-                        >
-                          {icono({ size: 15, color: c.brand, weight: 'duotone' })}
-                          <Text style={styles.fraccionGlifo}>{glifo}</Text>
-                          <Text style={styles.fraccionCantidad} numberOfLines={1}>
-                            {formatQuantity(base, data.display_unit)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  {usePanel ? (
-                    <View style={styles.usePanel}>
-                      <TextField
-                        label={`Otra cantidad, en ${
-                          data.display_unit === 'unit' ? 'unidades' : data.display_unit
-                        }`}
-                        hint={`Quedan ${formatQuantity(data.remaining_quantity, data.display_unit)}`}
-                        value={amount}
-                        onChangeText={setAmount}
-                        keyboardType="decimal-pad"
-                        inputMode="decimal"
-                        autoFocus
-                      />
-                      <Action
-                        label="Descontar"
-                        icono={<Minus size={20} color={c.onBrand} weight="bold" />}
-                        onPress={onUse}
-                        busy={act.isPending}
-                        primary
-                      />
-                    </View>
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setUsePanel(true)}
-                      style={({ pressed }) => [styles.otraCantidad, pressed && styles.pressed]}
-                    >
-                      <PencilSimple size={14} color={c.brand} weight="duotone" />
-                      <Text style={styles.otraCantidadText}>Otra cantidad</Text>
-                    </Pressable>
-                  )}
-                </View>
+                {/* Las fracciones y la cantidad exacta suben al tocar: no ocupan
+                    la pantalla hasta que se va a usar algo. */}
+                <Action
+                  label="Usar"
+                  icono={<ForkKnife size={20} color={c.brand} weight="duotone" />}
+                  onPress={() => {
+                    setError(null);
+                    setHojaUsar(true);
+                  }}
+                  busy={act.isPending}
+                />
 
                 <Action
                   label="Congelar"
                   icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
+                  // Lo que protege a alguien se queda a la vista: recongelar lo
+                  // descongelado sin cocinarlo es un riesgo, no una curiosidad.
                   hint={
                     data.state === 'thawed'
                       ? 'Ya se descongeló una vez. No lo vuelvas a congelar sin cocinarlo antes.'
-                      : 'La cuenta atrás se para mientras esté congelado.'
+                      : undefined
+                  }
+                  info={
+                    data.state === 'thawed'
+                      ? undefined
+                      : {
+                          titulo: 'Congelar',
+                          texto: 'La cuenta atrás de la fecha se para mientras esté congelado.',
+                        }
                   }
                   onPress={() => run(() => actions.freeze(detail.id))}
                   busy={act.isPending}
@@ -431,6 +341,20 @@ export default function Detalle() {
 
         <Historial item={data} />
       </ScrollView>
+
+      <HojaUsar
+        visible={hojaUsar}
+        onClose={() => {
+          setHojaUsar(false);
+          setError(null);
+        }}
+        restante={data.remaining_quantity}
+        unidad={data.display_unit}
+        ocupado={act.isPending}
+        error={error}
+        onUsar={usar}
+        onAviso={setError}
+      />
     </SafeAreaView>
   );
 }
@@ -471,7 +395,20 @@ function FechaLimite({ item }: { item: ItemDetail }) {
       <View style={[styles.dateCard, styles.dateCardFrozen]}>
         <View style={styles.frozenHead}>
           <Snowflake size={15} color={c.frost} weight="fill" />
-          <Text style={[styles.dateLabel, styles.dateLabelFrozen]}>En el congelador</Text>
+          <Text style={[styles.dateLabel, styles.dateLabelFrozen, styles.dateLabelTexto]}>
+            En el congelador
+          </Text>
+          <Info
+            titulo="Congelado"
+            texto={
+              'Mientras esté ahí no vence: la cuenta atrás está parada y se reanuda donde se quedó al sacarlo.' +
+              (item.frozen_days > 0
+                ? ` De veces anteriores lleva ${item.frozen_days} ${
+                    item.frozen_days === 1 ? 'día' : 'días'
+                  } ya sumados a su fecha.`
+                : '')
+            }
+          />
         </View>
 
         <Text style={styles.dateValue}>
@@ -486,15 +423,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
           <Text style={styles.frozenSince}>Lo congelaste {desde}.</Text>
         ) : null}
 
-        <Text style={styles.dateExplain}>
-          Mientras esté ahí no vence: la cuenta atrás está parada y se reanuda donde se quedó
-          al sacarlo.
-          {item.frozen_days > 0
-            ? ` De veces anteriores lleva ${item.frozen_days} ${
-                item.frozen_days === 1 ? 'día' : 'días'
-              } ya sumados a su fecha.`
-            : ''}
-        </Text>
       </View>
     );
   }
@@ -502,27 +430,32 @@ function FechaLimite({ item }: { item: ItemDetail }) {
   if (item.effective_limit_date === null) {
     return (
       <View style={[styles.dateCard, styles.dateCardNeutral]}>
-        <Text style={styles.dateLabel}>Sin fecha</Text>
+        <View style={styles.frozenHead}>
+          <Text style={[styles.dateLabel, styles.dateLabelTexto]}>Sin fecha</Text>
+          <Info
+            titulo="Sin fecha"
+            texto="No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla."
+          />
+        </View>
         <Text style={styles.dateValue}>No sé cuándo vence</Text>
-        <Text style={styles.dateExplain}>
-          No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla.
-        </Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.dateCard, urgent ? styles.dateCardUrgent : styles.dateCardNeutral]}>
-      <Text style={[styles.dateLabel, urgent && styles.dateLabelUrgent]}>
-        {item.date_kind === 'expiry' && item.effective_date_reason === 'label'
-          ? 'Caduca'
-          : 'Fecha límite'}{' '}
-        · {describeDateSource(item.effective_date_source)}
-      </Text>
+      <View style={styles.frozenHead}>
+        <Text style={[styles.dateLabel, styles.dateLabelTexto, urgent && styles.dateLabelUrgent]}>
+          {item.date_kind === 'expiry' && item.effective_date_reason === 'label'
+            ? 'Caduca'
+            : 'Fecha límite'}{' '}
+          · {describeDateSource(item.effective_date_source)}
+        </Text>
+        <Info titulo="De dónde sale esta fecha" texto={explanation} />
+      </View>
       <Text style={[styles.dateValue, urgent && styles.dateValueUrgent]}>
         {describeDaysLeft(item.days_left)}
       </Text>
-      <Text style={[styles.dateExplain, urgent && styles.dateExplainUrgent]}>{explanation}</Text>
     </View>
   );
 }
@@ -531,6 +464,7 @@ function Action({
   label,
   icono,
   hint,
+  info,
   onPress,
   busy,
   danger,
@@ -539,7 +473,10 @@ function Action({
   label: string;
   /** El icono de la acción: congelar es un copo, tirar una papelera. */
   icono?: React.ReactNode;
+  /** Texto a la vista. Solo para lo que protege a alguien; lo demás va en `info`. */
   hint?: string;
+  /** Lo que explica la acción, detrás de una «i» pequeña. */
+  info?: { titulo: string; texto: string };
   onPress: () => void;
   busy?: boolean;
   danger?: boolean;
@@ -548,30 +485,34 @@ function Action({
   const styles = useStyles();
   return (
     <View style={styles.actionWrapper}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: busy }}
-        disabled={busy}
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.action,
-          danger && styles.actionDanger,
-          primary && styles.actionPrimary,
-          pressed && styles.actionPressed,
-          busy && styles.actionBusy,
-        ]}
-      >
-        {icono}
-        <Text
-          style={[
-            styles.actionText,
-            danger && styles.actionTextDanger,
-            primary && styles.actionTextPrimary,
+      <View style={styles.actionFila}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.action,
+            styles.actionFlex,
+            danger && styles.actionDanger,
+            primary && styles.actionPrimary,
+            pressed && styles.actionPressed,
+            busy && styles.actionBusy,
           ]}
         >
-          {label}
-        </Text>
-      </Pressable>
+          {icono}
+          <Text
+            style={[
+              styles.actionText,
+              danger && styles.actionTextDanger,
+              primary && styles.actionTextPrimary,
+            ]}
+          >
+            {label}
+          </Text>
+        </Pressable>
+        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
+      </View>
       {hint ? <Text style={styles.actionHint}>{hint}</Text> : null}
     </View>
   );
@@ -636,9 +577,8 @@ const useStyles = makeStyles((c) => ({
   dateLabelFrozen: { color: c.frostInk },
   dateValue: { ...tabular, fontSize: 22, fontWeight: '600', color: c.ink },
   dateValueUrgent: { color: c.expiry },
-  dateExplain: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
-  dateExplainUrgent: { color: c.expiryInk },
   frozenHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
+  dateLabelTexto: { flex: 1 },
   frozenSince: { fontSize: 13, fontWeight: '600', color: c.frostInk },
 
   sectionTitle: {
@@ -652,6 +592,8 @@ const useStyles = makeStyles((c) => ({
 
   actions: { gap: space.sm },
   actionWrapper: { gap: 3 },
+  actionFila: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  actionFlex: { flex: 1 },
   action: {
     minHeight: touchTarget + 6,
     flexDirection: 'row',
@@ -671,43 +613,6 @@ const useStyles = makeStyles((c) => ({
   actionTextPrimary: { color: c.onBrand },
   actionTextDanger: { color: c.expiry },
   actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
-
-  usarBloque: {
-    gap: space.md,
-    padding: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surface,
-  },
-  usarHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 },
-  usarTitulo: { fontSize: 15, fontWeight: '600', color: c.ink },
-
-  fracciones: { flexDirection: 'row', gap: space.sm - 2 },
-  fraccion: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 1,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: c.brandSoft,
-    backgroundColor: c.brandSoft,
-  },
-  fraccionApagada: { opacity: 0.4 },
-  fraccionGlifo: { fontFamily: fonts.semibold, fontSize: 21, color: c.brandInk, lineHeight: 26 },
-  fraccionCantidad: { ...tabular, fontSize: 10.5, color: c.brandInk },
-
-  otraCantidad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    minHeight: touchTarget - 8,
-  },
-  otraCantidadText: { fontSize: 13.5, fontWeight: '600', color: c.brand },
-  usePanel: { gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.md },
 
   closedNote: {
     padding: space.lg,

@@ -63,9 +63,6 @@ export function SalirDeLaNevera({ neveraId, nombre, soyQuienLleva, cuantosSomos,
 
   return (
     <View style={styles.caja}>
-      {sola ? (
-        <Nota texto="Eres la única persona de esta nevera. Si ya no la usas, salir es la forma de liberar tu plaza." />
-      ) : null}
       <ConfirmAction
         label={sola ? 'Salir y dejarla vacía' : 'Salir de la nevera'}
         confirmLabel="Sí, salir"

@@ -11,7 +11,7 @@ import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { fonts, makeStyles, space, useType } from '@/shared/theme/tokens';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { Accion } from '../ui';
+import { Accion, Inicial } from '../ui';
 import { estaViva, plazoCorto } from './datos';
 
 /**
@@ -68,6 +68,7 @@ export function InvitacionesEnviadas({ neveraId, enviadas, soyQuienLleva }: Prop
         const viva = estaViva(inv);
         return (
           <View key={inv.id} style={styles.fila}>
+            <Inicial nombre={inv.invitee_username} size={34} />
             <View style={styles.texto}>
               <Text style={styles.nombre} numberOfLines={1}>
                 {inv.invitee_username}

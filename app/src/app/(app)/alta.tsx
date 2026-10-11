@@ -44,6 +44,7 @@ import { familyOf, toBase, unidadSugerida, type MeasurementUnit } from '@/shared
 import { Button } from '@/shared/ui/Button';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { Info } from '@/shared/ui/Info';
 import { TextField } from '@/shared/ui/TextField';
 import {
   fonts,
@@ -313,27 +314,37 @@ function Formulario({
                     ? `${ficha.name}${ficha.brand ? ` · ${ficha.brand}` : ''}`
                     : 'No he podido leer la ficha'}
                 </Text>
+                {/* La procedencia se queda a la vista, corta: Open Food Facts pide
+                    que se cite donde se usen sus datos. El consejo va en la «i». */}
                 {ficha ? (
                   <Text style={t.caption}>
                     {ficha.data_source === 'openfoodfacts'
-                      ? 'Datos de Open Food Facts. Revisa la cantidad y la fecha: lo que ponga el envase manda.'
-                      : 'Un producto que ya guardaste en esta nevera.'}
+                      ? 'De Open Food Facts'
+                      : 'Ya guardado en esta nevera'}
                   </Text>
-                ) : fichaFallo ? (
-                  <Text style={t.caption}>Puedes rellenarlo a mano; el producto queda enlazado.</Text>
                 ) : null}
               </View>
+              <Info
+                titulo="Producto escaneado"
+                texto={
+                  ficha
+                    ? ficha.data_source === 'openfoodfacts'
+                      ? 'Datos de Open Food Facts. Revisa la cantidad y la fecha: lo que ponga el envase manda.'
+                      : 'Es un producto que ya guardaste en esta nevera. Revisa la cantidad y la fecha.'
+                    : 'Puedes rellenarlo a mano; el producto queda enlazado igualmente.'
+                }
+              />
             </View>
           ) : codigo ? (
             <View style={styles.escaneado}>
               <Barcode size={18} color={c.brandInk} weight="duotone" />
               <View style={styles.escaneadoTexto}>
                 <Text style={styles.escaneadoTitulo}>No conozco este código</Text>
-                <Text style={t.caption}>
-                  Ponle nombre y lo recordaré en esta nevera: la próxima vez lo reconozco sin
-                  teclear.
-                </Text>
               </View>
+              <Info
+                titulo="Código nuevo"
+                texto="Ponle nombre y lo recordaré en esta nevera: la próxima vez lo reconozco sin teclear."
+              />
             </View>
           ) : (
             <Pressable
@@ -427,9 +438,13 @@ function Formulario({
           <Seccion
             icono={<Tag size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Qué pasillo"
-            nota={
+            info={
               categoriaFijada === null && name.trim() && categoriaSugerida !== 'otros'
-                ? 'Esta la he adivinado yo por el nombre. Si no he acertado, tócala.'
+                ? {
+                    titulo: 'Qué pasillo',
+                    texto:
+                      'La que lleva la chispa la he adivinado yo por el nombre. Si no he acertado, toca la tuya.',
+                  }
                 : undefined
             }
           >
@@ -474,6 +489,11 @@ function Formulario({
           <Seccion
             icono={<CalendarBlank size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Hasta cuándo"
+            info={{
+              titulo: 'Hasta cuándo',
+              texto:
+                'Si no la lleva o no te suena, déjalo sin marcar. «Sin fecha» también es una respuesta y tiene su grupo en la lista.',
+            }}
           >
             <Pressable
               accessibilityRole="switch"
@@ -486,10 +506,6 @@ function Formulario({
               </View>
               <View style={styles.toggleText}>
                 <Text style={styles.toggleTitle}>Ponerle fecha</Text>
-                <Text style={t.caption}>
-                  Si no la lleva o no te suena, déjalo sin marcar. «Sin fecha» también es una
-                  respuesta y tiene su grupo en la lista.
-                </Text>
               </View>
             </Pressable>
 
@@ -504,11 +520,13 @@ function Formulario({
                   options={SOURCE_OPTIONS}
                   value={source}
                   onChange={setSource}
-                  hint={
-                    source === 'package'
-                      ? 'La que viene impresa. Se guarda con su origen, para que luego se vea de dónde salió.'
-                      : 'Para sobras, granel o lo que viene desnudo. Tú pones los días; el calendario lo hago yo.'
-                  }
+                  info={{
+                    titulo: 'De dónde sale',
+                    texto: [
+                      'Lo pone el envase: la fecha impresa. Se guarda con su origen, para que luego se vea de dónde salió.',
+                      'La calculo yo: para sobras, granel o lo que viene desnudo. Tú pones los días; el calendario lo hago yo.',
+                    ],
+                  }}
                 />
 
                 {porDias ? (
@@ -539,7 +557,7 @@ function Formulario({
 
                     <TextField
                       label="¿Cuánto le das de vida?"
-                      hint={avisoDias ?? 'Se cuentan desde hoy.'}
+                      hint={avisoDias ?? undefined}
                       value={diasText}
                       onChangeText={(texto) => setDiasText(texto.replace(/\D/g, '').slice(0, 4))}
                       placeholder="7"
@@ -560,9 +578,7 @@ function Formulario({
                 ) : (
                   <TextField
                     label="La fecha del envase"
-                    hint={
-                      avisoFecha ?? 'Solo números: las barras se ponen solas. El año, de 2 o 4 cifras.'
-                    }
+                    hint={avisoFecha ?? undefined}
                     value={dateText}
                     onChangeText={(texto) => setDateText(formatearMientrasEscribe(texto))}
                     placeholder="31/12/2026"
@@ -577,11 +593,13 @@ function Formulario({
                   options={KIND_OPTIONS}
                   value={kind}
                   onChange={setKind}
-                  hint={
-                    kind === 'expiry'
-                      ? 'Pasada la fecha no se come. Es seguridad, no calidad.'
-                      : 'Pasada la fecha es cuestión de calidad, no de seguridad. Lo que baja es el sabor.'
-                  }
+                  info={{
+                    titulo: 'De qué tipo',
+                    texto: [
+                      'Caducidad: pasada la fecha no se come. Es seguridad, no calidad.',
+                      'Consumo preferente: pasada la fecha es cuestión de calidad, no de seguridad. Lo que baja es el sabor.',
+                    ],
+                  }}
                 />
               </View>
             ) : null}
@@ -611,12 +629,13 @@ function Formulario({
 function Seccion({
   icono,
   titulo,
-  nota,
+  info,
   children,
 }: {
   icono: React.ReactNode;
   titulo: string;
-  nota?: string;
+  /** Lo que explica el bloque, detrás de una «i» junto al título. */
+  info?: { titulo: string; texto: string | string[] };
   children: React.ReactNode;
 }) {
   const styles = useStyles();
@@ -625,9 +644,9 @@ function Seccion({
       <View style={styles.seccionHead}>
         {icono}
         <Text style={styles.seccionTitulo}>{titulo}</Text>
+        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
       </View>
       <View style={styles.seccionCuerpo}>{children}</View>
-      {nota ? <Text style={styles.seccionNota}>{nota}</Text> : null}
     </View>
   );
 }
@@ -696,7 +715,6 @@ const useStyles = makeStyles((c) => ({
     borderRadius: radius.lg,
     padding: space.md,
   },
-  seccionNota: { fontSize: 11.5, color: c.inkFaint, paddingHorizontal: 2 },
 
   cantidadFila: { flexDirection: 'row', gap: space.md, alignItems: 'flex-end' },
   cantidadCampo: { width: 96 },

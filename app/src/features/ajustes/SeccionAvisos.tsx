@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
-import { CaretDown, CaretUp } from 'phosphor-react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
+import { CaretDown, CaretRight, CaretUp, Clock } from 'phosphor-react-native';
 
 import type { SettingsPatch, UserSettings } from '@/api/settings';
-import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
+import { fonts, makeStyles, space, tabular, touchTarget, useTheme } from '@/shared/theme/tokens';
+import { Button } from '@/shared/ui/Button';
+import { HojaInferior } from '@/shared/ui/HojaInferior';
+import { Info } from '@/shared/ui/Info';
 import { NotaProximamente } from '@/shared/ui/Proximamente';
+import { SelectorHora } from '@/shared/ui/SelectorHora';
 import { Accion, Bloque, Row, Section, useAjustesStyles } from './ui';
 
 /**
@@ -40,6 +44,10 @@ type Props = {
 /**
  * Cuándo te aviso, y con qué reloj.
  *
+ * La hora se elige con un reloj de ruedas que sube desde abajo, como el de iOS, y
+ * no con una fila de 24 cuadros: ahí no había minutos, y había que buscar el número
+ * entre los demás. La fila de aquí enseña la hora elegida; tocarla abre el reloj.
+ *
  * La zona horaria era una sección aparte y ahora vive aquí dentro. No es solo
  * orden: la zona existe para decidir a qué hora cae el aviso, así que separarla
  * obligaba a leer dos bloques para entender uno. Sigue haciendo la otra cosa
@@ -53,9 +61,13 @@ type Props = {
 export function SeccionAvisos({ data, onPatch, guardando }: Props) {
   const styles = useStyles();
   const compartidos = useAjustesStyles();
-  const t = useType();
   const c = useTheme();
   const [zonasAbiertas, setZonasAbiertas] = useState(false);
+  const [relojAbierto, setRelojAbierto] = useState(false);
+  // Lo que se ve en las ruedas mientras se elige. No se guarda hasta «Listo»: cada
+  // vez que una rueda se para sería un UPDATE, y se acabaría guardando «las 7:12»
+  // por pasar por ahí de camino a las 8.
+  const [borrador, setBorrador] = useState({ hora: data.digest_hour, minuto: data.digest_minute });
 
   const device = deviceTimezone();
 
@@ -75,34 +87,44 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
       />
 
       {data.digest_enabled ? (
-        <View style={styles.horas}>
-          <Text style={t.label}>A qué hora</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horaFila}
+        <Bloque>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`A qué hora: ${hora(data.digest_hour, data.digest_minute)}. Cambiar`}
+            onPress={() => {
+              setBorrador({ hora: data.digest_hour, minuto: data.digest_minute });
+              setRelojAbierto(true);
+            }}
+            style={({ pressed }) => [styles.horaFila, pressed && styles.pulsada]}
           >
-            {Array.from({ length: 24 }, (_, h) => h).map((hora) => {
-              const on = data.digest_hour === hora;
-              const dosCifras = `${hora}`.padStart(2, '0');
-              return (
-                <Pressable
-                  key={hora}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
-                  // El número suelto se lee «cero siete» y no dice qué hace al
-                  // pulsarlo. La etiqueta describe la acción, como el resto.
-                  accessibilityLabel={`Avisarme a las ${hora}:00`}
-                  onPress={() => onPatch({ digest_hour: hora })}
-                  style={[styles.hora, on && styles.horaOn]}
-                >
-                  <Text style={[styles.horaText, on && styles.horaTextOn]}>{dosCifras}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+            <Clock size={20} color={c.brand} weight="duotone" />
+            <Text style={compartidos.rowTitle}>A qué hora</Text>
+            <View style={styles.horaValor}>
+              <Text style={styles.horaTexto}>{hora(data.digest_hour, data.digest_minute)}</Text>
+              <CaretRight size={15} color={c.inkFaint} weight="bold" />
+            </View>
+          </Pressable>
+        </Bloque>
       ) : null}
+
+      <HojaInferior
+        visible={relojAbierto}
+        onClose={() => setRelojAbierto(false)}
+        titulo="¿A qué hora te aviso?"
+      >
+        <SelectorHora
+          hora={borrador.hora}
+          minuto={borrador.minuto}
+          onCambio={(h, m) => setBorrador({ hora: h, minuto: m })}
+        />
+        <Button
+          label={`Listo · ${hora(borrador.hora, borrador.minuto)}`}
+          onPress={() => {
+            onPatch({ digest_hour: borrador.hora, digest_minute: borrador.minuto });
+            setRelojAbierto(false);
+          }}
+        />
+      </HojaInferior>
 
       {/* ── Zona horaria ───────────────────────────────────────────────── */}
       <Bloque>
@@ -116,11 +138,14 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
           style={styles.zonaActual}
         >
           <View style={styles.zonaTexto}>
-            <Text style={compartidos.rowTitle}>Zona horaria</Text>
+            <View style={styles.zonaTitulo}>
+              <Text style={compartidos.rowTitle}>Zona horaria</Text>
+              <Info
+                titulo="Zona horaria"
+                texto="Con esta se cuenta la hora del aviso y qué es «hoy» en tu inventario."
+              />
+            </View>
             <Text style={styles.zonaValor}>{data.timezone}</Text>
-            <Text style={t.caption}>
-              Con esta se cuenta la hora del aviso y qué es «hoy» en tu inventario.
-            </Text>
           </View>
           {zonasAbiertas ? (
             <CaretUp size={17} color={c.inkMuted} weight="bold" />
@@ -162,21 +187,17 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
   );
 }
 
+/** «08:05»: la hora con dos cifras en cada parte, como en un reloj. */
+function hora(h: number, m: number): string {
+  return `${`${h}`.padStart(2, '0')}:${`${m}`.padStart(2, '0')}`;
+}
+
 const useStyles = makeStyles((c) => ({
-  horas: { gap: space.sm, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg },
-  horaFila: { gap: space.sm - 2, paddingRight: space.lg },
-  hora: {
-    minWidth: touchTarget,
-    minHeight: touchTarget,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm + 2,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  horaOn: { backgroundColor: c.brandSoft, borderColor: c.brand, borderWidth: 1.5 },
-  horaText: { fontSize: 14, fontWeight: '600', color: c.inkMuted },
-  horaTextOn: { color: c.brand },
+  horaFila: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },
+  horaValor: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space.xs },
+  horaTexto: { ...tabular, fontFamily: fonts.semibold, fontSize: 18, color: c.brandInk },
+  pulsada: { opacity: 0.7 },
+  zonaTitulo: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
 
   zonaActual: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },
   zonaTexto: { flex: 1, gap: 3 },

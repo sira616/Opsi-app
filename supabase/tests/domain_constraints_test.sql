@@ -293,6 +293,20 @@ select throws_ok(
 );
 
 select throws_ok(
+  $$update public.user_settings set digest_minute = 60$$,
+  '23514',
+  null,
+  'y los minutos, minutos de verdad'
+);
+
+select throws_ok(
+  $$update public.user_settings set digest_minute = -1$$,
+  '23514',
+  null,
+  'sin negativos'
+);
+
+select throws_ok(
   $$update public.user_settings set push_token = 'ExponentPushToken[xxx]'$$,
   '23514',
   null,

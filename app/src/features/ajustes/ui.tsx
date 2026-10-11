@@ -14,24 +14,66 @@
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { fonts, makeStyles, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { CheckCircle, Info as IconoInfo } from 'phosphor-react-native';
 
-/** Un bloque de ajustes: su título en versalitas y su tarjeta. */
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+import { fonts, makeStyles, radius, space, touchTarget, useTheme } from '@/shared/theme/tokens';
+import { Info } from '@/shared/ui/Info';
+
+/**
+ * Un bloque de ajustes: su título en versalitas y su tarjeta.
+ *
+ * `info` es lo que explica el bloque, detrás de una «i» junto al título.
+ */
+export function Section({
+  title,
+  info,
+  children,
+}: {
+  title: string;
+  info?: string;
+  children: ReactNode;
+}) {
   const styles = useAjustesStyles();
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {info ? <Info titulo={title} texto={info} /> : null}
+      </View>
       <View style={styles.card}>{children}</View>
     </View>
   );
 }
 
 /**
- * Una fila: nombre del ajuste, una frase que lo explica y el control.
+ * La inicial de alguien en un círculo.
  *
- * El texto de apoyo no es decoración. Casi todos estos ajustes tienen una
+ * Una lista de nombres a secas se lee como una tabla. Con la inicial delante cada
+ * fila tiene a qué agarrarse, y no cuesta ni una imagen ni un dato más: sale del
+ * propio nombre de usuario.
+ */
+export function Inicial({ nombre, size = 38 }: { nombre: string; size?: number }) {
+  const styles = useAjustesStyles();
+  return (
+    <View
+      accessible={false}
+      style={[styles.inicial, { width: size, height: size, borderRadius: size / 2 }]}
+    >
+      <Text style={[styles.inicialText, { fontSize: size * 0.42 }]}>
+        {nombre.trim().charAt(0).toUpperCase() || '?'}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Una fila: nombre del ajuste, una «i» que lo explica y el control.
+ *
+ * El texto de apoyo no es decoración: casi todos estos ajustes tienen una
  * consecuencia que no se adivina por el nombre, y la frase es donde se cuenta.
+ * Pero leída cada vez que se abre Ajustes, ocho frases seguidas hacen que nadie
+ * lea ninguna. Por eso va detrás de una «i» pequeña junto al nombre: está, y se
+ * lee cuando se busca.
  */
 export function Row({
   title,
@@ -46,8 +88,10 @@ export function Row({
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+        <View style={styles.rowTitulo}>
+          <Text style={styles.rowTitle}>{title}</Text>
+          {subtitle ? <Info titulo={title} texto={subtitle} /> : null}
+        </View>
       </View>
       {right}
     </View>
@@ -100,8 +144,11 @@ type Tono = 'neutro' | 'aviso' | 'bien';
  * Un recuadro con una frase: el resultado de una acción, o por qué algo no se
  * puede hacer ahora mismo.
  *
- * Tres tonos y ninguno es rojo: el rojo es de `ErrorNote` y de la caducidad, y
- * gastarlo en «ese nombre no existe» enseña a ignorarlo donde sí importa.
+ * El recuadro es SIEMPRE neutro. Antes el aviso era naranja y el éxito verde, y
+ * una pantalla con cajas de colores se lee como una pantalla con alarmas. El tono
+ * lo da ahora un icono pequeño: un check cuando salió bien, una «i» cuando no.
+ * Y ninguno es rojo: el rojo es de `ErrorNote` y de la caducidad, y gastarlo en
+ * «ese nombre no existe» enseña a ignorarlo donde sí importa.
  *
  * @param alerta Para lo que aparece DESPUÉS de pulsar algo. Sin esto un lector
  *   de pantalla no anuncia la respuesta y el usuario se queda sin saber si su
@@ -117,24 +164,15 @@ export function Nota({
   alerta?: boolean;
 }) {
   const styles = useAjustesStyles();
+  const c = useTheme();
   return (
-    <View
-      accessibilityRole={alerta ? 'alert' : undefined}
-      style={[
-        styles.nota,
-        tono === 'aviso' && styles.notaAviso,
-        tono === 'bien' && styles.notaBien,
-      ]}
-    >
-      <Text
-        style={[
-          styles.notaText,
-          tono === 'aviso' && styles.notaTextAviso,
-          tono === 'bien' && styles.notaTextBien,
-        ]}
-      >
-        {texto}
-      </Text>
+    <View accessibilityRole={alerta ? 'alert' : undefined} style={styles.nota}>
+      {tono === 'bien' ? (
+        <CheckCircle size={17} color={c.brand} weight="fill" />
+      ) : tono === 'aviso' ? (
+        <IconoInfo size={17} color={c.inkMuted} weight="regular" />
+      ) : null}
+      <Text style={[styles.notaText, tono !== 'neutro' && styles.notaTextConIcono]}>{texto}</Text>
     </View>
   );
 }
@@ -151,6 +189,9 @@ export function Etiqueta({ texto, fuerte }: { texto: string; fuerte?: boolean })
 
 export const useAjustesStyles = makeStyles((c) => ({
   section: { gap: space.sm },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  inicial: { alignItems: 'center', justifyContent: 'center', backgroundColor: c.brandSoft },
+  inicialText: { fontFamily: fonts.bold, color: c.brandInk },
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
@@ -169,8 +210,8 @@ export const useAjustesStyles = makeStyles((c) => ({
 
   row: { flexDirection: 'row', gap: space.lg, alignItems: 'center' },
   rowText: { flex: 1, gap: 3 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: c.ink },
-  rowSubtitle: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
+  rowTitulo: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: c.ink, flexShrink: 1 },
 
   bloque: {
     gap: space.md,
@@ -186,15 +227,15 @@ export const useAjustesStyles = makeStyles((c) => ({
   accionText: { fontSize: 14.5, fontWeight: '600', color: c.brand },
 
   nota: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.sm,
     backgroundColor: c.surfaceAlt,
     borderRadius: radius.sm + 2,
     padding: space.md,
   },
-  notaAviso: { backgroundColor: c.warningSoft },
-  notaBien: { backgroundColor: c.brandSoft },
-  notaText: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
-  notaTextAviso: { color: c.ink },
-  notaTextBien: { color: c.brandInk },
+  notaText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
+  notaTextConIcono: { color: c.ink },
 
   etiqueta: {
     paddingHorizontal: space.sm,

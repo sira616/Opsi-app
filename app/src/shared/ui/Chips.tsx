@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { makeStyles, radius, space, touchTarget } from '@/shared/theme/tokens';
+import { Info } from './Info';
 
 export type ChipOption<T extends string> = {
   value: T;
@@ -14,7 +15,8 @@ type Props<T extends string> = {
   options: readonly ChipOption<T>[];
   value: T;
   onChange: (value: T) => void;
-  hint?: string;
+  /** Lo que explica la elección, detrás de una «i» junto a la etiqueta. */
+  info?: { titulo: string; texto: string | string[] };
 };
 
 /**
@@ -24,12 +26,17 @@ type Props<T extends string> = {
  * detrás de un toque y obliga a recordar cuáles hay. En una pantalla de alta,
  * que se usa con una mano y con prisa, verlas todas gana.
  */
-export function Chips<T extends string>({ label, options, value, onChange, hint }: Props<T>) {
+export function Chips<T extends string>({ label, options, value, onChange, info }: Props<T>) {
   const styles = useStyles();
 
   return (
     <View style={styles.wrapper}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? (
+        <View style={styles.etiquetaFila}>
+          <Text style={styles.label}>{label}</Text>
+          {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
+        </View>
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {options.map((option) => {
           const selected = option.value === value;
@@ -57,13 +64,13 @@ export function Chips<T extends string>({ label, options, value, onChange, hint 
           );
         })}
       </ScrollView>
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
 
 const useStyles = makeStyles((c) => ({
   wrapper: { gap: space.sm - 2 },
+  etiquetaFila: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   label: { fontSize: 12.5, color: c.inkMuted },
   row: { gap: space.sm, paddingRight: space.lg },
   chip: {
@@ -80,5 +87,4 @@ const useStyles = makeStyles((c) => ({
   chipText: { fontSize: 14, fontWeight: '600', color: c.inkMuted },
   chipTextOn: { color: c.brand },
   chipTextDanger: { color: c.expiry },
-  hint: { fontSize: 11.5, color: c.inkFaint },
 }));

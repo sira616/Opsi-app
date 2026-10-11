@@ -18,6 +18,8 @@ export type UserSettings = {
   timezone: string;
   digest_enabled: boolean;
   digest_hour: number;
+  /** Los minutos de la hora del resumen. Se eligen junto con la hora. */
+  digest_minute: number;
   auto_add_to_shopping_list: boolean;
   locale: string;
   /**
@@ -34,8 +36,8 @@ export async function fetchSettings(): Promise<UserSettings | null> {
   const { data, error } = await supabase
     .from('user_settings')
     .select(
-      'user_id, username, timezone, digest_enabled, digest_hour, auto_add_to_shopping_list, ' +
-        'locale, household_limit',
+      'user_id, username, timezone, digest_enabled, digest_hour, digest_minute, ' +
+        'auto_add_to_shopping_list, locale, household_limit',
     )
     .maybeSingle();
 
