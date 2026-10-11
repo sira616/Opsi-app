@@ -624,6 +624,38 @@ isOneToOne: false
               "days": number,"origin": Database["public"]['Enums']["shelf_life_origin"],"recommended_location": Database["public"]['Enums']["storage_location"]
             }[]
                            },
+"stock_from_list":
+{ Args: { "p_category"?: Database["public"]['Enums']["food_category"],"p_date_kind"?: Database["public"]['Enums']["date_kind"],"p_date_source"?: Database["public"]['Enums']["date_source"],"p_display_unit": Database["public"]['Enums']["measurement_unit"],"p_limit_date"?: string,"p_list_item_id": string,"p_location"?: Database["public"]['Enums']["storage_location"],"p_name": string,"p_notes"?: string,"p_product_id"?: string,"p_quantity": number,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
+              "category": Database["public"]['Enums']["food_category"],
+"closed_out_at": string | null,
+"created_at": string,
+"created_by": string | null,
+"date_kind": Database["public"]['Enums']["date_kind"] | null,
+"date_source": Database["public"]['Enums']["date_source"] | null,
+"display_unit": Database["public"]['Enums']["measurement_unit"],
+"frozen_at": string | null,
+"frozen_days": number,
+"household_id": string,
+"id": string,
+"initial_quantity": number,
+"limit_date": string | null,
+"location": Database["public"]['Enums']["storage_location"],
+"name": string,
+"notes": string | null,
+"opened_at": string | null,
+"product_id": string | null,
+"remaining_quantity": number,
+"state": Database["public"]['Enums']["item_state"],
+"thawed_at": string | null,
+"unit_family": Database["public"]['Enums']["unit_family"],
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "inventory_items"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "thaw_item":
 { Args: { "p_item_id": string }; Returns: {
               "category": Database["public"]['Enums']["food_category"],
