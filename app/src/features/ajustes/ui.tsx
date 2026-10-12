@@ -67,21 +67,24 @@ export function Inicial({ nombre, size = 38 }: { nombre: string; size?: number }
 }
 
 /**
- * Una fila: nombre del ajuste, una «i» que lo explica y el control.
+ * Una fila: nombre del ajuste, el control y, si hace falta, un texto.
  *
- * El texto de apoyo no es decoración: casi todos estos ajustes tienen una
- * consecuencia que no se adivina por el nombre, y la frase es donde se cuenta.
- * Pero leída cada vez que se abre Ajustes, ocho frases seguidas hacen que nadie
- * lea ninguna. Por eso va detrás de una «i» pequeña junto al nombre: está, y se
- * lee cuando se busca.
+ *   · `subtitle` es texto a la vista. Para filas cuyo contenido ES el texto (lo
+ *     que se guarda, de dónde salen los datos): esconderlo detrás de una «i»
+ *     dejaría la fila vacía.
+ *   · `info` es una explicación detrás de una «i» pequeña junto al nombre. Solo
+ *     para lo que NO se adivina por el nombre (una consecuencia). Lo que se
+ *     entiende solo no lleva ni una cosa ni la otra.
  */
 export function Row({
   title,
   subtitle,
+  info,
   right,
 }: {
   title: string;
   subtitle?: string;
+  info?: string;
   right?: ReactNode;
 }) {
   const styles = useAjustesStyles();
@@ -90,8 +93,9 @@ export function Row({
       <View style={styles.rowText}>
         <View style={styles.rowTitulo}>
           <Text style={styles.rowTitle}>{title}</Text>
-          {subtitle ? <Info titulo={title} texto={subtitle} /> : null}
+          {info ? <Info titulo={title} texto={info} /> : null}
         </View>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
       {right}
     </View>
@@ -212,6 +216,7 @@ export const useAjustesStyles = makeStyles((c) => ({
   rowText: { flex: 1, gap: 3 },
   rowTitulo: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   rowTitle: { fontSize: 15, fontWeight: '600', color: c.ink, flexShrink: 1 },
+  rowSubtitle: { fontSize: 12.5, lineHeight: 18, color: c.inkMuted },
 
   bloque: {
     gap: space.md,

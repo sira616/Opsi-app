@@ -152,3 +152,42 @@ export async function vaciarCompradas(householdId: string): Promise<void> {
     .eq('is_purchased', true);
   if (error) throw error;
 }
+
+/** Algo que se acabó hace poco, listo para volver a apuntarlo con un toque. */
+export type Sugerencia = {
+  name: string;
+  product_id: string | null;
+  unit_family: UnitFamily;
+  display_unit: MeasurementUnit;
+  /** Lo que traía, en unidad base: es lo que se apunta para volver a comprar. */
+  initial_quantity: number;
+};
+
+/**
+ * Lo último que se agotó en UNA nevera, sin repetidos.
+ *
+ * Es la fuente de las sugerencias de la lista: «se te acabó la leche» es lo más
+ * probable que haya que volver a comprar, y apuntarlo cuesta un toque en lugar de
+ * escribirlo. Solo lo agotado (`finished`), no lo tirado: tirar algo caducado no
+ * quiere decir que se quiera volver a comprar.
+ */
+export async function fetchSugerencias(householdId: string): Promise<Sugerencia[]> {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .select('name, product_id, unit_family, display_unit, initial_quantity')
+    .eq('household_id', householdId)
+    .eq('state', 'finished')
+    .order('closed_out_at', { ascending: false })
+    .limit(30);
+
+  if (error) throw error;
+  const vistas = new Set<string>();
+  const unicas: Sugerencia[] = [];
+  for (const s of (data ?? []) as unknown as Sugerencia[]) {
+    const clave = s.name.trim().toLowerCase();
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    unicas.push(s);
+  }
+  return unicas.slice(0, 10);
+}

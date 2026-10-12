@@ -45,7 +45,6 @@ import { familyOf, fromBase, toBase, unidadSugerida, type MeasurementUnit } from
 import { Button } from '@/shared/ui/Button';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { Info } from '@/shared/ui/Info';
 import { TextField } from '@/shared/ui/TextField';
 import {
   fonts,
@@ -348,7 +347,7 @@ function Formulario({
                     : 'No he podido leer la ficha'}
                 </Text>
                 {/* La procedencia se queda a la vista, corta: Open Food Facts pide
-                    que se cite donde se usen sus datos. El consejo va en la «i». */}
+                    que se cite donde se usen sus datos. */}
                 {ficha ? (
                   <Text style={t.caption}>
                     {ficha.data_source === 'openfoodfacts'
@@ -357,16 +356,6 @@ function Formulario({
                   </Text>
                 ) : null}
               </View>
-              <Info
-                titulo="Producto escaneado"
-                texto={
-                  ficha
-                    ? ficha.data_source === 'openfoodfacts'
-                      ? 'Datos de Open Food Facts. Revisa la cantidad y la fecha: lo que ponga el envase manda.'
-                      : 'Es un producto que ya guardaste en esta nevera. Revisa la cantidad y la fecha.'
-                    : 'Puedes rellenarlo a mano; el producto queda enlazado igualmente.'
-                }
-              />
             </View>
           ) : codigo ? (
             <View style={styles.escaneado}>
@@ -374,10 +363,6 @@ function Formulario({
               <View style={styles.escaneadoTexto}>
                 <Text style={styles.escaneadoTitulo}>No conozco este código</Text>
               </View>
-              <Info
-                titulo="Código nuevo"
-                texto="Ponle nombre y lo recordaré en esta nevera: la próxima vez lo reconozco sin teclear."
-              />
             </View>
           ) : (
             <Pressable
@@ -471,15 +456,6 @@ function Formulario({
           <Seccion
             icono={<Tag size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Qué pasillo"
-            info={
-              categoriaFijada === null && name.trim() && categoriaSugerida !== 'otros'
-                ? {
-                    titulo: 'Qué pasillo',
-                    texto:
-                      'La que lleva la chispa la he adivinado yo por el nombre. Si no he acertado, toca la tuya.',
-                  }
-                : undefined
-            }
           >
             <View style={styles.categorias}>
               {CATEGORIAS.map((cat) => {
@@ -522,11 +498,6 @@ function Formulario({
           <Seccion
             icono={<CalendarBlank size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Hasta cuándo"
-            info={{
-              titulo: 'Hasta cuándo',
-              texto:
-                'Si no la lleva o no te suena, déjalo sin marcar. «Sin fecha» también es una respuesta y tiene su grupo en la lista.',
-            }}
           >
             <Pressable
               accessibilityRole="switch"
@@ -553,13 +524,6 @@ function Formulario({
                   options={SOURCE_OPTIONS}
                   value={source}
                   onChange={setSource}
-                  info={{
-                    titulo: 'De dónde sale',
-                    texto: [
-                      'Lo pone el envase: la fecha impresa. Se guarda con su origen, para que luego se vea de dónde salió.',
-                      'La calculo yo: para sobras, granel o lo que viene desnudo. Tú pones los días; el calendario lo hago yo.',
-                    ],
-                  }}
                 />
 
                 {porDias ? (
@@ -662,13 +626,10 @@ function Formulario({
 function Seccion({
   icono,
   titulo,
-  info,
   children,
 }: {
   icono: React.ReactNode;
   titulo: string;
-  /** Lo que explica el bloque, detrás de una «i» junto al título. */
-  info?: { titulo: string; texto: string | string[] };
   children: React.ReactNode;
 }) {
   const styles = useStyles();
@@ -677,7 +638,6 @@ function Seccion({
       <View style={styles.seccionHead}>
         {icono}
         <Text style={styles.seccionTitulo}>{titulo}</Text>
-        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
       </View>
       <View style={styles.seccionCuerpo}>{children}</View>
     </View>

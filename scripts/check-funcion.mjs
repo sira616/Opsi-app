@@ -93,6 +93,12 @@ async function limpiar() {
 
 // ── Arranque ─────────────────────────────────────────────────────────────────
 const estado = estadoDeSupabase();
+if (estado?.API_URL && estado.ANON_KEY && !estado.FUNCTIONS_URL) {
+  // `supabase status` solo da la URL de las funciones cuando están arriba.
+  console.error(rojo('\nSupabase está arriba, pero las Edge Functions no.'));
+  console.error(tenue('  docker start supabase_edge_runtime_opsi   (o: npm run db:stop && npm run up)'));
+  process.exit(2);
+}
 if (!estado?.API_URL || !estado.ANON_KEY || !estado.FUNCTIONS_URL) {
   console.error(rojo('\nNo llego al Supabase local.'));
   console.error(tenue('  ¿Está Docker abierto y Supabase levantado?  npm run db:start'));

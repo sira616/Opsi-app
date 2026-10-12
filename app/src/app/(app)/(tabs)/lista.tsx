@@ -17,6 +17,7 @@ import {
   CaretUp,
   Check,
   CheckCircle,
+  Confetti,
   Package,
   Plus,
   ShoppingCart,
@@ -27,25 +28,32 @@ import type { Nevera } from '@/api/household';
 import {
   agregarLinea,
   fetchLista,
+  fetchSugerencias,
   marcarComprada,
   quitarLinea,
   vaciarCompradas,
   type LineaLista,
+  type Sugerencia,
 } from '@/api/lista';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
+import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
+import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
+import { IconoComida } from '@/shared/lib/iconos-comida';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity } from '@/shared/lib/units';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { HojaInferior } from '@/shared/ui/HojaInferior';
 import {
+  conAlpha,
   fonts,
   makeStyles,
   radius,
   space,
   tabBarClearance,
+  tabular,
   touchTarget,
   useTheme,
   useType,
@@ -61,6 +69,28 @@ import {
 export default function Lista() {
   const { activa } = useNeveraActual();
   return <ListaDe key={activa.id} nevera={activa} />;
+}
+
+/**
+ * Lo pendiente, agrupado por pasillo y en el orden en que se recorre un
+ * supermercado. Una lista plana de cuarenta nombres obliga a ir y volver; agrupada
+ * se compra de una pasada, y el agrupado sale gratis del nombre (el mismo
+ * `adivinarCategoria` que usa el alta).
+ */
+function agruparPorPasillo(lineas: LineaLista[]): { categoria: Categoria; lineas: LineaLista[] }[] {
+  const grupos = new Map<Categoria, LineaLista[]>();
+  for (const l of lineas) {
+    const cat = adivinarCategoria(l.name);
+    grupos.set(cat, [...(grupos.get(cat) ?? []), l]);
+  }
+  return CATEGORIAS.filter((d) => grupos.has(d.valor)).map((d) => ({
+    categoria: d.valor,
+    lineas: grupos.get(d.valor) ?? [],
+  }));
+}
+
+function etiquetaDe(categoria: Categoria): string {
+  return CATEGORIAS.find((d) => d.valor === categoria)?.etiqueta ?? '';
 }
 
 function ListaDe({ nevera }: { nevera: Nevera }) {
@@ -79,10 +109,25 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     queryKey: queryKeys.listaDe(nevera.id),
     queryFn: () => fetchLista(nevera.id),
   });
+  // Cuelga de la clave de la lista: cualquier cambio de la lista las refresca a las dos.
+  const sugeridas = useQuery({
+    queryKey: [...queryKeys.listaDe(nevera.id), 'sugerencias'],
+    queryFn: () => fetchSugerencias(nevera.id),
+  });
 
   const todas = lista.data ?? [];
   const pendientes = todas.filter((l) => !l.is_purchased);
   const compradas = todas.filter((l) => l.is_purchased);
+  const grupos = agruparPorPasillo(pendientes);
+
+  // Lo que ya está pendiente no se vuelve a sugerir.
+  const yaApuntado = new Set(pendientes.map((l) => l.name.trim().toLowerCase()));
+  const sugerencias = (sugeridas.data ?? []).filter((s) => !yaApuntado.has(s.name.trim().toLowerCase()));
+
+  const hechas = compradas.length;
+  const total = todas.length;
+  const progreso = total === 0 ? 0 : hechas / total;
+  const completa = total > 0 && pendientes.length === 0;
 
   // Una sola forma de ejecutar y refrescar: cualquier cambio vuelve a pedir la
   // lista de ESTA nevera, y el error del servidor sale tal cual (ya está en español).
@@ -105,6 +150,17 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     );
   }
 
+  function repetir(s: Sugerencia) {
+    cambiar.mutate(() =>
+      agregarLinea({
+        householdId: nevera.id,
+        name: s.name,
+        productId: s.product_id,
+        cantidad: { unitFamily: s.unit_family, displayUnit: s.display_unit, quantity: s.initial_quantity },
+      }),
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -115,11 +171,36 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
           </View>
         </View>
         <Text style={t.title}>La compra</Text>
-        <Text style={t.bodySmall}>
-          {pendientes.length === 0
-            ? 'Nada pendiente'
-            : `${pendientes.length} ${pendientes.length === 1 ? 'cosa' : 'cosas'} por comprar`}
-        </Text>
+
+        {/* El resumen: cuánto falta de un vistazo, y cuánto llevas. */}
+        <View style={[styles.resumen, completa && styles.resumenCompleto]}>
+          <View style={styles.resumenIcono}>
+            {completa ? (
+              <Confetti size={26} color={c.brandInk} weight="duotone" />
+            ) : (
+              <ShoppingCart size={26} color={c.brandInk} weight="duotone" />
+            )}
+          </View>
+          <View style={styles.resumenTexto}>
+            <Text style={styles.resumenTitulo}>
+              {completa
+                ? '¡Lista completa!'
+                : pendientes.length === 0
+                  ? 'Nada que comprar'
+                  : `${pendientes.length} ${pendientes.length === 1 ? 'cosa' : 'cosas'} por comprar`}
+            </Text>
+            {total > 0 ? (
+              <>
+                <View style={styles.pista}>
+                  <View style={[styles.pistaRelleno, { width: `${progreso * 100}%` }]} />
+                </View>
+                <Text style={styles.resumenDetalle}>
+                  {hechas} de {total} en el carro
+                </Text>
+              </>
+            ) : null}
+          </View>
+        </View>
 
         <View style={styles.apuntar}>
           <TextInput
@@ -165,18 +246,53 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
 
         <ErrorNote message={error ?? (lista.error ? describeDbError(lista.error) : null)} />
 
+        {/* Lo que se acabó hace poco, a un toque de volver a la lista. */}
+        {sugerencias.length > 0 ? (
+          <View style={styles.sugerencias}>
+            <Text style={styles.sugerenciasTitulo}>Se te acabó</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sugerenciasFila}>
+              {sugerencias.map((s) => (
+                <Pressable
+                  key={s.name}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Apuntar ${s.name} en la lista`}
+                  onPress={() => repetir(s)}
+                  style={({ pressed }) => [styles.sugerencia, pressed && styles.pulsado]}
+                >
+                  <IconoComida nombre={s.name} size={16} color={c.brandInk} weight="duotone" />
+                  <Text style={styles.sugerenciaTexto} numberOfLines={1}>
+                    {s.name}
+                  </Text>
+                  <Plus size={14} color={c.brandInk} weight="bold" />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {!lista.isPending && !lista.error && todas.length === 0 ? (
           <View style={styles.vacio}>
             <View style={styles.vacioIcono}>
-              <ShoppingCart size={28} color={c.brand} weight="duotone" />
+              <ShoppingCart size={30} color={c.brand} weight="duotone" />
             </View>
             <Text style={styles.vacioTitulo}>La lista está vacía</Text>
             <Text style={t.bodySmall}>Lo que apuntes aquí lo ven todas las personas de esta nevera.</Text>
           </View>
         ) : null}
 
-        {pendientes.map((linea) => (
-          <Linea key={linea.id} linea={linea} onPress={() => setElegida(linea)} />
+        {grupos.map((grupo) => (
+          <View key={grupo.categoria} style={styles.grupo}>
+            <View style={styles.grupoCabecera}>
+              <View style={styles.grupoIcono}>
+                <IconoCategoria categoria={grupo.categoria} size={15} color={c.brandInk} weight="duotone" />
+              </View>
+              <Text style={styles.grupoTitulo}>{etiquetaDe(grupo.categoria)}</Text>
+              <Text style={styles.grupoCuenta}>{grupo.lineas.length}</Text>
+            </View>
+            {grupo.lineas.map((linea) => (
+              <Linea key={linea.id} linea={linea} onPress={() => setElegida(linea)} />
+            ))}
+          </View>
         ))}
 
         {compradas.length > 0 ? (
@@ -187,7 +303,8 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
               onPress={() => setCompradasAbiertas((v) => !v)}
               style={styles.compradasCabecera}
             >
-              <Text style={styles.compradasTitulo}>Comprado · {compradas.length}</Text>
+              <CheckCircle size={18} color={c.brand} weight="fill" />
+              <Text style={styles.compradasTitulo}>En el carro · {compradas.length}</Text>
               {compradasAbiertas ? (
                 <CaretUp size={16} color={c.inkMuted} weight="bold" />
               ) : (
@@ -278,23 +395,32 @@ function Linea({ linea, onPress }: { linea: LineaLista; onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel={comprada ? `${linea.name}, comprado. Quitar la tachadura` : linea.name}
       onPress={onPress}
-      style={({ pressed }) => [styles.linea, pressed && styles.pulsado]}
+      style={({ pressed }) => [styles.linea, comprada && styles.lineaComprada, pressed && styles.pulsado]}
     >
-      {comprada ? (
-        <CheckCircle size={26} color={c.brand} weight="fill" />
-      ) : (
-        <View style={styles.circulo} />
-      )}
+      <View style={[styles.avatar, comprada && styles.avatarApagado]}>
+        <IconoComida
+          nombre={linea.name}
+          size={22}
+          color={comprada ? c.inkFaint : c.brandInk}
+          weight="duotone"
+        />
+      </View>
       <View style={styles.lineaTexto}>
         <Text style={[styles.lineaNombre, comprada && styles.lineaTachada]} numberOfLines={2}>
           {linea.name}
         </Text>
         {cantidad || linea.source === 'auto_restock' ? (
-          <Text style={styles.lineaDetalle}>
-            {[cantidad, linea.source === 'auto_restock' ? 'se acabó' : null].filter(Boolean).join(' · ')}
-          </Text>
+          <View style={styles.lineaDetalleFila}>
+            {cantidad ? <Text style={styles.lineaCantidad}>{cantidad}</Text> : null}
+            {linea.source === 'auto_restock' ? <Text style={styles.lineaEtiqueta}>se acabó</Text> : null}
+          </View>
         ) : null}
       </View>
+      {comprada ? (
+        <CheckCircle size={26} color={c.brand} weight="fill" />
+      ) : (
+        <View style={styles.circulo} />
+      )}
     </Pressable>
   );
 }
@@ -325,12 +451,37 @@ function Opcion({
 
 const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
-  header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm, gap: space.xs },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
+  header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm, gap: space.sm },
+  headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
   pildoraHueco: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
 
-  apuntar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
+  // El resumen: una tarjeta con color de marca, para que la pantalla tenga un
+  // punto de partida y no sea solo una columna de texto.
+  resumen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+    padding: space.lg,
+    borderRadius: radius.lg + 4,
+    backgroundColor: c.brandSoft,
+  },
+  resumenCompleto: { borderWidth: 1.5, borderColor: c.brand },
+  resumenIcono: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: conAlpha(c.brand, 0.18),
+  },
+  resumenTexto: { flex: 1, gap: 6 },
+  resumenTitulo: { fontFamily: fonts.displaySemi, fontSize: 20, color: c.brandInk },
+  pista: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: conAlpha(c.brand, 0.22) },
+  pistaRelleno: { height: 8, borderRadius: 4, backgroundColor: c.brand },
+  resumenDetalle: { ...tabular, fontSize: 12.5, color: c.brandInk },
+
+  apuntar: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   input: {
     flex: 1,
     minHeight: touchTarget + 4,
@@ -354,44 +505,111 @@ const useStyles = makeStyles((c) => ({
   masApagado: { opacity: 0.4 },
   pulsado: { opacity: 0.7 },
 
-  content: { paddingHorizontal: space.xl, paddingBottom: tabBarClearance, gap: space.xs },
+  content: { paddingHorizontal: space.xl, paddingBottom: tabBarClearance, gap: space.lg },
   loader: { marginTop: space.xl },
+
+  sugerencias: { gap: space.sm },
+  sugerenciasTitulo: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: c.inkMuted,
+  },
+  sugerenciasFila: { gap: space.sm, paddingRight: space.lg },
+  sugerencia: {
+    maxWidth: 220,
+    minHeight: touchTarget - 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs + 2,
+    paddingHorizontal: space.md + 2,
+    borderRadius: radius.pill,
+    backgroundColor: c.brandSoft,
+  },
+  sugerenciaTexto: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 13.5, color: c.brandInk },
 
   vacio: { alignItems: 'center', gap: space.sm, paddingVertical: space.xxl },
   vacioIcono: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: c.brandSoft,
   },
-  vacioTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: c.ink },
+  vacioTitulo: { fontFamily: fonts.semibold, fontSize: 17, color: c.ink },
 
+  grupo: { gap: space.sm },
+  grupoCabecera: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  grupoIcono: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.brandSoft,
+  },
+  grupoTitulo: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: c.inkMuted,
+  },
+  grupoCuenta: { ...tabular, fontFamily: fonts.semibold, fontSize: 12, color: c.inkFaint },
+
+  // Cada línea es una tarjeta: se ve qué se toca y cuánto ocupa cada cosa.
   linea: {
-    minHeight: touchTarget + 10,
+    minHeight: touchTarget + 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingVertical: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
+  lineaComprada: { backgroundColor: 'transparent', borderStyle: 'dashed' },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.brandSoft,
+  },
+  avatarApagado: { backgroundColor: c.surfaceAlt },
   // El círculo vacío se dibuja: es un borde, y así mide lo mismo que el check.
   circulo: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: c.borderStrong },
-  lineaTexto: { flex: 1, gap: 1 },
+  lineaTexto: { flex: 1, gap: 2 },
   lineaNombre: { fontFamily: fonts.medium, fontSize: 16, color: c.ink },
   lineaTachada: { color: c.inkFaint, textDecorationLine: 'line-through' },
-  lineaDetalle: { fontSize: 12.5, color: c.inkMuted },
+  lineaDetalleFila: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  lineaCantidad: { ...tabular, fontFamily: fonts.semibold, fontSize: 12.5, color: c.inkMuted },
+  lineaEtiqueta: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    color: c.brandInk,
+    backgroundColor: c.brandSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.sm,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
 
-  compradas: { marginTop: space.lg, gap: space.xs },
+  compradas: { gap: space.sm },
   compradasCabecera: {
     minHeight: touchTarget,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: space.sm,
   },
   compradasTitulo: {
+    flex: 1,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,

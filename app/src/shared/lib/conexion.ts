@@ -24,6 +24,27 @@ export function esFalloDeRed(mensaje: string): boolean {
   );
 }
 
+/**
+ * Qué decir cuando la petición SÍ llega al servidor, pero la pasarela no encuentra
+ * la función (una Edge Function parada, sin desplegar o que no arranca).
+ *
+ * Es distinto de «sin conexión»: aquí hay red, y el resto de la app funciona. Con
+ * el mensaje genérico de siempre —«algo ha fallado de nuestra parte»— el fallo se
+ * veía igual que cualquier otro y no daba ninguna pista de qué hacer. Lo más común
+ * en desarrollo es que el contenedor de las funciones se haya parado.
+ */
+export function mensajeFuncionCaida(): string {
+  const base = 'El buscador de productos no responde ahora mismo. Puedes añadirlo a mano con este código.';
+  if (!__DEV__) return base;
+  return (
+    `${base}\n\n` +
+    'En desarrollo: las funciones de Supabase no están levantadas.\n' +
+    '  npm run up\n' +
+    'o, si ya estaba todo arriba:\n' +
+    '  docker start supabase_edge_runtime_opsi'
+  );
+}
+
 export function mensajeSinConexion(): string {
   // Las pistas de abajo (`npm run up`, `app/.env`, el cortafuegos) son para quien
   // programa, y enseñan además la dirección del servidor. Una persona con la app
