@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-12** (sesión 29)
+> Última actualización: **2026-10-12** (sesión 30)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **29 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **30 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **10 ficheros pgTAP, 340 tests** contra pgTAP real · `db:check`: **521 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
+| Tests | **11 ficheros pgTAP, 367 tests** contra pgTAP real · `db:check`: **552 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -787,6 +787,30 @@ La fase 4. La tabla y su RLS ya estaban desde la fase 0; lo que se decidió es l
 **Descartado:** una Edge Function para la lista (no hay secreto ni tercero: la tabla, la RLS y una función
 bastan); marcar «comprado» sin más y dejar que la persona dé de alta aparte (dos pasos que pueden quedar
 a medias); y bloquear duplicados con un índice único (ver arriba).
+
+### D-37 · Un elemento se puede corregir, con rastro, y la cantidad solo sin abrir · 2026-10-12
+
+Hasta ahora lo que se daba de alta no se podía corregir: un nombre mal escrito o una fecha copiada con un
+dígito cambiado obligaba a tirar el elemento y volver a darlo de alta, y el historial contaba que se tiró algo
+que nunca se tiró.
+
+- **Va por una función (`update_item`) y no por un UPDATE suelto.** El permiso de UPDATE sobre la tabla ya lo
+  tenía quien pertenece a la nevera, pero un cambio escrito a pelo no deja rastro. Aquí el cambio y su
+  evento `updated` —con lo de antes y lo de ahora de cada campo que cambió— se escriben en la misma
+  transacción. El tipo `updated` ya existía en el enum desde la fase 0, sin usarse.
+- **Se corrige** el nombre, el pasillo, dónde está y la fecha (con su tipo y su origen).
+- **La cantidad solo se corrige en lo que está sin abrir.** En lo empezado, lo que queda es el resultado de
+  lo que se fue usando, cada uso con su evento: reescribirlo dejaría el historial diciendo una cosa y el
+  elemento otra. Para eso está «Usar». Sin abrir, lo comprado y lo que queda son lo mismo y se cambian a la vez.
+- **No se toca** el estado, la nevera, el producto enlazado ni las marcas de tiempo: cada una tiene su acción
+  o su regla. Lo cerrado (agotado o tirado) no se edita, como no admite ninguna otra acción.
+- **Mandar lo que ya había no hace nada ni deja un evento vacío.**
+- **Una fecha que no se toca conserva su origen** (puede venir del catálogo o de una estimación); solo la que
+  se teclea de nuevo la afirma la persona, con «Del envase» o «La puse yo».
+- **El historial dice qué cambió** («cambió la fecha y el nombre»), no cada valor: eso queda en la base de datos.
+
+**El lápiz de editar es casi invisible a propósito** (arriba a la derecha del detalle, en gris tenue): se busca
+cuando hace falta y no debe competir con las acciones de abajo.
 
 ## 3. Convenciones
 
@@ -1838,3 +1862,24 @@ a mano, pero el script no se ha ejecutado entero).
 pasarela tiene su propio formato de error y hay que reconocerlo. (2) Este directorio lo comparte quien
 mantiene el repositorio y la sesión: cambiar de rama aquí cambia lo que ve su servidor de desarrollo (se
 fusionó la PR de la lista antes de seguir, para que `main` la tuviera).
+
+### 2026-10-12 (sesión 30) · Editar un elemento, y la cabecera sin el nombre de la app
+
+**Hecho.** Se quitó el nombre de la app («Opsi») de la cabecera del inventario y de la lista (las pantallas de
+entrar y crear cuenta lo conservan: ahí es la marca). Y se añadió **editar un elemento**
+([D-37](#d-37--un-elemento-se-puede-corregir-con-rastro-y-la-cantidad-solo-sin-abrir--2026-10-12)): la función
+`update_item`, su test (`editar_elemento_test.sql`, 27), la pantalla `editar-elemento/[id]` y un lápiz sutil
+en el detalle.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **367** (27 nuevos); `db:check` 552; y **en el
+navegador** con la cuenta de pruebas: abrir el lápiz, cambiar nombre, pasillo, sitio y fecha, guardar, y ver
+en la base de datos el elemento corregido y el evento `updated` con lo de antes y lo de ahora, y en el
+historial «cambió la fecha, el nombre, el pasillo y dónde está».
+
+**Sin verificar:** nada en un móvil; **la corrección de la cantidad desde la interfaz** (sí por pgTAP: sin abrir
+se cambia, abierto se rechaza); y editar un elemento congelado.
+
+**Se aprendió:** (1) la «i», el lápiz y lo que no debe competir con las acciones se resuelve por tamaño y color,
+no por quitarlo: el detalle tiene ahora una sola cosa tenue arriba a la derecha. (2) Probar una escritura con
+una cuenta de pruebas y borrar luego lo creado: aquí también los eventos, que sobreviven al borrado del
+elemento (`item_id` pasa a nulo) y se quedarían huérfanos en la nevera.

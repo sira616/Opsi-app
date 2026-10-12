@@ -39,6 +39,7 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
 | `(app)/elemento/[id]` | Sesión | Detalle y acciones de un elemento |
+| `(app)/editar-elemento/[id]` | Sesión | Corregir un elemento que no esté cerrado |
 | `(app)/cambiar-nevera` | Sesión | Selector de nevera |
 | `(app)/nevera/nueva`, `nevera/[id]`, `nevera/[id]/editar` | Sesión | Crear, gestionar y renombrar una nevera |
 
@@ -73,6 +74,7 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 | Función | Modo | Qué autoriza en el servidor |
 |---|---|---|
 | `create_item` | invoker | Que la nevera pedida sea de quien llama, y que el producto enlazado (si lo hay) sea del catálogo global o de esa misma nevera |
+| `update_item` | invoker | Corregir un elemento (nombre, pasillo, sitio, fecha y, **solo sin abrir**, la cantidad) y escribir su evento `updated` con lo de antes y lo de ahora, en una transacción. Bloquea la fila, pasa por la RLS (lo de otra nevera «no existe») y rechaza lo cerrado. No toca el estado, la nevera ni el producto |
 | `stock_from_list` | invoker | Marca una línea de la lista como comprada y da de alta el elemento, **en una transacción**. Bloquea la línea (dos personas a la vez no crean dos elementos) y la lee con la RLS: una línea de otra nevera «no existe» |
 | `open_item`, `use_quantity`, `freeze_item`, `thaw_item`, `finish_item`, `discard_item` | invoker | La RLS del elemento + `require_item()`, que **bloquea la fila** (dos personas a la vez no se pisan) |
 | `require_item`, `record_inventory_event` | invoker | Auxiliares de las acciones |
