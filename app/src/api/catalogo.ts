@@ -24,7 +24,7 @@
 
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 
-import { esFalloDeRed, mensajeSinConexion } from '@/shared/lib/conexion';
+import { esFalloDeRed, mensajeFuncionCaida, mensajeSinConexion } from '@/shared/lib/conexion';
 import { errorSinTraducir } from '@/shared/lib/error-generico';
 import { normalizarGtin } from '@/shared/lib/gtin';
 import { supabase } from '@/shared/lib/supabase';
@@ -105,7 +105,14 @@ function leerRespuesta(cuerpo: unknown, codigo: string): ResultadoBusqueda {
   throw new ErrorBusqueda('respuesta_rara', errorSinTraducir('catálogo', cuerpo));
 }
 
-/** El mensaje que escribió la función, si lo hay. */
+/**
+ * El mensaje que escribió la función, si lo hay.
+ *
+ * Una respuesta sin nuestro `{ code, message }` no la escribió la función: la dio
+ * la pasarela. Y eso casi siempre significa que la función no está arriba (404,
+ * 502, 503 o 504 —con `{"message":"name resolution failed"}` cuando el contenedor
+ * está parado—), que se dice como lo que es y no como un fallo genérico.
+ */
 async function mensajeDeLaFuncion(error: FunctionsHttpError): Promise<ErrorBusqueda> {
   try {
     const cuerpo = (await error.context.json()) as { code?: unknown; message?: unknown };
@@ -113,7 +120,11 @@ async function mensajeDeLaFuncion(error: FunctionsHttpError): Promise<ErrorBusqu
       return new ErrorBusqueda(cuerpo.code, cuerpo.message);
     }
   } catch {
-    // Una respuesta que no es JSON viene del gateway, no de nuestra función.
+    // Una respuesta que no es JSON tampoco la escribió la función.
+  }
+  const estado = error.context.status;
+  if (estado === 404 || estado === 502 || estado === 503 || estado === 504) {
+    return new ErrorBusqueda('funcion_caida', mensajeFuncionCaida());
   }
   return new ErrorBusqueda('servicio', errorSinTraducir('catálogo', error));
 }
