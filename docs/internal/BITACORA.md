@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-11** (sesión 28)
+> Última actualización: **2026-10-12** (sesión 29)
 
 ---
 
@@ -1795,3 +1795,46 @@ con ellos mismos (usuarios repetidos): una sola a la vez. (2) Tras reiniciar Doc
 puede dejar una base vacía si falla a medias (`ContainerRemoveError`): repetirlo con el motor sano, y no
 fiarse de `migration up` sobre una base de la que no se sabe el estado. (3) `Circle` no está exportado por
 `phosphor-react-native` aunque el fichero exista: un círculo vacío se dibuja con un borde.
+
+### 2026-10-12 (sesión 29) · El escáner no responde, la lista sosa y las «i» que sobran
+
+**Qué se vio al probarlo en el móvil.** Tres cosas: el escáner daba «algo ha fallado de nuestra parte»
+(también tecleando el código), la lista de la compra se veía sosa, y las «i» junto a los botones del
+detalle quedaban fatal.
+
+**El escáner: el contenedor de las Edge Functions estaba parado.** Con él abajo, la pasarela contesta
+`503 {"message":"name resolution failed"}`, que no lleva el `{ code, message }` de la función, y la app lo
+traducía al error genérico: sin ninguna pista. Comprobado reproduciéndolo (parar el contenedor, buscar un
+código, ver el mensaje; volver a arrancarlo, 200). La causa de que se parase no es del código: tras reiniciar
+Docker, **`supabase start` da el stack por levantado en cuanto la base de datos responde y no arranca un
+contenedor de funciones que se quedó parado**, y todo lo demás sigue funcionando. Tres cambios:
+
+- La app distingue una respuesta de la pasarela (404, 502, 503, 504 sin el formato de la función) y dice
+  «el buscador no responde, puedes añadirlo a mano», con en desarrollo el comando que lo arregla.
+- `npm run up` comprueba que las funciones están arriba (`supabase status` solo da su URL cuando lo están) y
+  hace `docker start supabase_edge_runtime_opsi` si no.
+- `npm run fn:check` distingue «Supabase caído» de «Supabase arriba pero sin funciones».
+
+**La lista, más viva:** una tarjeta de resumen con el progreso (cuántas cosas faltan y cuántas ya están en
+el carro), lo pendiente **agrupado por pasillo** (se compra de una pasada), cada línea como tarjeta con su
+icono de comida, y unas sugerencias «Se te acabó» a un toque con lo último que se agotó y no está ya en la
+lista. Lo comprado queda plegado como «En el carro».
+
+**Las «i»:** salen todas las de los botones del detalle. Lo que protege a alguien se dice **dentro del
+botón**, en una línea: «24 horas para consumirlo» en Descongelar y «Ya se descongeló: cocínalo antes de
+volver a congelar» en Congelar. Se quitaron además las que explicaban lo que se entiende solo (abrir,
+congelar, sin fecha, el pasillo, de dónde sale la fecha, el producto escaneado, usuario y contraseña, los
+dos de la nevera). `Row` vuelve a tener texto a la vista (`subtitle`) y una «i» aparte (`info`): en Privacidad
+y Acerca de el texto ES el contenido, y detrás de una «i» dejaba la fila vacía. Se quedan las que explican
+algo que no se adivina: de dónde sale la fecha, los detalles de una vez abierto, caducidad frente a consumo
+preferente, el correo, la zona horaria, apuntar lo que se acaba y las de invitar.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; **en el navegador**, la lista nueva con los datos reales de
+la base local, el detalle sin «i» junto a los botones y el mensaje nuevo del escáner con el contenedor parado.
+**Sin verificar:** en el móvil, y `npm run up` arrancando un contenedor parado (el `docker start` sí se hizo
+a mano, pero el script no se ha ejecutado entero).
+
+**Se aprendió:** (1) un error genérico que no distingue la causa es una mala experiencia aunque «no falle»: la
+pasarela tiene su propio formato de error y hay que reconocerlo. (2) Este directorio lo comparte quien
+mantiene el repositorio y la sesión: cambiar de rama aquí cambia lo que ve su servidor de desarrollo (se
+fusionó la PR de la lista antes de seguir, para que `main` la tuviera).
