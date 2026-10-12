@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-10** (sesión 27)
+> Última actualización: **2026-10-11** (sesión 28)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **28 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **29 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **9 ficheros pgTAP, 305 tests** contra pgTAP real · `db:check`: **482 comprobaciones** en PGlite · `db:carreras`: 11, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
+| Tests | **10 ficheros pgTAP, 340 tests** contra pgTAP real · `db:check`: **521 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -757,6 +757,36 @@ La hora se guarda al pulsar «Listo», no a cada vuelta de rueda.
 **Coste:** una explicación detrás de una «i» la lee menos gente. Es el cambio que se pidió, y lo que
 no se puede esconder está en la segunda regla. **Sin verificar en un móvil:** las ruedas con el dedo
 (en el navegador se probó con la rueda del ratón), la animación de la hoja y el lector de pantalla.
+
+### D-36 · La lista de la compra: nada se apunta solo, y «comprado» entra al inventario en una transacción · 2026-10-11
+
+La fase 4. La tabla y su RLS ya estaban desde la fase 0; lo que se decidió es lo que faltaba alrededor.
+
+- **El principio «nada se apunta solo» se hace cumplir en la base de datos.** La columna `source` decía en
+  un comentario que `auto_restock` solo aparecía si la persona lo había encendido, y no lo comprobaba
+  nada: cualquier cliente podía escribirlo. Ahora un trigger lo rechaza (P0001) si `auto_add_to_shopping_list`
+  no es verdadero, y el origen no se puede cambiar después.
+- **Al agotarse algo se pregunta, y solo se apunta sin preguntar si la persona lo encendió.** Se ofrece al
+  terminar un elemento y al usar lo último que quedaba (las dos dejan el elemento en `finished`). Apagado,
+  que es como viene, sale «¿Lo apunto en la lista?»; encendido, se apunta y se dice. Lo apuntado lleva la
+  cantidad que traía el envase (1 l → «1 l»), y **no se duplica** lo que ya estaba pendiente (por producto o
+  por nombre sin mayúsculas). Esto último es del cliente y no de la base de datos a propósito: dos líneas
+  «leche» pueden ser legítimas, y bloquearlo en el servidor sería decidir por la persona.
+- **Tocar una línea no la tacha de golpe: abre una hoja con tres opciones** (guardarla en la nevera, tacharla
+  sin guardarla, quitarla). Casi siempre lo que se quiere es que entre en la nevera, y a veces —papel de
+  cocina— solo tacharla; con un solo toque habría que adivinar.
+- **«Ya lo tengo» pasa por el alta, no por un atajo.** Abre el formulario con el nombre y la cantidad ya
+  puestos y pide lo que falta (dónde se guarda, la fecha). El servidor hace el alta y marca la línea en una
+  sola transacción (`stock_from_list`, que envuelve a `create_item`): si el alta falla, la línea no queda
+  comprada; si dos personas lo hacen a la vez, la segunda recibe «ya está marcado como comprado» y no se
+  crea un duplicado (probado con dos sesiones en `db:carreras`).
+- **Cuatro cierres que el trigger hace de paso**, los mismos que ya se hicieron con `create_item`:
+  `created_by` es siempre quien escribe, el producto enlazado es global o de la misma nevera, y hay un tope
+  de 300 líneas por nevera.
+
+**Descartado:** una Edge Function para la lista (no hay secreto ni tercero: la tabla, la RLS y una función
+bastan); marcar «comprado» sin más y dejar que la persona dé de alta aparte (dos pasos que pueden quedar
+a medias); y bloquear duplicados con un índice único (ver arriba).
 
 ## 3. Convenciones
 
@@ -1739,3 +1769,29 @@ con imán de cada rueda en Android, la animación de las hojas y el lector de pa
 **Se aprendió:** (1) cuando una petición admite dos lecturas con consecuencias distintas, preguntar una
 vez cuesta menos que rehacer: aquí cambió qué se quitaba y qué se mudaba. (2) El puerto 8081 lo tenía un
 `expo start` que no era mío: se usó en lugar de arrancar otro y no se tocó.
+
+### 2026-10-11 (sesión 28) · La lista de la compra (fase 4)
+
+**Cómo fue.** Tras fusionar la PR de los cambios del frontend, se dio el estado de la app y se siguió con la
+fase 4, que es la única que no depende de nada externo (los avisos piden una cuenta de Expo y el chat y los
+tickets una clave de la API de Claude). Se empezó por la base de datos —lo que la RLS no dice— y después la
+pantalla. Ver [D-36](#d-36--la-lista-de-la-compra-nada-se-apunta-solo-y-comprado-entra-al-inventario-en-una-transacción--2026-10-11).
+
+**Hecho:** la migración `20261011100000_lista_de_la_compra` (trigger `check_shopping_item` y la función
+`stock_from_list`), `lista_compra_test.sql`, un caso nuevo en `db:carreras`, la API (`api/lista.ts`), la pestaña
+Lista, el alta rellenada desde una línea, y la oferta de apuntar cuando algo se agota.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **340** (35 nuevos); `db:carreras` **14** (3 nuevos);
+`db:check` 521; y **en el navegador** con la cuenta de desarrollo: apuntar dos líneas, tachar una
+sin guardarla (queda comprada con su fecha en la base de datos), guardar la otra desde «Ya lo tengo» (el
+alta sale con el nombre puesto, y el elemento entra en el inventario **y** la línea queda comprada), y
+terminar una leche → «¿Lo apunto en la lista?» → «Apuntarlo» → línea con `volume · l · 1000`.
+
+**Sin verificar:** nada en un móvil; **apuntar con el ajuste ENCENDIDO desde la interfaz** (sí por pgTAP: el
+trigger lo deja pasar); el tope de 300 con dos inserciones simultáneas; la pestaña con muchas líneas.
+
+**Se aprendió:** (1) `supabase test db` lanzado a la vez que otra ejecución de los mismos tests choca
+con ellos mismos (usuarios repetidos): una sola a la vez. (2) Tras reiniciar Docker, `supabase db reset`
+puede dejar una base vacía si falla a medias (`ContainerRemoveError`): repetirlo con el motor sano, y no
+fiarse de `migration up` sobre una base de la que no se sabe el estado. (3) `Circle` no está exportado por
+`phosphor-react-native` aunque el fichero exista: un círculo vacío se dibuja con un borde.

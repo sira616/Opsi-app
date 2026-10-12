@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Barcode, CalendarBlank, MapPin, Scales, Sparkle, Tag } from 'phosphor-react-native';
 
 import { codigoDeRuta, crearProductoPrivado, idDeRuta } from '@/api/catalogo';
+import { fetchLinea, type LineaLista } from '@/api/lista';
 import {
   createItem,
   fetchProducto,
@@ -40,7 +41,7 @@ import {
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
-import { familyOf, toBase, unidadSugerida, type MeasurementUnit } from '@/shared/lib/units';
+import { familyOf, fromBase, toBase, unidadSugerida, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -122,12 +123,27 @@ const ATAJOS: [string, number][] = [
  * Esperar a la ficha ANTES de montar el formulario (y no rellenarlo después con un
  * efecto) es lo que evita pisar lo que la persona ya haya escrito, y deja el
  * formulario con un estado inicial en lugar de corregirlo al segundo render.
+ *
+ * Lo mismo vale para una línea de la lista de la compra (`lista`): se pide por su
+ * id, y de ella salen el nombre, la cantidad y, si lo lleva, el producto. Al
+ * guardar, el servidor da de alta el elemento Y marca la línea como comprada en una
+ * sola transacción.
  */
 export default function AltaManual() {
   const c = useTheme();
-  const params = useLocalSearchParams<{ codigo?: string; producto?: string }>();
+  const params = useLocalSearchParams<{ codigo?: string; producto?: string; lista?: string }>();
   const codigo = codigoDeRuta(params.codigo);
-  const productoId = idDeRuta(params.producto);
+  const listaId = idDeRuta(params.lista);
+
+  const lineaQ = useQuery({
+    queryKey: queryKeys.linea(listaId ?? ''),
+    queryFn: () => fetchLinea(listaId as string),
+    enabled: listaId !== null,
+  });
+  const linea = lineaQ.data ?? null;
+
+  // El producto de la ruta manda; si no hay, el de la línea de la lista.
+  const productoId = idDeRuta(params.producto) ?? linea?.product_id ?? null;
 
   const fichaQ = useQuery({
     queryKey: [...queryKeys.inventario, 'producto', productoId],
@@ -137,7 +153,7 @@ export default function AltaManual() {
     staleTime: 30 * 60_000,
   });
 
-  if (productoId !== null && fichaQ.isPending) {
+  if ((listaId !== null && lineaQ.isPending) || (productoId !== null && fichaQ.isPending)) {
     return (
       <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.ground, justifyContent: 'center' }}>
         <ActivityIndicator color={c.brand} />
@@ -151,18 +167,26 @@ export default function AltaManual() {
       productoId={productoId}
       ficha={fichaQ.data ?? null}
       fichaFallo={fichaQ.isError}
+      linea={linea}
+      listaId={listaId}
     />
   );
 }
 
 /** El contenido del envase, listo para el formulario: «1 L» → 1 l, «330 ml» → 330 ml. */
-function cantidadInicial(ficha: ProductoCatalogo | null): { quantity: string; unit: MeasurementUnit } {
+function cantidadInicial(
+  ficha: ProductoCatalogo | null,
+  linea: LineaLista | null,
+): { quantity: string; unit: MeasurementUnit } {
+  const texto = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
+  // Lo que se apuntó en la lista manda sobre lo que trae el envase: es lo que la
+  // persona dijo que iba a comprar.
+  if (linea?.quantity != null && linea.display_unit) {
+    return { quantity: texto(fromBase(linea.quantity, linea.display_unit)), unit: linea.display_unit };
+  }
   if (!ficha?.unit_family || !ficha.net_quantity) return { quantity: '1', unit: 'unit' };
   const sugerida = unidadSugerida(ficha.unit_family, ficha.net_quantity);
-  return {
-    quantity: String(Math.round(sugerida.amount * 100) / 100).replace('.', ','),
-    unit: sugerida.unit,
-  };
+  return { quantity: texto(sugerida.amount), unit: sugerida.unit };
 }
 
 function Formulario({
@@ -170,11 +194,16 @@ function Formulario({
   productoId,
   ficha,
   fichaFallo,
+  linea,
+  listaId,
 }: {
   codigo: string | null;
   productoId: string | null;
   ficha: ProductoCatalogo | null;
   fichaFallo: boolean;
+  /** La línea de la lista de la que se parte, si se viene de ahí. */
+  linea: LineaLista | null;
+  listaId: string | null;
 }) {
   const styles = useStyles();
   const t = useType();
@@ -185,8 +214,8 @@ function Formulario({
   // consecuencias, y se enseña en la propia pantalla.
   const { activa } = useNeveraActual();
 
-  const inicial = cantidadInicial(ficha);
-  const [name, setName] = useState(ficha?.name ?? '');
+  const inicial = cantidadInicial(ficha, linea);
+  const [name, setName] = useState(ficha?.name ?? linea?.name ?? '');
   const [quantity, setQuantity] = useState(inicial.quantity);
   const [unit, setUnit] = useState<MeasurementUnit>(inicial.unit);
   const [location, setLocation] = useState<StorageLocation>('pantry');
@@ -228,12 +257,16 @@ function Formulario({
         });
         enlazado = privadoCreado.current;
       }
-      await createItem({ ...item, productId: enlazado });
+      await createItem({ ...item, productId: enlazado, listaId });
     },
     // La nevera sale de lo que se mandó, no de la activa de este momento: es la
     // que hay que refrescar aunque algo la cambiara mientras se guardaba.
     async onSuccess(_creado, guardado) {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(guardado.householdId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(guardado.householdId) }),
+        // Si venía de la lista, esa línea acaba de quedar comprada.
+        listaId ? queryClient.invalidateQueries({ queryKey: queryKeys.lista }) : Promise.resolve(),
+      ]);
       router.back();
     },
     onError(caught: unknown) {

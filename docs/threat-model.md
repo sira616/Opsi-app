@@ -106,6 +106,28 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 configuración de producción (sí en local, con `supabase functions serve`); y cómo se porta OFF
 con el tráfico de más de una persona.
 
+## 5 · Lista de la compra (fase 4)
+
+Tabla y RLS desde la fase 0; las reglas que la RLS no dice, en el trigger `check_shopping_item`
+(`20261011100000_lista_de_la_compra`). **Sin Edge Function**: la app habla con la tabla y con una
+función de la base de datos.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **S**poofing | Apuntar una línea «de parte de» otra persona de la nevera (`created_by` lo escribía el cliente) | El trigger pisa `created_by` con `auth.uid()` al insertar, y no deja cambiarlo después | `lista_compra_test.sql` |
+| **T**ampering | Que algo se apunte **solo** sin que la persona lo haya encendido (el principio del proyecto era solo un comentario) | `source = 'auto_restock'` se rechaza (P0001) salvo que `user_settings.auto_add_to_shopping_list` sea verdadero; el origen no se puede cambiar después | `lista_compra_test.sql` |
+| **T**ampering | Enlazar un producto privado de **otra** nevera conociendo su uuid | El producto tiene que ser global o de la misma nevera; mismo mensaje para «no existe» y «no es tuyo» | `lista_compra_test.sql` |
+| **T**ampering | Marcar como comprado y que **no** entre en el inventario (o al revés) por fallar la segunda de dos llamadas | `stock_from_list` hace las dos cosas en una transacción; si el alta falla, la línea no se toca | `lista_compra_test.sql` |
+| **T**ampering | Dos personas marcan la misma línea a la vez y se crean **dos** elementos | `stock_from_list` bloquea la línea (`for update`): la segunda ve «ya está marcado como comprado» | `npm run db:carreras` (**dos sesiones solapadas**) |
+| **I**nfo disclosure | Leer la lista de otra nevera | RLS por `is_household_member`; el cliente además filtra por la nevera activa | `lista_compra_test.sql` |
+| **D**oS | Una nevera acumula líneas sin límite | Tope de 300 por nevera (contando lo comprado), con mensaje que se entiende. Es una red contra un cliente descontrolado, **no** una limitación pensada para nadie | `lista_compra_test.sql` |
+| **E**levation | Dar de alta, desde una línea ajena, un elemento en la nevera de otra persona | `stock_from_list` lee la línea con la RLS: una línea de otra nevera «no existe» para quien llama | `lista_compra_test.sql` |
+
+**Lo que no cubre:** el origen `chat` (fase 5) se acepta tal cual desde el cliente; solo es una etiqueta y
+no da ningún permiso, pero cuando exista `opsi-chat` hay que decidir si lo escribe solo el servidor. El
+tope se comprueba contando filas dentro del trigger, así que dos inserciones **simultáneas** pueden pasarse
+por una o dos líneas: es aceptable para lo que es, y no se ha probado con dos sesiones.
+
 ---
 
 ## Lo que este documento todavía no cubre

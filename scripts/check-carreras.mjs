@@ -200,6 +200,28 @@ try {
   const usos = await eventos(b, ['quantity_used']);
   comprobar('un solo uso en el historial', usos === 1, `usos registrados: ${usos}`);
 
+  // ── D · Dos personas marcan como comprada la MISMA línea de la lista ───────
+  // Sin el `for update` de `stock_from_list`, las dos leerían la línea «sin
+  // comprar», las dos darían de alta el elemento y el inventario tendría el zumo
+  // por duplicado.
+  console.log('\n  Dos personas marcan como comprada la misma línea de la lista');
+  const lineaR = await psql(`
+    insert into public.shopping_list_items (household_id, name, unit_family, display_unit, quantity)
+    values ('${nevera}', 'carrera-lista', 'volume', 'l', 1000)
+    returning id;
+  `);
+  const linea = lineaR.salida.split('\n')[0].trim();
+  const altaLinea = `select 'ok ' || (public.stock_from_list('${linea}', 'carrera-zumo', 'volume', 'l', 1000)).id;`;
+  const resD = await carrera(altaLinea, altaLinea);
+  comprobar('la primera da de alta el elemento', resD.primera.codigo === 0 && /^ok /.test(resD.primera.salida), resD.primera.error);
+  comprobar(
+    'la segunda recibe «ya está marcado como comprado», no un duplicado',
+    resD.segunda.codigo !== 0 && /ya est[aá] marcado como comprado/.test(resD.segunda.error),
+    `respuesta: ${resD.segunda.error || resD.segunda.salida || '(nada)'}`,
+  );
+  const duplicados = await psql(`select count(*) from public.inventory_items where name = 'carrera-zumo';`);
+  comprobar('un solo elemento en el inventario', Number(duplicados.salida) === 1, `elementos: ${duplicados.salida}`);
+
   // ── C · La cuota del escáner, gastada desde dos sesiones a la vez ─────────
   // Treinta consultas por minuto. Si el contador se leyera y luego se escribiera,
   // dos consultas simultáneas verían el mismo número y se colarían las dos; con
