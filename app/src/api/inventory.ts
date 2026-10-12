@@ -396,3 +396,37 @@ async function callAction(fn: string, args: Record<string, unknown>): Promise<{ 
   if (error) throw error;
   return data as unknown as { state: ItemState };
 }
+
+export type EdicionElemento = {
+  name: string;
+  category: Categoria;
+  location: StorageLocation;
+  limitDate: string | null;
+  dateKind: DateKind | null;
+  dateSource: DateSource | null;
+  /**
+   * Solo se manda si cambió, y solo se admite en lo que está sin abrir: en lo
+   * empezado la cantidad que queda es el resultado de lo que se fue usando.
+   */
+  cantidad?: { quantity: number; displayUnit: MeasurementUnit } | null;
+};
+
+/**
+ * Corrige un elemento. Va por función y no por un UPDATE suelto para que el
+ * cambio y su evento `updated` —con lo de antes y lo de ahora— se escriban en la
+ * misma transacción. Mandar lo que ya había no hace nada ni deja rastro.
+ */
+export async function updateItem(id: string, e: EdicionElemento): Promise<void> {
+  const { error } = await supabase.rpc('update_item', {
+    p_item_id: id,
+    p_name: e.name,
+    p_category: e.category,
+    p_location: e.location,
+    p_limit_date: e.limitDate,
+    p_date_kind: e.dateKind,
+    p_date_source: e.dateSource,
+    p_quantity: e.cantidad?.quantity ?? null,
+    p_display_unit: e.cantidad?.displayUnit ?? null,
+  });
+  if (error) throw error;
+}

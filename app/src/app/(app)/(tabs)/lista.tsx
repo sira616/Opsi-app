@@ -165,7 +165,6 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.wordmark}>Opsi</Text>
           <View style={styles.pildoraHueco}>
             <PildoraNevera />
           </View>
@@ -453,7 +452,6 @@ const useStyles = makeStyles((c) => ({
   safe: { flex: 1, backgroundColor: c.ground },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm, gap: space.sm },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
   pildoraHueco: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
 
   // El resumen: una tarjeta con color de marca, para que la pantalla tenga un

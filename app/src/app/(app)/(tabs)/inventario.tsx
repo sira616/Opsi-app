@@ -81,9 +81,8 @@ function Inventario({ nevera }: { nevera: Nevera }) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.wordmark}>Opsi</Text>
-          {/* Con el hueco sobrante para sí: el nombre de la nevera cede ante el
-              logo y el «+», que tienen ancho fijo. */}
+          {/* Con el hueco sobrante para sí: el nombre de la nevera cede ante los
+              dos botones, que tienen ancho fijo. */}
           <View style={styles.pildoraHueco}>
             <PildoraNevera />
           </View>
@@ -228,7 +227,6 @@ const useStyles = makeStyles((c) => ({
   header: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.md, gap: space.xs },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
   pildoraHueco: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
-  wordmark: { fontSize: 21, fontWeight: '600', color: c.brand },
   add: {
     width: touchTarget,
     height: touchTarget,
