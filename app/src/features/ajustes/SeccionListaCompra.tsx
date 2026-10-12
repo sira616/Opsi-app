@@ -25,7 +25,7 @@ export function SeccionListaCompra({ data, onPatch, guardando }: Props) {
     <Section title="Lista de la compra">
       <Row
         title="Apuntar automáticamente al agotar"
-        subtitle="Con esto apagado te pregunto antes de apuntar nada. Viene así a propósito."
+        info="Con esto apagado te pregunto antes de apuntar nada. Viene así a propósito."
         right={
           <Switch
             value={data.auto_add_to_shopping_list}

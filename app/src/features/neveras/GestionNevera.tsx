@@ -15,7 +15,6 @@ import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { Info } from '@/shared/ui/Info';
 import { describirNevera } from './datos';
 import { useNeveraActual } from './NeveraActiva';
 
@@ -91,12 +90,6 @@ function Gestion({ nevera }: { nevera: Nevera }) {
             </Text>
             <View style={styles.describir}>
               <Text style={[t.bodySmall, styles.describirTexto]}>{describirNevera(nevera)}</Text>
-              {!esCompartida ? (
-                <Info
-                  titulo="Nevera privada"
-                  texto="Esta nevera es solo tuya: no se comparte ni se deja. Para compartir, crea una compartida y cambia entre las dos desde el inicio."
-                />
-              ) : null}
             </View>
           </View>
         </View>
@@ -126,14 +119,7 @@ function Gestion({ nevera }: { nevera: Nevera }) {
               ) : null}
             </Section>
 
-            <Section
-              title="Invitar"
-              info={
-                limite !== null
-                  ? `Caben ${limite} personas en esta nevera, contando las invitaciones que aún no han contestado.`
-                  : undefined
-              }
-            >
+            <Section title="Invitar">
               <Bloque>
                 {soyQuienLleva ? (
                   <Invitar

@@ -288,11 +288,8 @@ export default function Detalle() {
                 <Action
                   label="Descongelar"
                   icono={<Drop size={20} color={c.frost} weight="duotone" />}
-                  info={{
-                    titulo: 'Descongelar',
-                    texto:
-                      'Una vez descongelado, tienes 24 horas para consumirlo. No se vuelve a congelar.',
-                  }}
+                  // Lo que protege a alguien va a la vista y DENTRO del botón.
+                  subtitulo="24 horas para consumirlo"
                   onPress={() => run(() => actions.thaw(detail.id))}
                   busy={act.isPending}
                 />
@@ -312,11 +309,6 @@ export default function Detalle() {
                   <Action
                     label="Abrir"
                     icono={<Package size={20} color={c.brand} weight="duotone" />}
-                    info={{
-                      titulo: 'Abrir',
-                      texto:
-                        'Muchos alimentos duran menos una vez abiertos. Al abrirlo recalculo la fecha límite.',
-                    }}
                     onPress={() => run(() => actions.open(detail.id))}
                     busy={act.isPending}
                   />
@@ -337,20 +329,10 @@ export default function Detalle() {
                 <Action
                   label="Congelar"
                   icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
-                  // Lo que protege a alguien se queda a la vista: recongelar lo
-                  // descongelado sin cocinarlo es un riesgo, no una curiosidad.
-                  hint={
-                    data.state === 'thawed'
-                      ? 'Ya se descongeló una vez. No lo vuelvas a congelar sin cocinarlo antes.'
-                      : undefined
-                  }
-                  info={
-                    data.state === 'thawed'
-                      ? undefined
-                      : {
-                          titulo: 'Congelar',
-                          texto: 'La cuenta atrás de la fecha se para mientras esté congelado.',
-                        }
+                  // Recongelar lo descongelado sin cocinarlo es un riesgo, no una
+                  // curiosidad: se dice a la vista, dentro del botón.
+                  subtitulo={
+                    data.state === 'thawed' ? 'Ya se descongeló: cocínalo antes de volver a congelar' : undefined
                   }
                   onPress={() => run(() => actions.freeze(detail.id))}
                   busy={act.isPending}
@@ -484,17 +466,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
           <Text style={[styles.dateLabel, styles.dateLabelFrozen, styles.dateLabelTexto]}>
             En el congelador
           </Text>
-          <Info
-            titulo="Congelado"
-            texto={
-              'Mientras esté ahí no vence: la cuenta atrás está parada y se reanuda donde se quedó al sacarlo.' +
-              (item.frozen_days > 0
-                ? ` De veces anteriores lleva ${item.frozen_days} ${
-                    item.frozen_days === 1 ? 'día' : 'días'
-                  } ya sumados a su fecha.`
-                : '')
-            }
-          />
         </View>
 
         <Text style={styles.dateValue}>
@@ -518,10 +489,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
       <View style={[styles.dateCard, styles.dateCardNeutral]}>
         <View style={styles.frozenHead}>
           <Text style={[styles.dateLabel, styles.dateLabelTexto]}>Sin fecha</Text>
-          <Info
-            titulo="Sin fecha"
-            texto="No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla."
-          />
         </View>
         <Text style={styles.dateValue}>No sé cuándo vence</Text>
       </View>
@@ -549,8 +516,7 @@ function FechaLimite({ item }: { item: ItemDetail }) {
 function Action({
   label,
   icono,
-  hint,
-  info,
+  subtitulo,
   onPress,
   busy,
   danger,
@@ -559,10 +525,11 @@ function Action({
   label: string;
   /** El icono de la acción: congelar es un copo, tirar una papelera. */
   icono?: React.ReactNode;
-  /** Texto a la vista. Solo para lo que protege a alguien; lo demás va en `info`. */
-  hint?: string;
-  /** Lo que explica la acción, detrás de una «i» pequeña. */
-  info?: { titulo: string; texto: string };
+  /**
+   * Una línea debajo de la etiqueta, DENTRO del botón. Solo para lo que protege a
+   * alguien (las 24 horas de lo descongelado): lo que se entiende solo no lleva texto.
+   */
+  subtitulo?: string;
   onPress: () => void;
   busy?: boolean;
   danger?: boolean;
@@ -570,37 +537,34 @@ function Action({
 }) {
   const styles = useStyles();
   return (
-    <View style={styles.actionWrapper}>
-      <View style={styles.actionFila}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.action,
-            styles.actionFlex,
-            danger && styles.actionDanger,
-            primary && styles.actionPrimary,
-            pressed && styles.actionPressed,
-            busy && styles.actionBusy,
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: busy }}
+      disabled={busy}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.action,
+        subtitulo ? styles.actionConSubtitulo : null,
+        danger && styles.actionDanger,
+        primary && styles.actionPrimary,
+        pressed && styles.actionPressed,
+        busy && styles.actionBusy,
+      ]}
+    >
+      {icono}
+      <View style={styles.actionTextos}>
+        <Text
+          style={[
+            styles.actionText,
+            danger && styles.actionTextDanger,
+            primary && styles.actionTextPrimary,
           ]}
         >
-          {icono}
-          <Text
-            style={[
-              styles.actionText,
-              danger && styles.actionTextDanger,
-              primary && styles.actionTextPrimary,
-            ]}
-          >
-            {label}
-          </Text>
-        </Pressable>
-        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
+          {label}
+        </Text>
+        {subtitulo ? <Text style={styles.actionSubtitulo}>{subtitulo}</Text> : null}
       </View>
-      {hint ? <Text style={styles.actionHint}>{hint}</Text> : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -677,9 +641,6 @@ const useStyles = makeStyles((c) => ({
   },
 
   actions: { gap: space.sm },
-  actionWrapper: { gap: 3 },
-  actionFila: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  actionFlex: { flex: 1 },
   action: {
     minHeight: touchTarget + 6,
     flexDirection: 'row',
@@ -698,7 +659,9 @@ const useStyles = makeStyles((c) => ({
   actionText: { fontSize: 15, fontWeight: '600', color: c.ink },
   actionTextPrimary: { color: c.onBrand },
   actionTextDanger: { color: c.expiry },
-  actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
+  actionConSubtitulo: { paddingVertical: space.sm },
+  actionTextos: { flex: 1, gap: 1 },
+  actionSubtitulo: { fontSize: 12, lineHeight: 16, color: c.inkMuted },
 
   listaTexto: { fontSize: 15, lineHeight: 22, color: c.inkMuted },
 
