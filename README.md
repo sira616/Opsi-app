@@ -206,7 +206,7 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 **Fases 0, 1 y 2 · hechas.** Lo que hay hoy, y lo que se ha probado de verdad:
 
 - [x] Monorepo con `app/` y `supabase/`, con la CLI de Supabase fijada
-- [x] Esquema con **29 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
+- [x] Esquema con **30 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
 - [x] Alta y login por usuario y contraseña; el alta solo admite usuarios de Opsi
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
 - [x] Vista `inventory_with_priority` con la fecha límite efectiva, contada desde el día del usuario
@@ -219,7 +219,7 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 340 tests pgTAP (10 ficheros) contra Supabase local; 521 comprobaciones sin Docker
+**Probado:** 367 tests pgTAP (11 ficheros) contra Supabase local; 552 comprobaciones sin Docker
 (`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 58 tests de la
 lógica de la función de búsqueda (`npm run test:funciones`) y 19 contra el runtime de Edge Functions de
 verdad (`npm run fn:check`). La función, además, **contra Open Food Facts de verdad**. La app, en el

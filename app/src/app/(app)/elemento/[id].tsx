@@ -10,6 +10,7 @@ import {
   Drop,
   ForkKnife,
   Package,
+  PencilSimple,
   Snowflake,
   Trash,
 } from 'phosphor-react-native';
@@ -223,15 +224,34 @@ export default function Detalle() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <CaretLeft size={16} color={c.inkMuted} weight="bold" />
-          <Text style={styles.backText}>Inventario</Text>
-        </Pressable>
+        <View style={styles.topFila}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            onPress={() => router.back()}
+            style={styles.back}
+          >
+            <CaretLeft size={16} color={c.inkMuted} weight="bold" />
+            <Text style={styles.backText}>Inventario</Text>
+          </Pressable>
+
+          {/* Editar, a propósito casi invisible: se busca cuando hace falta (un
+              nombre mal escrito, una fecha mal copiada) y no debe competir con
+              las acciones de abajo. Lo cerrado no se edita, así que no sale. */}
+          {!closedOut ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Editar"
+              onPress={() =>
+                router.push({ pathname: '/editar-elemento/[id]', params: { id: detail.id } })
+              }
+              hitSlop={6}
+              style={({ pressed }) => [styles.editar, pressed && styles.pressed]}
+            >
+              <PencilSimple size={18} color={c.inkFaint} weight="regular" />
+            </Pressable>
+          ) : null}
+        </View>
 
         {/* ── Cabecera: el mismo icono que en la lista ──────────────────── */}
         <View style={styles.cabecera}>
@@ -574,6 +594,14 @@ const useStyles = makeStyles((c) => ({
   errorBox: { alignSelf: 'stretch', paddingHorizontal: space.xl },
   content: { padding: space.xl, gap: space.lg, paddingBottom: space.xxl * 2 },
 
+  topFila: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editar: {
+    width: touchTarget,
+    height: touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -space.sm,
+  },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
