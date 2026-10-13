@@ -120,6 +120,54 @@ function sinTocarNada(llamadas: Llamadas, ...salvo: (keyof Llamadas)[]) {
   }
 }
 
+// ── Lo que no es comida ──────────────────────────────────────────────────
+
+test('un libro (prefijo ISBN) es «no es comida» sin gastar cuota ni tocar el catálogo', async () => {
+  const { dep, llamadas, logs } = montar();
+  const r = await manejar(peticion({ barcode: '9780306406157' }), dep);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await leer(r), { found: false, barcode: '9780306406157', not_food: true });
+  // Solo se comprobó quién pregunta: ni cuota, ni caché, ni OFF.
+  sinTocarNada(llamadas, 'verificarUsuario');
+  assert.equal(logs.at(-1)?.resultado, 'no_comida_prefijo');
+});
+
+test('un libro SIN sesión sigue siendo 401: el filtro no abre nada', async () => {
+  const { dep, llamadas } = montar();
+  const r = await manejar(peticion({ barcode: '9780306406157' }, { token: null }), dep);
+  assert.equal(r.status, 401);
+  sinTocarNada(llamadas);
+});
+
+test('si OFF dice que es de otro tipo: «no es comida», y ni se guarda ni se anota como falta', async () => {
+  const { dep, llamadas, logs } = montar({
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_es_comida' };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await leer(r), { found: false, barcode: CODIGO, not_food: true });
+  assert.equal(llamadas.guardar, 0);
+  // Una falta se contestaría luego como «no lo conozco»: dejaría añadirlo.
+  assert.equal(llamadas.registrarFalta, 0);
+  assert.equal(logs.at(-1)?.resultado, 'no_comida');
+});
+
+test('el veredicto de OFF manda sobre una ficha vieja del catálogo', async () => {
+  const vieja: FilaCatalogo = { ...FILA, updated_at: new Date(AHORA - 40 * 86_400_000).toISOString() };
+  const { dep } = montar({
+    async buscarEnCatalogo() {
+      return vieja;
+    },
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_es_comida' };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal((await leer(r)).not_food, true);
+});
+
 // ── Antes de nada: método, tamaño, sesión ────────────────────────────────
 
 test('OPTIONS contesta el preflight sin tocar nada', async () => {
