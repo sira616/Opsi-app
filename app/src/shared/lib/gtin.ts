@@ -70,3 +70,20 @@ export function normalizarGtin(entrada: string): string | null {
   if (codigo.length === 14 && codigo.startsWith('0')) return codigo.slice(1);
   return codigo;
 }
+
+/**
+ * ¿Es el código de algo que NO se come, mirando solo el prefijo?
+ *
+ * Los tres primeros dígitos de un EAN-13 los reparte GS1, y unos rangos no son de
+ * productos de tienda sino de otra cosa: revistas (977, el ISSN), libros (978 y
+ * 979, el ISBN), recibos de devolución (980) y cupones (981 a 984, y 990 a 999).
+ * Ninguno puede ser comida, así que para esos no hace falta preguntar a nadie.
+ *
+ * Es solo lo que se sabe SIN consultar. Un champú o una bombilla llevan un prefijo
+ * de país como cualquier yogur: de esos solo sabe el catálogo (ver `off.ts`).
+ */
+export function esCodigoDeNoComida(codigo: string): boolean {
+  if (codigo.length !== 13) return false;
+  const prefijo = Number(codigo.slice(0, 3));
+  return (prefijo >= 977 && prefijo <= 984) || prefijo >= 990;
+}

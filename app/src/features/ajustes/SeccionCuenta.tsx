@@ -44,7 +44,6 @@ export function SeccionCuenta({ username }: { username: string }) {
     <Section title="Cuenta">
       <Row
         title="Usuario"
-        subtitle="Es con lo que entras y no se puede cambiar."
         right={
           <View style={styles.usuario}>
             <UserCircle size={17} color={c.brand} weight="duotone" />
@@ -125,7 +124,7 @@ function BloqueCorreo() {
     <Bloque>
       <Row
         title="Correo"
-        subtitle={
+        info={
           confirmado
             ? 'Confirmado. Con él puedes recuperar la contraseña si la olvidas.'
             : 'Sin correo no hay forma de recuperar la contraseña. Es lo único para lo que se usa.'
@@ -237,7 +236,6 @@ function BloqueContrasena() {
     <Bloque>
       <Row
         title="Contraseña"
-        subtitle={`Mínimo ${CONTRASENA_MIN} caracteres. Larga vale más que complicada.`}
         right={<Key size={19} color={c.inkFaint} weight="duotone" />}
       />
 

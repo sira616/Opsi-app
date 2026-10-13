@@ -34,10 +34,12 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `/` | — | Redirige según haya sesión |
 | `(app)/(tabs)/inventario` | Sesión | «Consumir primero» de la nevera activa |
 | `(app)/(tabs)/ajustes` | Sesión | Perfil, aspecto, avisos, mis neveras, cuenta, privacidad |
-| `(app)/(tabs)/lista`, `chat` | Sesión | «Próximamente» (fases 4 y 5) |
+| `(app)/(tabs)/lista` | Sesión | La lista de la compra de la nevera activa |
+| `(app)/(tabs)/chat` | Sesión | «Próximamente» (fase 5) |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
 | `(app)/elemento/[id]` | Sesión | Detalle y acciones de un elemento |
+| `(app)/editar-elemento/[id]` | Sesión | Corregir un elemento que no esté cerrado |
 | `(app)/cambiar-nevera` | Sesión | Selector de nevera |
 | `(app)/nevera/nueva`, `nevera/[id]`, `nevera/[id]/editar` | Sesión | Crear, gestionar y renombrar una nevera |
 
@@ -61,7 +63,7 @@ que **puede intentar**; la RLS decide además **sobre qué filas**.
 | `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; `service_role` solo lo lee y lo escribe vía `upsert_global_product()` |
 | `lookup_usage` | Tabla | **Nada** (ni leer) | Contadores del límite de consultas del escáner. Sin política ni permiso para ningún rol: solo la tocan `consume_lookup_quota()` y `consume_off_slot()`. Se purga a los 2 días |
 | `barcode_misses` | Tabla | **Nada** (ni leer) | Caché de códigos que Open Food Facts no conoce. Sin política ni permiso; no guarda quién preguntó. Se purga a los 7 días |
-| `shopping_list_items` | Tabla | Las cuatro | RLS por nevera (la funcionalidad llega en la fase 4) |
+| `shopping_list_items` | Tabla | Las cuatro | RLS por nevera. Un trigger (`check_shopping_item`) impone lo que la RLS no: `auto_restock` solo si la persona lo encendió, `created_by` siempre quien escribe, producto global o de la misma nevera, y un tope de 300 líneas por nevera |
 | `user_settings` | Tabla | Leer lo suyo; escribir **columna a columna** | `household_limit` y `username` no son editables; zona horaria validada por trigger |
 | `category_shelf_life_reference`, `open_shelf_life_reference` | Tabla | Leer | Referencias de solo lectura |
 
@@ -72,6 +74,8 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 | Función | Modo | Qué autoriza en el servidor |
 |---|---|---|
 | `create_item` | invoker | Que la nevera pedida sea de quien llama, y que el producto enlazado (si lo hay) sea del catálogo global o de esa misma nevera |
+| `update_item` | invoker | Corregir un elemento (nombre, pasillo, sitio, fecha y, **solo sin abrir**, la cantidad) y escribir su evento `updated` con lo de antes y lo de ahora, en una transacción. Bloquea la fila, pasa por la RLS (lo de otra nevera «no existe») y rechaza lo cerrado. No toca el estado, la nevera ni el producto |
+| `stock_from_list` | invoker | Marca una línea de la lista como comprada y da de alta el elemento, **en una transacción**. Bloquea la línea (dos personas a la vez no crean dos elementos) y la lee con la RLS: una línea de otra nevera «no existe» |
 | `open_item`, `use_quantity`, `freeze_item`, `thaw_item`, `finish_item`, `discard_item` | invoker | La RLS del elemento + `require_item()`, que **bloquea la fila** (dos personas a la vez no se pisan) |
 | `require_item`, `record_inventory_event` | invoker | Auxiliares de las acciones |
 | `shelf_life_for_item` | invoker | La RLS del elemento |
@@ -104,6 +108,7 @@ Sin permiso de ejecución para `anon` ni `authenticated`.
 | `forbid_household_change` | Trigger: un elemento, una línea de la lista o un producto no se mueven de nevera |
 | `handle_new_user` | Trigger de alta: solo admite correos sintéticos, saca el nombre del correo, crea la nevera privada |
 | `touch_updated_at` | Trigger de `updated_at` |
+| `check_shopping_item` | Trigger de la lista de la compra: ver la tabla `shopping_list_items` |
 
 ### Funciones que solo ejecuta `service_role` (el escáner)
 

@@ -24,9 +24,9 @@
 
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 
-import { esFalloDeRed, mensajeSinConexion } from '@/shared/lib/conexion';
+import { esFalloDeRed, mensajeFuncionCaida, mensajeSinConexion } from '@/shared/lib/conexion';
 import { errorSinTraducir } from '@/shared/lib/error-generico';
-import { normalizarGtin } from '@/shared/lib/gtin';
+import { esCodigoDeNoComida, normalizarGtin } from '@/shared/lib/gtin';
 import { supabase } from '@/shared/lib/supabase';
 import type { UnitFamily } from '@/shared/lib/units';
 
@@ -41,9 +41,14 @@ export type ProductoEscaneado = {
   image_url: string | null;
 };
 
+/**
+ * `noEsComida`: el código existe, pero es de un libro, un cupón o algo que el catálogo
+ * sabe que no se come. Opsi solo guarda comida, así que el escáner lo rechaza en vez
+ * de ofrecer añadirlo a mano.
+ */
 export type ResultadoBusqueda =
   | { encontrado: true; producto: ProductoEscaneado }
-  | { encontrado: false; codigo: string };
+  | { encontrado: false; codigo: string; noEsComida: boolean };
 
 /**
  * Un error de la búsqueda con un mensaje ya escrito para leerse.
@@ -96,7 +101,7 @@ function leerProducto(valor: unknown): ProductoEscaneado | null {
 
 function leerRespuesta(cuerpo: unknown, codigo: string): ResultadoBusqueda {
   const c = (cuerpo ?? {}) as Record<string, unknown>;
-  if (c.found === false) return { encontrado: false, codigo };
+  if (c.found === false) return { encontrado: false, codigo, noEsComida: c.not_food === true };
   if (c.found === true) {
     const producto = leerProducto(c.product);
     if (producto) return { encontrado: true, producto };
@@ -105,7 +110,14 @@ function leerRespuesta(cuerpo: unknown, codigo: string): ResultadoBusqueda {
   throw new ErrorBusqueda('respuesta_rara', errorSinTraducir('catálogo', cuerpo));
 }
 
-/** El mensaje que escribió la función, si lo hay. */
+/**
+ * El mensaje que escribió la función, si lo hay.
+ *
+ * Una respuesta sin nuestro `{ code, message }` no la escribió la función: la dio
+ * la pasarela. Y eso casi siempre significa que la función no está arriba (404,
+ * 502, 503 o 504 —con `{"message":"name resolution failed"}` cuando el contenedor
+ * está parado—), que se dice como lo que es y no como un fallo genérico.
+ */
 async function mensajeDeLaFuncion(error: FunctionsHttpError): Promise<ErrorBusqueda> {
   try {
     const cuerpo = (await error.context.json()) as { code?: unknown; message?: unknown };
@@ -113,7 +125,11 @@ async function mensajeDeLaFuncion(error: FunctionsHttpError): Promise<ErrorBusqu
       return new ErrorBusqueda(cuerpo.code, cuerpo.message);
     }
   } catch {
-    // Una respuesta que no es JSON viene del gateway, no de nuestra función.
+    // Una respuesta que no es JSON tampoco la escribió la función.
+  }
+  const estado = error.context.status;
+  if (estado === 404 || estado === 502 || estado === 503 || estado === 504) {
+    return new ErrorBusqueda('funcion_caida', mensajeFuncionCaida());
   }
   return new ErrorBusqueda('servicio', errorSinTraducir('catálogo', error));
 }
@@ -129,6 +145,11 @@ export async function buscarPorCodigo(codigo: string): Promise<ResultadoBusqueda
       'codigo_invalido',
       'Ese código no es válido. Revisa los números: el último es de control.',
     );
+  }
+
+  // Lo que se sabe sin preguntar a nadie. El servidor lo repite (es quien manda).
+  if (esCodigoDeNoComida(normalizado)) {
+    return { encontrado: false, codigo: normalizado, noEsComida: true };
   }
 
   const { data, error } = await supabase.functions.invoke('lookup-barcode', {

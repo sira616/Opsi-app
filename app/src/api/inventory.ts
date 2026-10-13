@@ -335,6 +335,13 @@ export type NewItem = {
    * acaba de crear). Null en un alta a mano de algo sin código.
    */
   productId?: string | null;
+  /**
+   * La línea de la lista de la compra de la que sale. Con ella, dar de alta y
+   * marcar la línea como comprada es UNA transacción del servidor
+   * (`stock_from_list`): o pasan las dos cosas o ninguna. La nevera sale de la
+   * línea; `householdId` se manda igualmente y el servidor no lo usa.
+   */
+  listaId?: string | null;
 };
 
 /**
@@ -347,20 +354,22 @@ export async function createItem(item: NewItem): Promise<void> {
   // Sin `.single()`: la función devuelve una fila suelta, no un conjunto, y
   // pedirle a PostgREST que la trate como objeto único es una forma de fallar
   // a cambio de un dato que aquí no se usa.
-  const { error } = await supabase
-    .rpc('create_item', {
-      p_household_id: item.householdId,
-      p_name: item.name,
-      p_unit_family: item.unitFamily,
-      p_display_unit: item.displayUnit,
-      p_quantity: item.quantity,
-      p_location: item.location,
-      p_limit_date: item.limitDate,
-      p_date_kind: item.dateKind,
-      p_date_source: item.dateSource,
-      p_category: item.category,
-      p_product_id: item.productId ?? null,
-    });
+  const datos = {
+    p_name: item.name,
+    p_unit_family: item.unitFamily,
+    p_display_unit: item.displayUnit,
+    p_quantity: item.quantity,
+    p_location: item.location,
+    p_limit_date: item.limitDate,
+    p_date_kind: item.dateKind,
+    p_date_source: item.dateSource,
+    p_category: item.category,
+    p_product_id: item.productId ?? null,
+  };
+
+  const { error } = item.listaId
+    ? await supabase.rpc('stock_from_list', { p_list_item_id: item.listaId, ...datos })
+    : await supabase.rpc('create_item', { p_household_id: item.householdId, ...datos });
 
   if (error) throw error;
 }
@@ -377,7 +386,47 @@ export const actions = {
     callAction('use_quantity', { p_item_id: id, p_amount: amountInBaseUnit }),
 };
 
-async function callAction(fn: string, args: Record<string, unknown>) {
-  const { error } = await supabase.rpc(fn, args);
+/**
+ * Todas las acciones devuelven el elemento ya cambiado, y se pasa tal cual: la
+ * pantalla lo mira para saber si la acción lo dejó agotado (`state`), que es
+ * cuando toca ofrecer apuntarlo en la lista.
+ */
+async function callAction(fn: string, args: Record<string, unknown>): Promise<{ state: ItemState }> {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) throw error;
+  return data as unknown as { state: ItemState };
+}
+
+export type EdicionElemento = {
+  name: string;
+  category: Categoria;
+  location: StorageLocation;
+  limitDate: string | null;
+  dateKind: DateKind | null;
+  dateSource: DateSource | null;
+  /**
+   * Solo se manda si cambió, y solo se admite en lo que está sin abrir: en lo
+   * empezado la cantidad que queda es el resultado de lo que se fue usando.
+   */
+  cantidad?: { quantity: number; displayUnit: MeasurementUnit } | null;
+};
+
+/**
+ * Corrige un elemento. Va por función y no por un UPDATE suelto para que el
+ * cambio y su evento `updated` —con lo de antes y lo de ahora— se escriban en la
+ * misma transacción. Mandar lo que ya había no hace nada ni deja rastro.
+ */
+export async function updateItem(id: string, e: EdicionElemento): Promise<void> {
+  const { error } = await supabase.rpc('update_item', {
+    p_item_id: id,
+    p_name: e.name,
+    p_category: e.category,
+    p_location: e.location,
+    p_limit_date: e.limitDate,
+    p_date_kind: e.dateKind,
+    p_date_source: e.dateSource,
+    p_quantity: e.cantidad?.quantity ?? null,
+    p_display_unit: e.cantidad?.displayUnit ?? null,
+  });
   if (error) throw error;
 }

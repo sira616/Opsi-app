@@ -154,15 +154,34 @@ function Fila({
 /**
  * Lo que el evento guardó en su `payload` y merece leerse.
  *
- * Solo dos casos, y los dos porque explican algo que si no se pregunta uno:
- * por qué se dio por terminado sin tocar «Terminar», y cuántos días se le
- * sumaron a la fecha al sacarlo del congelador.
+ * Solo tres casos, y los tres porque explican algo que si no se pregunta uno:
+ * por qué se dio por terminado sin tocar «Terminar», cuántos días se le
+ * sumaron a la fecha al sacarlo del congelador, y qué se corrigió al editarlo.
  */
 function describeDetalle(evento: InventoryEvent): string | null {
   const payload = evento.payload ?? {};
 
   if (evento.type === 'finished' && payload.reason === 'quantity_reached_zero') {
     return 'se acabó la cantidad';
+  }
+
+  // Lo editado: qué cambió, sin el detalle de cada valor (eso está en la base de
+  // datos). «Cambió la fecha y el nombre» es lo que se pregunta uno al verlo.
+  if (evento.type === 'updated') {
+    const cambios = payload.cambios;
+    if (cambios && typeof cambios === 'object') {
+      const nombres: Record<string, string> = {
+        name: 'el nombre',
+        category: 'el pasillo',
+        location: 'dónde está',
+        date: 'la fecha',
+        quantity: 'la cantidad',
+      };
+      const lista = Object.keys(cambios)
+        .map((k) => nombres[k])
+        .filter(Boolean);
+      if (lista.length > 0) return `cambió ${lista.join(', ').replace(/, ([^,]*)$/, ' y $1')}`;
+    }
   }
 
   if (evento.type === 'thawed') {

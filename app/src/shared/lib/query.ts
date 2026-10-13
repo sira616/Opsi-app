@@ -81,6 +81,16 @@ export const queryKeys = {
   invitacionesEnviadas: (neveraId: string) =>
     ['household', neveraId, 'invitaciones', 'enviadas'] as const,
 
+  /**
+   * La lista de la compra. Cuelga de la nevera, como la lista de prioridad: sin su
+   * id, la lista de una nevera se serviría como la de otra durante el minuto que
+   * dura fresca. `lista` solo invalida las de TODAS las neveras (al guardar algo
+   * comprado, que puede venir de cualquiera).
+   */
+  lista: ['lista'] as const,
+  listaDe: (neveraId: string) => ['lista', neveraId] as const,
+  linea: (id: string) => ['lista', 'linea', id] as const,
+
   settings: ['settings'] as const,
   correo: ['cuenta', 'correo'] as const,
 };

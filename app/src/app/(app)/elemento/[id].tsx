@@ -10,11 +10,14 @@ import {
   Drop,
   ForkKnife,
   Package,
+  PencilSimple,
   Snowflake,
   Trash,
 } from 'phosphor-react-native';
 
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
+import { agregarLinea } from '@/api/lista';
+import { fetchSettings } from '@/api/settings';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
 import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
@@ -24,8 +27,10 @@ import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity } from '@/shared/lib/units';
+import { Button } from '@/shared/ui/Button';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
+import { HojaInferior } from '@/shared/ui/HojaInferior';
 import { Info } from '@/shared/ui/Info';
 import {
   fonts,
@@ -58,6 +63,11 @@ export default function Detalle() {
 
   const [error, setError] = useState<string | null>(null);
   const [hojaUsar, setHojaUsar] = useState(false);
+  // Lo que se acaba de hacer con la lista al agotarse algo: preguntar, o avisar de
+  // que ya se apuntó (solo si la persona tiene encendido apuntar lo que se acaba).
+  const [lista, setLista] = useState<null | { paso: 'pregunta' } | { paso: 'hecho'; nuevo: boolean }>(
+    null,
+  );
 
   const item = useQuery({
     queryKey: queryKeys.item(id),
@@ -79,10 +89,12 @@ export default function Detalle() {
    * hay que acertar. Cuesta lo mismo: solo se recarga la que está a la vista.
    */
   const act = useMutation({
-    mutationFn: (run: () => Promise<void>) => run(),
-    async onSuccess() {
+    mutationFn: (run: () => Promise<{ state: string } | void>) => run(),
+    async onSuccess(resultado) {
       setError(null);
       setHojaUsar(false);
+      // Se acabó (terminándolo, o usando lo que quedaba): toca ofrecer apuntarlo.
+      if (resultado && resultado.state === 'finished') void alAcabarse();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.item(id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.itemEvents(id) }),
@@ -93,6 +105,44 @@ export default function Detalle() {
       setError(describeDbError(caught));
     },
   });
+
+  const ajustes = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+
+  /**
+   * Algo se acaba de agotar: ofrecer apuntarlo en la lista.
+   *
+   * NADA se apunta solo salvo que la persona lo haya encendido en Ajustes (y el
+   * servidor lo exige: ver `check_shopping_item`). Apagado, que es como viene, se
+   * pregunta. Encendido, se apunta y se dice, sin pedir nada otra vez.
+   */
+  async function alAcabarse() {
+    if (!ajustes.data?.auto_add_to_shopping_list) {
+      setLista({ paso: 'pregunta' });
+      return;
+    }
+    try {
+      setLista({ paso: 'hecho', nuevo: await apuntarEnLista('auto_restock') });
+    } catch (caught) {
+      setLista(null);
+      setError(describeDbError(caught));
+    }
+  }
+
+  /** Apunta lo que se ha acabado, con lo que traía. `false` si ya estaba pendiente. */
+  async function apuntarEnLista(origen: 'manual' | 'auto_restock'): Promise<boolean> {
+    // El elemento recién agotado, tal como se cargó: su nombre y lo que traía no cambian.
+    const e = item.data;
+    if (!e) return false;
+    const nuevo = await agregarLinea({
+      householdId: e.household_id,
+      name: e.name,
+      origen,
+      productId: e.product_id,
+      cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
+    });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
+    return nuevo;
+  }
 
   if (item.isPending) {
     return (
@@ -158,7 +208,7 @@ export default function Detalle() {
    * —«Quieres usar 500 pero solo quedan 300»—, así que taparlo era perder el
    * único dato útil. Es el mismo error que ya se cometió con P0002.
    */
-  function run(fn: () => Promise<void>) {
+  function run(fn: () => Promise<{ state: string } | void>) {
     setError(null);
     act.mutate(fn);
   }
@@ -174,15 +224,34 @@ export default function Detalle() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <CaretLeft size={16} color={c.inkMuted} weight="bold" />
-          <Text style={styles.backText}>Inventario</Text>
-        </Pressable>
+        <View style={styles.topFila}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            onPress={() => router.back()}
+            style={styles.back}
+          >
+            <CaretLeft size={16} color={c.inkMuted} weight="bold" />
+            <Text style={styles.backText}>Inventario</Text>
+          </Pressable>
+
+          {/* Editar, a propósito casi invisible: se busca cuando hace falta (un
+              nombre mal escrito, una fecha mal copiada) y no debe competir con
+              las acciones de abajo. Lo cerrado no se edita, así que no sale. */}
+          {!closedOut ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Editar"
+              onPress={() =>
+                router.push({ pathname: '/editar-elemento/[id]', params: { id: detail.id } })
+              }
+              hitSlop={6}
+              style={({ pressed }) => [styles.editar, pressed && styles.pressed]}
+            >
+              <PencilSimple size={18} color={c.inkFaint} weight="regular" />
+            </Pressable>
+          ) : null}
+        </View>
 
         {/* ── Cabecera: el mismo icono que en la lista ──────────────────── */}
         <View style={styles.cabecera}>
@@ -239,11 +308,8 @@ export default function Detalle() {
                 <Action
                   label="Descongelar"
                   icono={<Drop size={20} color={c.frost} weight="duotone" />}
-                  info={{
-                    titulo: 'Descongelar',
-                    texto:
-                      'Una vez descongelado, tienes 24 horas para consumirlo. No se vuelve a congelar.',
-                  }}
+                  // Lo que protege a alguien va a la vista y DENTRO del botón.
+                  subtitulo="24 horas para consumirlo"
                   onPress={() => run(() => actions.thaw(detail.id))}
                   busy={act.isPending}
                 />
@@ -263,11 +329,6 @@ export default function Detalle() {
                   <Action
                     label="Abrir"
                     icono={<Package size={20} color={c.brand} weight="duotone" />}
-                    info={{
-                      titulo: 'Abrir',
-                      texto:
-                        'Muchos alimentos duran menos una vez abiertos. Al abrirlo recalculo la fecha límite.',
-                    }}
                     onPress={() => run(() => actions.open(detail.id))}
                     busy={act.isPending}
                   />
@@ -288,20 +349,10 @@ export default function Detalle() {
                 <Action
                   label="Congelar"
                   icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
-                  // Lo que protege a alguien se queda a la vista: recongelar lo
-                  // descongelado sin cocinarlo es un riesgo, no una curiosidad.
-                  hint={
-                    data.state === 'thawed'
-                      ? 'Ya se descongeló una vez. No lo vuelvas a congelar sin cocinarlo antes.'
-                      : undefined
-                  }
-                  info={
-                    data.state === 'thawed'
-                      ? undefined
-                      : {
-                          titulo: 'Congelar',
-                          texto: 'La cuenta atrás de la fecha se para mientras esté congelado.',
-                        }
+                  // Recongelar lo descongelado sin cocinarlo es un riesgo, no una
+                  // curiosidad: se dice a la vista, dentro del botón.
+                  subtitulo={
+                    data.state === 'thawed' ? 'Ya se descongeló: cocínalo antes de volver a congelar' : undefined
                   }
                   onPress={() => run(() => actions.freeze(detail.id))}
                   busy={act.isPending}
@@ -341,6 +392,43 @@ export default function Detalle() {
 
         <Historial item={data} />
       </ScrollView>
+
+      {/* Al agotarse algo: ofrecer apuntarlo, o decir que ya se apuntó. */}
+      <HojaInferior
+        visible={lista !== null}
+        onClose={() => setLista(null)}
+        titulo={
+          lista?.paso === 'hecho'
+            ? lista.nuevo
+              ? 'Apuntado en la lista'
+              : 'Ya estaba en la lista'
+            : '¿Lo apunto en la lista?'
+        }
+      >
+        <Text style={styles.listaTexto}>
+          {lista?.paso === 'hecho'
+            ? `«${data.name}» está en la lista de la compra.`
+            : `Se te ha acabado «${data.name}». ¿Lo apunto en la lista de la compra?`}
+        </Text>
+        {lista?.paso === 'pregunta' ? (
+          <>
+            <Button
+              label="Apuntarlo"
+              onPress={async () => {
+                try {
+                  setLista({ paso: 'hecho', nuevo: await apuntarEnLista('manual') });
+                } catch (caught) {
+                  setLista(null);
+                  setError(describeDbError(caught));
+                }
+              }}
+            />
+            <Button label="Ahora no" variant="quiet" onPress={() => setLista(null)} />
+          </>
+        ) : (
+          <Button label="Vale" onPress={() => setLista(null)} />
+        )}
+      </HojaInferior>
 
       <HojaUsar
         visible={hojaUsar}
@@ -398,17 +486,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
           <Text style={[styles.dateLabel, styles.dateLabelFrozen, styles.dateLabelTexto]}>
             En el congelador
           </Text>
-          <Info
-            titulo="Congelado"
-            texto={
-              'Mientras esté ahí no vence: la cuenta atrás está parada y se reanuda donde se quedó al sacarlo.' +
-              (item.frozen_days > 0
-                ? ` De veces anteriores lleva ${item.frozen_days} ${
-                    item.frozen_days === 1 ? 'día' : 'días'
-                  } ya sumados a su fecha.`
-                : '')
-            }
-          />
         </View>
 
         <Text style={styles.dateValue}>
@@ -432,10 +509,6 @@ function FechaLimite({ item }: { item: ItemDetail }) {
       <View style={[styles.dateCard, styles.dateCardNeutral]}>
         <View style={styles.frozenHead}>
           <Text style={[styles.dateLabel, styles.dateLabelTexto]}>Sin fecha</Text>
-          <Info
-            titulo="Sin fecha"
-            texto="No es lo mismo que «sin urgencia». Si el envase trae una fecha, merece la pena ponerla."
-          />
         </View>
         <Text style={styles.dateValue}>No sé cuándo vence</Text>
       </View>
@@ -463,8 +536,7 @@ function FechaLimite({ item }: { item: ItemDetail }) {
 function Action({
   label,
   icono,
-  hint,
-  info,
+  subtitulo,
   onPress,
   busy,
   danger,
@@ -473,10 +545,11 @@ function Action({
   label: string;
   /** El icono de la acción: congelar es un copo, tirar una papelera. */
   icono?: React.ReactNode;
-  /** Texto a la vista. Solo para lo que protege a alguien; lo demás va en `info`. */
-  hint?: string;
-  /** Lo que explica la acción, detrás de una «i» pequeña. */
-  info?: { titulo: string; texto: string };
+  /**
+   * Una línea debajo de la etiqueta, DENTRO del botón. Solo para lo que protege a
+   * alguien (las 24 horas de lo descongelado): lo que se entiende solo no lleva texto.
+   */
+  subtitulo?: string;
   onPress: () => void;
   busy?: boolean;
   danger?: boolean;
@@ -484,37 +557,34 @@ function Action({
 }) {
   const styles = useStyles();
   return (
-    <View style={styles.actionWrapper}>
-      <View style={styles.actionFila}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.action,
-            styles.actionFlex,
-            danger && styles.actionDanger,
-            primary && styles.actionPrimary,
-            pressed && styles.actionPressed,
-            busy && styles.actionBusy,
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: busy }}
+      disabled={busy}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.action,
+        subtitulo ? styles.actionConSubtitulo : null,
+        danger && styles.actionDanger,
+        primary && styles.actionPrimary,
+        pressed && styles.actionPressed,
+        busy && styles.actionBusy,
+      ]}
+    >
+      {icono}
+      <View style={styles.actionTextos}>
+        <Text
+          style={[
+            styles.actionText,
+            danger && styles.actionTextDanger,
+            primary && styles.actionTextPrimary,
           ]}
         >
-          {icono}
-          <Text
-            style={[
-              styles.actionText,
-              danger && styles.actionTextDanger,
-              primary && styles.actionTextPrimary,
-            ]}
-          >
-            {label}
-          </Text>
-        </Pressable>
-        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
+          {label}
+        </Text>
+        {subtitulo ? <Text style={styles.actionSubtitulo}>{subtitulo}</Text> : null}
       </View>
-      {hint ? <Text style={styles.actionHint}>{hint}</Text> : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -524,6 +594,14 @@ const useStyles = makeStyles((c) => ({
   errorBox: { alignSelf: 'stretch', paddingHorizontal: space.xl },
   content: { padding: space.xl, gap: space.lg, paddingBottom: space.xxl * 2 },
 
+  topFila: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editar: {
+    width: touchTarget,
+    height: touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -space.sm,
+  },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -591,9 +669,6 @@ const useStyles = makeStyles((c) => ({
   },
 
   actions: { gap: space.sm },
-  actionWrapper: { gap: 3 },
-  actionFila: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  actionFlex: { flex: 1 },
   action: {
     minHeight: touchTarget + 6,
     flexDirection: 'row',
@@ -612,7 +687,11 @@ const useStyles = makeStyles((c) => ({
   actionText: { fontSize: 15, fontWeight: '600', color: c.ink },
   actionTextPrimary: { color: c.onBrand },
   actionTextDanger: { color: c.expiry },
-  actionHint: { fontSize: 11.5, lineHeight: 16, color: c.inkFaint, paddingHorizontal: 2 },
+  actionConSubtitulo: { paddingVertical: space.sm },
+  actionTextos: { flex: 1, gap: 1 },
+  actionSubtitulo: { fontSize: 12, lineHeight: 16, color: c.inkMuted },
+
+  listaTexto: { fontSize: 15, lineHeight: 22, color: c.inkMuted },
 
   closedNote: {
     padding: space.lg,

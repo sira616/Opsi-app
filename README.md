@@ -166,7 +166,7 @@ Ocho piezas, todas colgando de `household_id`:
 | **1** · Inventario | Alta manual, acciones, eventos, vista de prioridad, «Consumir primero» | Abrir la leche cambia estado, fecha y posición, y deja evento |
 | **2** · Escáner ✅ | Cámara EAN/UPC, `lookup-barcode`, confirmación precargada, fallback manual | Producto conocido al inventario en dos toques *(hecho en local; la cámara sin probar en un móvil)* |
 | **3** · Avisos | Token push, `daily-digest` con pg_cron, ajustes de hora | Un solo aviso al día; ninguno si no hay urgencias |
-| **4** · Lista | CRUD, «¿lo añado?» al agotar, marcar comprado → inventario | Terminar los huevos ofrece añadirlos; comprarlos los devuelve al inventario |
+| **4** · Lista ✅ | CRUD, «¿lo añado?» al agotar, marcar comprado → inventario | Terminar los huevos ofrece añadirlos; comprarlos los devuelve al inventario *(hecho en local; sin ver en un móvil)* |
 | **5** · Chat | `opsi-chat`, herramientas con RLS, recetas, límites de uso | «¿Qué ceno?» responde con lo que hay; «he terminado el bacon» lo marca |
 | **6** · Ticket | Subida a Storage privado, `parse-receipt` con visión, pantalla de revisión | Un ticket de 10 líneas → 10 elementos tras confirmar |
 
@@ -206,7 +206,7 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 **Fases 0, 1 y 2 · hechas.** Lo que hay hoy, y lo que se ha probado de verdad:
 
 - [x] Monorepo con `app/` y `supabase/`, con la CLI de Supabase fijada
-- [x] Esquema con **28 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
+- [x] Esquema con **30 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
 - [x] Alta y login por usuario y contraseña; el alta solo admite usuarios de Opsi
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
 - [x] Vista `inventory_with_priority` con la fecha límite efectiva, contada desde el día del usuario
@@ -219,9 +219,9 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 305 tests pgTAP (9 ficheros) contra Supabase local; 482 comprobaciones sin Docker
-(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 58 tests de la
-lógica de la función de búsqueda (`npm run test:funciones`) y 19 contra el runtime de Edge Functions de
+**Probado:** 367 tests pgTAP (11 ficheros) contra Supabase local; 552 comprobaciones sin Docker
+(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 67 tests de la
+lógica de la función de búsqueda (`npm run test:funciones`) y 21 contra el runtime de Edge Functions de
 verdad (`npm run fn:check`). La función, además, **contra Open Food Facts de verdad**. La app, en el
 navegador con dos cuentas. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.
 

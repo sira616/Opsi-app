@@ -76,6 +76,7 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 | **T**ampering | La caché se **envenena**: OFF lo edita cualquiera, y lo que se guarda lo ven todas las personas (y en la fase 5, el modelo) | **Dos filtros de dos lenguajes.** El de la función se queda con un subconjunto de campos: texto sin saltos de línea ni caracteres de control, de formato, bidireccionales o de ancho cero, sin `<` `>`, con tope de longitud; `image_url` solo de `images.openfoodfacts.org` por https y sin puerto ni credenciales; categorías con el formato exacto de OFF. El de la base de datos (`upsert_global_product`) lo **revalida** todo: si la función tuviera un fallo, rechaza igualmente. `service_role` no puede escribir `products` directamente | `off.test.ts` (una ficha envenenada sale limpia), `escaner_test.sql` (22 casos rechazados en SQL y comprobación de que no entró nada) |
 | **T**ampering | Una nevera compartida pone en un producto **privado** la URL de su servidor como imagen y se entera de cuándo y desde qué IP lo abre cada compañera | `products_image_url_ck`: la imagen de **cualquier** producto, privado o global, solo puede ser de `images.openfoodfacts.org` | `escaner_test.sql` |
 | **T**ampering | Enlazar un elemento a un producto privado de **otra** nevera conociendo su uuid | `create_item` exige que el producto sea global o de la misma nevera, con el mismo mensaje para «no existe» y «no es tuyo» | `escaner_test.sql` |
+| **T**ampering | El texto con el que OFF dice «esto no es comida» (`status_verbose`) se toma por una orden, o se guarda y se enseña | Solo cuenta la frase **exacta** `product found with a different product type: <tipo corto en minúsculas>`, y de ella solo sale un booleano: el texto no se guarda, no se registra y no llega a la app. Cualquier otra cosa (otra frase, mayúsculas, un añadido tras el tipo) es «no existe». Un 404 con el cuerpo roto o enorme no lanza | `off.test.ts` (las tres bases de la familia, y cinco textos que no cuentan) |
 | **T**ampering | Dos filas para el mismo producto por escribir el código distinto (el UPC-A de 12 cifras y su EAN-13 con un cero delante son el mismo artículo) | Normalizar antes de buscar y de guardar: 12 cifras → se antepone `0`; 14 cifras con `0` delante → se quita; un GTIN-14 con otro indicador es otro artículo (una caja) y se deja; la normalización **nunca arregla** un código (ni rellena por la izquierda ni corrige el control) | `gtin.test.ts`, `lookup.test.ts` (los tres escriben el mismo código) |
 | **R**epudiation | No saber quién consultó qué | Un registro por petición con `request_id`, `user_id`, resultado, estado y milisegundos; **sin** token, cuerpo ni código de barras (el código dice qué compra la persona) | `lookup.test.ts`; visto en el log del runtime real |
 | **I**nfo disclosure | Un error de OFF o una excepción llega a la app con detalle interno | Código de error propio y mensaje en español sin detalle; el motivo (`http_429`, el mensaje de la base de datos…) va solo al log | `lookup.test.ts` |
@@ -93,18 +94,40 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 - **Método y ruta:** `POST /functions/v1/lookup-barcode`, cuerpo `{ "barcode": "<8–14 cifras>" }`, máximo 1 KB (también `OPTIONS`, para el preflight de la versión web)
 - **Autenticación:** JWT de una persona con sesión, **verificado dentro de la función**
 - **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función, y solo por `upsert_global_product`
-- **Entrada validada:** solo cifras, 8, 12, 13 o 14 de ellas, dígito de control GS1 correcto, y no una cadena de ceros
-- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, source: "openfoodfacts" } }` o `{ "found": false, "barcode": "…" }`. Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
+- **Entrada validada:** solo cifras, 8, 12, 13 o 14 de ellas, dígito de control GS1 correcto, y no una cadena de ceros. Además, **solo comida**: un EAN-13 con prefijo de revista, libro, recibo o cupón (977–984 y 990–999) contesta «no es comida» sin gastar cuota ni preguntar a nadie, y un código que OFF dice que es de otra base (cosmética, mascotas, otros productos) también
+- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, source: "openfoodfacts" } }` o `{ "found": false, "barcode": "…" }` (con `"not_food": true` si no es comida). Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
 - **Límites:** 30/min y 500/día por persona; 10/min globales hacia OFF; timeout 4 s; respuesta de OFF ≤ 256 KB
 - **Riesgos:** SSRF, envenenamiento de la caché, abuso de cuota, filtrado de errores, entrada no confiable hacia el modelo
 - **Controles en servidor:** los de la tabla de arriba
 - **Secretos:** `OFF_USER_AGENT` (nombre de la app y un contacto **real**; el valor de ejemplo se rechaza) en el entorno de la función. La clave de servicio la inyecta Supabase y no sale de ahí
-- **Tests automatizados:** `npm run test:funciones` (58, sin Deno ni red), `npm run db:test` (`escaner_test.sql`, 60), `npm run db:carreras` y `npm run fn:check` (19, en el runtime de Edge Functions de verdad)
+- **Tests automatizados:** `npm run test:funciones` (67, sin Deno ni red), `npm run db:test` (`escaner_test.sql`, 60), `npm run db:carreras` y `npm run fn:check` (21, en el runtime de Edge Functions de verdad)
 - **Estado:** `[x] diseño`  `[x] código`  `[x] tests`  `[x] inventario`  `[ ] prod`
 
 **Lo que no está probado:** la cámara en un móvil real; la llamada a OFF desde el runtime con la
 configuración de producción (sí en local, con `supabase functions serve`); y cómo se porta OFF
 con el tráfico de más de una persona.
+
+## 5 · Lista de la compra (fase 4)
+
+Tabla y RLS desde la fase 0; las reglas que la RLS no dice, en el trigger `check_shopping_item`
+(`20261011100000_lista_de_la_compra`). **Sin Edge Function**: la app habla con la tabla y con una
+función de la base de datos.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **S**poofing | Apuntar una línea «de parte de» otra persona de la nevera (`created_by` lo escribía el cliente) | El trigger pisa `created_by` con `auth.uid()` al insertar, y no deja cambiarlo después | `lista_compra_test.sql` |
+| **T**ampering | Que algo se apunte **solo** sin que la persona lo haya encendido (el principio del proyecto era solo un comentario) | `source = 'auto_restock'` se rechaza (P0001) salvo que `user_settings.auto_add_to_shopping_list` sea verdadero; el origen no se puede cambiar después | `lista_compra_test.sql` |
+| **T**ampering | Enlazar un producto privado de **otra** nevera conociendo su uuid | El producto tiene que ser global o de la misma nevera; mismo mensaje para «no existe» y «no es tuyo» | `lista_compra_test.sql` |
+| **T**ampering | Marcar como comprado y que **no** entre en el inventario (o al revés) por fallar la segunda de dos llamadas | `stock_from_list` hace las dos cosas en una transacción; si el alta falla, la línea no se toca | `lista_compra_test.sql` |
+| **T**ampering | Dos personas marcan la misma línea a la vez y se crean **dos** elementos | `stock_from_list` bloquea la línea (`for update`): la segunda ve «ya está marcado como comprado» | `npm run db:carreras` (**dos sesiones solapadas**) |
+| **I**nfo disclosure | Leer la lista de otra nevera | RLS por `is_household_member`; el cliente además filtra por la nevera activa | `lista_compra_test.sql` |
+| **D**oS | Una nevera acumula líneas sin límite | Tope de 300 por nevera (contando lo comprado), con mensaje que se entiende. Es una red contra un cliente descontrolado, **no** una limitación pensada para nadie | `lista_compra_test.sql` |
+| **E**levation | Dar de alta, desde una línea ajena, un elemento en la nevera de otra persona | `stock_from_list` lee la línea con la RLS: una línea de otra nevera «no existe» para quien llama | `lista_compra_test.sql` |
+
+**Lo que no cubre:** el origen `chat` (fase 5) se acepta tal cual desde el cliente; solo es una etiqueta y
+no da ningún permiso, pero cuando exista `opsi-chat` hay que decidir si lo escribe solo el servidor. El
+tope se comprueba contando filas dentro del trigger, así que dos inserciones **simultáneas** pueden pasarse
+por una o dos líneas: es aceptable para lo que es, y no se ha probado con dos sesiones.
 
 ---
 

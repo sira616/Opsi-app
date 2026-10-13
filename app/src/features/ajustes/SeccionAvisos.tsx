@@ -75,7 +75,7 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
     <Section title="Avisos">
       <Row
         title="Resumen diario"
-        subtitle="Un solo aviso al día con lo que conviene gastar. Si no hay nada urgente, no te molesto."
+        info="Un solo aviso al día con lo que conviene gastar. Si no hay nada urgente, no te molesto."
         right={
           <Switch
             value={data.digest_enabled}

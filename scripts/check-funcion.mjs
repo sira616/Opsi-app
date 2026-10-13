@@ -31,6 +31,8 @@ const CLAVE = 'una-clave-de-prueba-larga';
 const CODIGO_DEL_CATALOGO = '8400000000017';
 /** Un GTIN-13 válido que no está en ninguna parte: se anota como falta a mano. */
 const CODIGO_FALTA = '8499990000145';
+/** El ISBN-13 de ejemplo de la propia norma: un libro, prefijo 978. */
+const CODIGO_LIBRO = '9780306406157';
 
 const verde = (s) => `\x1b[32m${s}\x1b[0m`;
 const rojo = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -93,6 +95,12 @@ async function limpiar() {
 
 // ── Arranque ─────────────────────────────────────────────────────────────────
 const estado = estadoDeSupabase();
+if (estado?.API_URL && estado.ANON_KEY && !estado.FUNCTIONS_URL) {
+  // `supabase status` solo da la URL de las funciones cuando están arriba.
+  console.error(rojo('\nSupabase está arriba, pero las Edge Functions no.'));
+  console.error(tenue('  docker start supabase_edge_runtime_opsi   (o: npm run db:stop && npm run up)'));
+  process.exit(2);
+}
 if (!estado?.API_URL || !estado.ANON_KEY || !estado.FUNCTIONS_URL) {
   console.error(rojo('\nNo llego al Supabase local.'));
   console.error(tenue('  ¿Está Docker abierto y Supabase levantado?  npm run db:start'));
@@ -199,6 +207,17 @@ try {
     falta.estado === 200 && falta.json?.found === false && falta.json?.barcode === CODIGO_FALTA,
     `estado ${falta.estado} ${JSON.stringify(falta.json)}`,
   );
+
+  // Un libro no se come: por el prefijo se sabe sin preguntar a nadie, y sin gastar cuota.
+  const cuotaAntes = await psql(`select coalesce(sum(n), 0) from public.lookup_usage where clave like 'u:%';`);
+  const libro = await llamar({ token, cuerpo: { barcode: CODIGO_LIBRO } });
+  const cuotaDespues = await psql(`select coalesce(sum(n), 0) from public.lookup_usage where clave like 'u:%';`);
+  comprobar(
+    'un libro (prefijo ISBN) contesta «no es comida» sin llamar a nadie',
+    libro.estado === 200 && libro.json?.found === false && libro.json?.not_food === true,
+    `estado ${libro.estado} ${JSON.stringify(libro.json)}`,
+  );
+  comprobar('y sin gastar cuota', cuotaAntes.salida === cuotaDespues.salida, `${cuotaAntes.salida} → ${cuotaDespues.salida}`);
 
   // ── El límite ───────────────────────────────────────────────────────────
   console.log('\n  El límite por persona (30 por minuto)');

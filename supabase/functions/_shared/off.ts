@@ -35,6 +35,8 @@ export type ProductoOff = {
 export type ResultadoOff =
   | { tipo: 'encontrado'; producto: ProductoOff }
   | { tipo: 'no_existe' }
+  /** El código existe, pero en otra base de la familia (cosmética, mascotas, otros): no es comida. */
+  | { tipo: 'no_es_comida' }
   | { tipo: 'error'; motivo: string };
 
 // ── Límites ───────────────────────────────────────────────────────────────
@@ -227,6 +229,25 @@ export function normalizarRespuestaOff(json: unknown): ProductoOff | null {
   };
 }
 
+/**
+ * ¿Dice OFF que el código existe pero NO es comida?
+ *
+ * OFF es solo de comida. Su familia (Open Beauty Facts, Open Pet Food Facts, Open
+ * Products Facts) comparte códigos de barras, y distingue «no lo conozco» de «es de
+ * otra de la familia» en el texto `status_verbose`: un champú contesta
+ * «product found with a different product type: beauty». Se acepta solo esa forma
+ * exacta, con un tipo corto de letras, y se ignora cualquier otro texto: lo que
+ * escribe OFF no se interpreta más allá de esto.
+ */
+export function esRespuestaDeOtroTipo(json: unknown): boolean {
+  return (
+    esObjeto(json) &&
+    json.status === 0 &&
+    typeof json.status_verbose === 'string' &&
+    /^product found with a different product type: [a-z_]{1,20}$/.test(json.status_verbose)
+  );
+}
+
 // ── La llamada ────────────────────────────────────────────────────────────
 
 /**
@@ -298,6 +319,16 @@ export async function leerLimitado(
   return new TextDecoder().decode(todo);
 }
 
+/** Lee el cuerpo de un 404 y dice si es el de «existe, pero no es comida». Nunca lanza. */
+async function cuerpoEsDeOtroTipo(respuesta: Response): Promise<boolean> {
+  try {
+    const texto = await leerLimitado(respuesta, MAX_CUERPO_OFF);
+    return texto !== null && esRespuestaDeOtroTipo(JSON.parse(texto));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pregunta a Open Food Facts por UN código, que debe llegar ya validado y
  * normalizado (`normalizarGtin`). Nunca lanza: todo fallo es un resultado.
@@ -324,10 +355,10 @@ export async function consultarOff(codigo: string, opciones: OpcionesOff): Promi
     return { tipo: 'error', motivo: nombre === 'TimeoutError' ? 'tiempo_agotado' : 'red' };
   }
 
-  // OFF contesta 404 con `status: 0` cuando no conoce el código.
+  // OFF contesta 404 con `status: 0` cuando no conoce el código, y también cuando
+  // lo conoce pero es de otra base (no es comida). Solo el cuerpo los distingue.
   if (respuesta.status === 404) {
-    await respuesta.body?.cancel();
-    return { tipo: 'no_existe' };
+    return (await cuerpoEsDeOtroTipo(respuesta)) ? { tipo: 'no_es_comida' } : { tipo: 'no_existe' };
   }
   if (!respuesta.ok) {
     await respuesta.body?.cancel();
@@ -342,6 +373,8 @@ export async function consultarOff(codigo: string, opciones: OpcionesOff): Promi
   } catch {
     return { tipo: 'error', motivo: 'respuesta_ilegible' };
   }
+
+  if (esRespuestaDeOtroTipo(json)) return { tipo: 'no_es_comida' };
 
   // Un 200 con `status: 0` también significa «no existe» (pasa con códigos que
   // OFF considera inválidos). Y un producto sin nombre es lo mismo para nosotros.

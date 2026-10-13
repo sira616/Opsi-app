@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { digitoDeControl, esGtinValido, normalizarGtin } from './gtin.ts';
+import { digitoDeControl, esCodigoDeNoComida, esGtinValido, normalizarGtin } from './gtin.ts';
 
 // Códigos con control correcto de los cuatro tamaños. Los de 12, 13 y 8 cifras
 // son ejemplos de la propia GS1; el de 14 es un EAN-13 con un 1 de indicador y
@@ -80,4 +80,29 @@ test('quita los espacios de los bordes y nada más', () => {
 test('no arregla un código: ni rellena por la izquierda ni corrige el control', () => {
   assert.equal(normalizarGtin('12345678901'), null);
   assert.equal(normalizarGtin('5449000000995'), null);
+});
+
+/** Completa 12 cifras con su control, para probar prefijos sin copiar códigos de nadie. */
+const conControl = (cuerpo: string) => `${cuerpo}${digitoDeControl(cuerpo)}`;
+
+test('libros, revistas, recibos y cupones no son comida', () => {
+  // 978 y 979 son los ISBN; 977 los ISSN; 980 recibos; 981–984 y 99x cupones.
+  for (const prefijo of ['977', '978', '979', '980', '981', '984', '990', '999']) {
+    const codigo = conControl(`${prefijo}123456789`);
+    assert.equal(esGtinValido(codigo), true, codigo);
+    assert.equal(esCodigoDeNoComida(codigo), true, prefijo);
+  }
+});
+
+test('un producto de tienda corriente sí pasa, y también el límite de los rangos', () => {
+  for (const prefijo of ['000', '300', '400', '540', '761', '840', '849', '976', '985', '989']) {
+    assert.equal(esCodigoDeNoComida(conControl(`${prefijo}123456789`)), false, prefijo);
+  }
+  assert.equal(esCodigoDeNoComida(EAN13), false);
+});
+
+test('el prefijo solo se mira en un EAN-13: un EAN-8 o un GTIN-14 no', () => {
+  assert.equal(esCodigoDeNoComida(EAN8), false);
+  assert.equal(esCodigoDeNoComida(GTIN14_CAJA), false);
+  assert.equal(esCodigoDeNoComida(''), false);
 });

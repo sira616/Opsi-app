@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Barcode, CalendarBlank, MapPin, Scales, Sparkle, Tag } from 'phosphor-react-native';
 
 import { codigoDeRuta, crearProductoPrivado, idDeRuta } from '@/api/catalogo';
+import { fetchLinea, type LineaLista } from '@/api/lista';
 import {
   createItem,
   fetchProducto,
@@ -24,27 +25,26 @@ import {
   type ProductoCatalogo,
   type StorageLocation,
 } from '@/api/inventory';
+import {
+  cantidadInicial,
+  diasDeRuta,
+  ubicacionDeRuta,
+  ubicacionSugerida,
+} from '@/features/alta/valores';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
-import {
-  aIso,
-  enDias,
-  fechaLegible,
-  formatearMientrasEscribe,
-  isoEnDias,
-  problemaDias,
-  problemaFecha,
-} from '@/shared/lib/fecha-input';
+import { aIso, isoEnDias, problemaDias, problemaFecha } from '@/shared/lib/fecha-input';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
-import { familyOf, toBase, unidadSugerida, type MeasurementUnit } from '@/shared/lib/units';
+import { recordarGuardado } from '@/shared/lib/ultimo-guardado';
+import { familyOf, toBase, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
+import { CampoFecha } from '@/shared/ui/CampoFecha';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { Info } from '@/shared/ui/Info';
 import { TextField } from '@/shared/ui/TextField';
 import {
   fonts,
@@ -71,45 +71,6 @@ const LOCATION_OPTIONS: ChipOption<StorageLocation>[] = [
   { value: 'other', label: 'Otro' },
 ];
 
-// El rojo del chip de caducidad no es decoración: es seguridad frente a
-// calidad, y el usuario tiene que verlo al elegir.
-const KIND_OPTIONS: ChipOption<DateKind>[] = [
-  { value: 'best_before', label: 'Consumo preferente' },
-  { value: 'expiry', label: 'Caducidad', danger: true },
-];
-
-/**
- * De dónde sale la fecha. Y, desde ahora, QUÉ SE PREGUNTA.
- *
- * Hubo tres opciones y dos de ellas —«La pongo yo» y «A ojo»— eran la misma:
- * en las dos la escribe la persona. Ahora son dos y se nombran por lo único
- * que las distingue de verdad, que es si la fecha viene impresa o no.
- *
- * El chip dejó de ser una etiqueta al final del formulario. Con «lo pone el
- * envase» se copia la fecha impresa; con «la calculo yo» se piden DÍAS, que
- * es lo que una persona sabe de verdad de sus sobras —«esto aguanta una
- * semana»— y no un día concreto del calendario. Antes se elegía «la calculo
- * yo» y el formulario seguía exigiendo la fecha exacta: el chip no cambiaba
- * nada y la queja era justa.
- *
- * `estimate` sigue en el esquema, pero es lo que dice el comentario de su
- * migración: «calculada por la app». La pondrá el catálogo o la asistente,
- * nunca este formulario. Los días los pone una persona, así que lo que se
- * guarda es `user`.
- */
-const SOURCE_OPTIONS: ChipOption<DateSource>[] = [
-  { value: 'package', label: 'Lo pone el envase' },
-  { value: 'user', label: 'La calculo yo' },
-];
-
-/** Los atajos escriben DÍAS, no una fecha: son la respuesta rápida al campo. */
-const ATAJOS: [string, number][] = [
-  ['3 días', 3],
-  ['1 semana', 7],
-  ['2 semanas', 14],
-  ['1 mes', 30],
-];
-
 /**
  * La cáscara: averigua QUÉ se va a dar de alta y le pasa el formulario ya servido.
  *
@@ -122,12 +83,33 @@ const ATAJOS: [string, number][] = [
  * Esperar a la ficha ANTES de montar el formulario (y no rellenarlo después con un
  * efecto) es lo que evita pisar lo que la persona ya haya escrito, y deja el
  * formulario con un estado inicial en lugar de corregirlo al segundo render.
+ *
+ * Lo mismo vale para una línea de la lista de la compra (`lista`): se pide por su
+ * id, y de ella salen el nombre, la cantidad y, si lo lleva, el producto. Al
+ * guardar, el servidor da de alta el elemento Y marca la línea como comprada en una
+ * sola transacción.
  */
 export default function AltaManual() {
   const c = useTheme();
-  const params = useLocalSearchParams<{ codigo?: string; producto?: string }>();
+  const params = useLocalSearchParams<{
+    codigo?: string;
+    producto?: string;
+    lista?: string;
+    donde?: string;
+    dias?: string;
+  }>();
   const codigo = codigoDeRuta(params.codigo);
-  const productoId = idDeRuta(params.producto);
+  const listaId = idDeRuta(params.lista);
+
+  const lineaQ = useQuery({
+    queryKey: queryKeys.linea(listaId ?? ''),
+    queryFn: () => fetchLinea(listaId as string),
+    enabled: listaId !== null,
+  });
+  const linea = lineaQ.data ?? null;
+
+  // El producto de la ruta manda; si no hay, el de la línea de la lista.
+  const productoId = idDeRuta(params.producto) ?? linea?.product_id ?? null;
 
   const fichaQ = useQuery({
     queryKey: [...queryKeys.inventario, 'producto', productoId],
@@ -137,7 +119,7 @@ export default function AltaManual() {
     staleTime: 30 * 60_000,
   });
 
-  if (productoId !== null && fichaQ.isPending) {
+  if ((listaId !== null && lineaQ.isPending) || (productoId !== null && fichaQ.isPending)) {
     return (
       <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: c.ground, justifyContent: 'center' }}>
         <ActivityIndicator color={c.brand} />
@@ -151,18 +133,12 @@ export default function AltaManual() {
       productoId={productoId}
       ficha={fichaQ.data ?? null}
       fichaFallo={fichaQ.isError}
+      linea={linea}
+      listaId={listaId}
+      inicialDonde={ubicacionDeRuta(params.donde)}
+      inicialDias={diasDeRuta(params.dias)}
     />
   );
-}
-
-/** El contenido del envase, listo para el formulario: «1 L» → 1 l, «330 ml» → 330 ml. */
-function cantidadInicial(ficha: ProductoCatalogo | null): { quantity: string; unit: MeasurementUnit } {
-  if (!ficha?.unit_family || !ficha.net_quantity) return { quantity: '1', unit: 'unit' };
-  const sugerida = unidadSugerida(ficha.unit_family, ficha.net_quantity);
-  return {
-    quantity: String(Math.round(sugerida.amount * 100) / 100).replace('.', ','),
-    unit: sugerida.unit,
-  };
 }
 
 function Formulario({
@@ -170,11 +146,21 @@ function Formulario({
   productoId,
   ficha,
   fichaFallo,
+  linea,
+  listaId,
+  inicialDonde,
+  inicialDias,
 }: {
   codigo: string | null;
   productoId: string | null;
   ficha: ProductoCatalogo | null;
   fichaFallo: boolean;
+  /** La línea de la lista de la que se parte, si se viene de ahí. */
+  linea: LineaLista | null;
+  listaId: string | null;
+  /** Lo que se llevaba elegido en la hoja rápida, si se viene de ahí. */
+  inicialDonde: StorageLocation | null;
+  inicialDias: number | null;
 }) {
   const styles = useStyles();
   const t = useType();
@@ -185,11 +171,13 @@ function Formulario({
   // consecuencias, y se enseña en la propia pantalla.
   const { activa } = useNeveraActual();
 
-  const inicial = cantidadInicial(ficha);
-  const [name, setName] = useState(ficha?.name ?? '');
+  const inicial = cantidadInicial(ficha, linea);
+  const [name, setName] = useState(ficha?.name ?? linea?.name ?? '');
   const [quantity, setQuantity] = useState(inicial.quantity);
   const [unit, setUnit] = useState<MeasurementUnit>(inicial.unit);
-  const [location, setLocation] = useState<StorageLocation>('pantry');
+  // Dónde se guarda se propone a partir del pasillo (un yogur, a la nevera) y solo
+  // se «fija» cuando la persona toca uno, igual que la categoría.
+  const [ubicacionFijada, setUbicacionFijada] = useState<StorageLocation | null>(inicialDonde);
 
   // La categoría se propone a partir del nombre y solo se «fija» cuando el
   // usuario toca una. Así escribir «merluza» la pone en Pescado sin pedir
@@ -197,17 +185,18 @@ function Formulario({
   const [categoriaFijada, setCategoriaFijada] = useState<Categoria | null>(null);
   const categoriaSugerida = adivinarCategoria(name);
   const category = categoriaFijada ?? categoriaSugerida;
+  const location = ubicacionFijada ?? ubicacionSugerida(category);
 
   // La fecha es opcional a propósito. «Sin fecha» es una respuesta legítima y
   // tiene su propio grupo en la lista: obligar a inventarse una sería
   // exactamente lo que el proyecto se niega a hacer.
-  const [hasDate, setHasDate] = useState(false);
+  const [hasDate, setHasDate] = useState(inicialDias !== null);
   const [dateText, setDateText] = useState('');
   // Los días del modo «la calculo yo». Es otro estado y no el mismo campo
   // porque son otra cosa: «7» ahí significa una semana, no el día 7.
-  const [diasText, setDiasText] = useState('');
+  const [diasText, setDiasText] = useState(inicialDias !== null ? String(inicialDias) : '');
   const [kind, setKind] = useState<DateKind>('best_before');
-  const [source, setSource] = useState<DateSource>('package');
+  const [source, setSource] = useState<DateSource>(inicialDias !== null ? 'user' : 'package');
 
   const [error, setError] = useState<string | null>(null);
 
@@ -228,12 +217,18 @@ function Formulario({
         });
         enlazado = privadoCreado.current;
       }
-      await createItem({ ...item, productId: enlazado });
+      await createItem({ ...item, productId: enlazado, listaId });
     },
     // La nevera sale de lo que se mandó, no de la activa de este momento: es la
     // que hay que refrescar aunque algo la cambiara mientras se guardaba.
     async onSuccess(_creado, guardado) {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(guardado.householdId) });
+      // Si se llegó desde el escáner, que sepa qué se acaba de guardar.
+      recordarGuardado(guardado.name);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(guardado.householdId) }),
+        // Si venía de la lista, esa línea acaba de quedar comprada.
+        listaId ? queryClient.invalidateQueries({ queryKey: queryKeys.lista }) : Promise.resolve(),
+      ]);
       router.back();
     },
     onError(caught: unknown) {
@@ -244,10 +239,6 @@ function Formulario({
   // El formulario tiene dos modos y cada uno valida lo suyo. Mezclarlos sería
   // el bug de antes al revés: pedir una fecha donde se escriben días.
   const porDias = source === 'user';
-  const avisoFecha = hasDate && !porDias ? problemaFecha(dateText) : null;
-  const avisoDias = hasDate && porDias ? problemaDias(diasText) : null;
-  const fechaCalculada =
-    hasDate && porDias && avisoDias === null ? fechaLegible(enDias(Number(diasText))) : null;
 
   function onSubmit() {
     setError(null);
@@ -315,7 +306,7 @@ function Formulario({
                     : 'No he podido leer la ficha'}
                 </Text>
                 {/* La procedencia se queda a la vista, corta: Open Food Facts pide
-                    que se cite donde se usen sus datos. El consejo va en la «i». */}
+                    que se cite donde se usen sus datos. */}
                 {ficha ? (
                   <Text style={t.caption}>
                     {ficha.data_source === 'openfoodfacts'
@@ -324,16 +315,6 @@ function Formulario({
                   </Text>
                 ) : null}
               </View>
-              <Info
-                titulo="Producto escaneado"
-                texto={
-                  ficha
-                    ? ficha.data_source === 'openfoodfacts'
-                      ? 'Datos de Open Food Facts. Revisa la cantidad y la fecha: lo que ponga el envase manda.'
-                      : 'Es un producto que ya guardaste en esta nevera. Revisa la cantidad y la fecha.'
-                    : 'Puedes rellenarlo a mano; el producto queda enlazado igualmente.'
-                }
-              />
             </View>
           ) : codigo ? (
             <View style={styles.escaneado}>
@@ -341,10 +322,6 @@ function Formulario({
               <View style={styles.escaneadoTexto}>
                 <Text style={styles.escaneadoTitulo}>No conozco este código</Text>
               </View>
-              <Info
-                titulo="Código nuevo"
-                texto="Ponle nombre y lo recordaré en esta nevera: la próxima vez lo reconozco sin teclear."
-              />
             </View>
           ) : (
             <Pressable
@@ -438,15 +415,6 @@ function Formulario({
           <Seccion
             icono={<Tag size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Qué pasillo"
-            info={
-              categoriaFijada === null && name.trim() && categoriaSugerida !== 'otros'
-                ? {
-                    titulo: 'Qué pasillo',
-                    texto:
-                      'La que lleva la chispa la he adivinado yo por el nombre. Si no he acertado, toca la tuya.',
-                  }
-                : undefined
-            }
           >
             <View style={styles.categorias}>
               {CATEGORIAS.map((cat) => {
@@ -482,18 +450,13 @@ function Formulario({
             icono={<MapPin size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Dónde lo guardas"
           >
-            <Chips options={LOCATION_OPTIONS} value={location} onChange={setLocation} />
+            <Chips options={LOCATION_OPTIONS} value={location} onChange={setUbicacionFijada} />
           </Seccion>
 
           {/* ── Fecha ───────────────────────────────────────────────────── */}
           <Seccion
             icono={<CalendarBlank size={15} color={c.inkMuted} weight="duotone" />}
             titulo="Hasta cuándo"
-            info={{
-              titulo: 'Hasta cuándo',
-              texto:
-                'Si no la lleva o no te suena, déjalo sin marcar. «Sin fecha» también es una respuesta y tiene su grupo en la lista.',
-            }}
           >
             <Pressable
               accessibilityRole="switch"
@@ -510,98 +473,16 @@ function Formulario({
             </Pressable>
 
             {hasDate ? (
-              <View style={styles.dateFields}>
-                {/*
-                  El origen va PRIMERO porque manda sobre el resto del bloque:
-                  decide si se copia una fecha o se cuentan días.
-                */}
-                <Chips
-                  label="De dónde sale"
-                  options={SOURCE_OPTIONS}
-                  value={source}
-                  onChange={setSource}
-                  info={{
-                    titulo: 'De dónde sale',
-                    texto: [
-                      'Lo pone el envase: la fecha impresa. Se guarda con su origen, para que luego se vea de dónde salió.',
-                      'La calculo yo: para sobras, granel o lo que viene desnudo. Tú pones los días; el calendario lo hago yo.',
-                    ],
-                  }}
-                />
-
-                {porDias ? (
-                  <View style={styles.dias}>
-                    {/*
-                      Los atajos van ANTES del campo a propósito: cubren la
-                      mayoría de los casos de un toque, y quien los use no
-                      llega a teclear. Ahora escriben días, no una fecha.
-                    */}
-                    <View style={styles.atajos}>
-                      {ATAJOS.map(([etiqueta, dias]) => {
-                        const on = diasText === `${dias}`;
-                        return (
-                          <Pressable
-                            key={etiqueta}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Ponerle ${etiqueta}`}
-                            onPress={() => setDiasText(`${dias}`)}
-                            style={[styles.atajo, on && styles.atajoOn]}
-                          >
-                            <Text style={[styles.atajoText, on && styles.atajoTextOn]}>
-                              {etiqueta}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-
-                    <TextField
-                      label="¿Cuánto le das de vida?"
-                      hint={avisoDias ?? undefined}
-                      value={diasText}
-                      onChangeText={(texto) => setDiasText(texto.replace(/\D/g, '').slice(0, 4))}
-                      placeholder="7"
-                      keyboardType="number-pad"
-                      inputMode="numeric"
-                      maxLength={4}
-                    />
-
-                    {/*
-                      La cuenta, ya hecha y a la vista. Un número de días se
-                      teclea en un segundo y se equivoca con un cero de más:
-                      ver el día que sale es lo que lo caza antes de guardar.
-                    */}
-                    {fechaCalculada ? (
-                      <Text style={styles.calculo}>Se guardará el {fechaCalculada}.</Text>
-                    ) : null}
-                  </View>
-                ) : (
-                  <TextField
-                    label="La fecha del envase"
-                    hint={avisoFecha ?? undefined}
-                    value={dateText}
-                    onChangeText={(texto) => setDateText(formatearMientrasEscribe(texto))}
-                    placeholder="31/12/2026"
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
-                )}
-
-                <Chips
-                  label="De qué tipo"
-                  options={KIND_OPTIONS}
-                  value={kind}
-                  onChange={setKind}
-                  info={{
-                    titulo: 'De qué tipo',
-                    texto: [
-                      'Caducidad: pasada la fecha no se come. Es seguridad, no calidad.',
-                      'Consumo preferente: pasada la fecha es cuestión de calidad, no de seguridad. Lo que baja es el sabor.',
-                    ],
-                  }}
-                />
-              </View>
+              <CampoFecha
+                source={source}
+                onSource={setSource}
+                dateText={dateText}
+                onDateText={setDateText}
+                diasText={diasText}
+                onDiasText={setDiasText}
+                kind={kind}
+                onKind={setKind}
+              />
             ) : null}
           </Seccion>
 
@@ -629,13 +510,10 @@ function Formulario({
 function Seccion({
   icono,
   titulo,
-  info,
   children,
 }: {
   icono: React.ReactNode;
   titulo: string;
-  /** Lo que explica el bloque, detrás de una «i» junto al título. */
-  info?: { titulo: string; texto: string | string[] };
   children: React.ReactNode;
 }) {
   const styles = useStyles();
@@ -644,7 +522,6 @@ function Seccion({
       <View style={styles.seccionHead}>
         {icono}
         <Text style={styles.seccionTitulo}>{titulo}</Text>
-        {info ? <Info titulo={info.titulo} texto={info.texto} /> : null}
       </View>
       <View style={styles.seccionCuerpo}>{children}</View>
     </View>
@@ -765,32 +642,4 @@ const useStyles = makeStyles((c) => ({
   check: { color: c.ground, fontSize: 14, fontWeight: '700', lineHeight: 18 },
   toggleText: { flex: 1, gap: 2 },
   toggleTitle: { fontSize: 15, fontWeight: '600', color: c.ink },
-  dateFields: { gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.md },
-
-  dias: { gap: space.md },
-  calculo: {
-    fontFamily: fonts.semibold,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: c.brandInk,
-    backgroundColor: c.brandSoft,
-    borderRadius: radius.sm,
-    paddingVertical: space.sm - 2,
-    paddingHorizontal: space.md - 2,
-    overflow: 'hidden',
-  },
-
-  atajos: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm - 2 },
-  atajo: {
-    minHeight: 38,
-    justifyContent: 'center',
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: c.brandSoft,
-    backgroundColor: c.brandSoft,
-  },
-  atajoOn: { borderColor: c.brand, borderWidth: 1.5 },
-  atajoText: { fontFamily: fonts.semibold, fontSize: 12.5, color: c.brandInk },
-  atajoTextOn: { color: c.brandInk },
 }));

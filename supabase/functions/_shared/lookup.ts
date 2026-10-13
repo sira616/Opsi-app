@@ -13,6 +13,7 @@
  *   1. método y tamaño del cuerpo      → baratos y sin tocar nada
  *   2. sesión de una persona           → antes de gastar nada
  *   3. el código es un GTIN válido     → una lectura sucia no gasta cuota
+ *      · y su prefijo no es de un libro o un cupón → «no es comida», sin gastar nada
  *   4. cuota por persona               → 429 si se pasa
  *   5. caché global                    → lo normal: sin llamar a nadie
  *   6. caché de faltas                 → no se vuelve a preguntar por lo que OFF no tiene
@@ -20,7 +21,7 @@
  *   8. Open Food Facts                 → y se guarda lo que haya
  */
 
-import { normalizarGtin } from './gtin.ts';
+import { esCodigoDeNoComida, normalizarGtin } from './gtin.ts';
 import { leerLimitado } from './off.ts';
 import type { FamiliaUnidad, OpcionesOff, ProductoOff, ResultadoOff } from './off.ts';
 
@@ -183,6 +184,12 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
     const codigo = normalizarGtin(bruto);
     if (codigo === null) return fin('codigo_invalido', fallo(400, 'codigo_invalido'));
 
+    // Un libro o un cupón no se come. Se sabe por el prefijo, sin cuota, sin caché y
+    // sin preguntar a nadie: no hay nada que consultar.
+    if (esCodigoDeNoComida(codigo)) {
+      return fin('no_comida_prefijo', json(200, { found: false, barcode: codigo, not_food: true }));
+    }
+
     // 4. Cuota por persona. Cuenta aunque luego se resuelva desde la caché: lo
     //    que se limita es el ritmo de consultas, no las llamadas a OFF.
     const cuota = await dep.consumirCuota(usuario.id);
@@ -222,6 +229,12 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
     if (off.tipo === 'encontrado') {
       const guardado = await dep.guardar(codigo, off.producto);
       return fin('off', json(200, publico(guardado)));
+    }
+    if (off.tipo === 'no_es_comida') {
+      // Ni se guarda ni se anota como falta: una falta se contestaría la próxima vez
+      // como «no lo conozco» y dejaría añadirlo. El veredicto de OFF manda también
+      // sobre una ficha vieja del catálogo (alguien la pudo reclasificar).
+      return fin('no_comida', json(200, { found: false, barcode: codigo, not_food: true }));
     }
     if (off.tipo === 'no_existe') {
       // Si el producto estaba y OFF ya no lo tiene, se sirve el que hay.

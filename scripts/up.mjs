@@ -146,6 +146,27 @@ if (!apiUrl || !anonKey) {
   die('No encuentro la URL o la anon key en la salida de "supabase status".');
 }
 
+// ── Las funciones (el escáner) ────────────────────────────────────────────
+//
+// `supabase start` da el stack por levantado en cuanto la base de datos responde, y
+// NO arranca el contenedor de las Edge Functions si se quedó parado de antes (tras
+// reiniciar Docker, por ejemplo). Todo lo demás funciona y el escáner falla con un
+// «algo ha fallado», que es de lo más difícil de relacionar con su causa.
+// `supabase status` solo da la URL de las funciones cuando están arriba, así que es
+// lo que se mira.
+if (!findVar(/FUNCTIONS/)) {
+  console.log(dim('  Las funciones no están levantadas. Intentando arrancarlas…'));
+  spawnSync('docker', ['start', 'supabase_edge_runtime_opsi'], { stdio: 'ignore', shell: true });
+  const otra = supabase(['status', '-o', 'env'], { capture: true });
+  const arriba = /^FUNCTIONS[A-Z_]*\s*=/m.test(otra.stdout ?? '');
+  console.log(
+    arriba
+      ? green('  ✓ Funciones levantadas (el escáner ya responde).')
+      : red('  ✗ Las funciones siguen paradas: el escáner no va a funcionar.') +
+          dim('\n    Prueba:  docker start supabase_edge_runtime_opsi   o   npm run db:stop && npm run up'),
+  );
+}
+
 // Lo que ya hubiera en el fichero se respeta; solo se reescriben estas dos.
 const previous = existsSync(ENV_FILE) ? readFileSync(ENV_FILE, 'utf8') : '';
 const keep = previous

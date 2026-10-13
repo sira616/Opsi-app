@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-10** (sesión 27)
+> Última actualización: **2026-10-13** (sesión 31)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **28 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **30 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **9 ficheros pgTAP, 305 tests** contra pgTAP real · `db:check`: **482 comprobaciones** en PGlite · `db:carreras`: 11, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
+| Tests | **11 ficheros pgTAP, 367 tests** contra pgTAP real · `db:check`: **552 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -757,6 +757,100 @@ La hora se guarda al pulsar «Listo», no a cada vuelta de rueda.
 **Coste:** una explicación detrás de una «i» la lee menos gente. Es el cambio que se pidió, y lo que
 no se puede esconder está en la segunda regla. **Sin verificar en un móvil:** las ruedas con el dedo
 (en el navegador se probó con la rueda del ratón), la animación de la hoja y el lector de pantalla.
+
+### D-36 · La lista de la compra: nada se apunta solo, y «comprado» entra al inventario en una transacción · 2026-10-11
+
+La fase 4. La tabla y su RLS ya estaban desde la fase 0; lo que se decidió es lo que faltaba alrededor.
+
+- **El principio «nada se apunta solo» se hace cumplir en la base de datos.** La columna `source` decía en
+  un comentario que `auto_restock` solo aparecía si la persona lo había encendido, y no lo comprobaba
+  nada: cualquier cliente podía escribirlo. Ahora un trigger lo rechaza (P0001) si `auto_add_to_shopping_list`
+  no es verdadero, y el origen no se puede cambiar después.
+- **Al agotarse algo se pregunta, y solo se apunta sin preguntar si la persona lo encendió.** Se ofrece al
+  terminar un elemento y al usar lo último que quedaba (las dos dejan el elemento en `finished`). Apagado,
+  que es como viene, sale «¿Lo apunto en la lista?»; encendido, se apunta y se dice. Lo apuntado lleva la
+  cantidad que traía el envase (1 l → «1 l»), y **no se duplica** lo que ya estaba pendiente (por producto o
+  por nombre sin mayúsculas). Esto último es del cliente y no de la base de datos a propósito: dos líneas
+  «leche» pueden ser legítimas, y bloquearlo en el servidor sería decidir por la persona.
+- **Tocar una línea no la tacha de golpe: abre una hoja con tres opciones** (guardarla en la nevera, tacharla
+  sin guardarla, quitarla). Casi siempre lo que se quiere es que entre en la nevera, y a veces —papel de
+  cocina— solo tacharla; con un solo toque habría que adivinar.
+- **«Ya lo tengo» pasa por el alta, no por un atajo.** Abre el formulario con el nombre y la cantidad ya
+  puestos y pide lo que falta (dónde se guarda, la fecha). El servidor hace el alta y marca la línea en una
+  sola transacción (`stock_from_list`, que envuelve a `create_item`): si el alta falla, la línea no queda
+  comprada; si dos personas lo hacen a la vez, la segunda recibe «ya está marcado como comprado» y no se
+  crea un duplicado (probado con dos sesiones en `db:carreras`).
+- **Cuatro cierres que el trigger hace de paso**, los mismos que ya se hicieron con `create_item`:
+  `created_by` es siempre quien escribe, el producto enlazado es global o de la misma nevera, y hay un tope
+  de 300 líneas por nevera.
+
+**Descartado:** una Edge Function para la lista (no hay secreto ni tercero: la tabla, la RLS y una función
+bastan); marcar «comprado» sin más y dejar que la persona dé de alta aparte (dos pasos que pueden quedar
+a medias); y bloquear duplicados con un índice único (ver arriba).
+
+### D-37 · Un elemento se puede corregir, con rastro, y la cantidad solo sin abrir · 2026-10-12
+
+Hasta ahora lo que se daba de alta no se podía corregir: un nombre mal escrito o una fecha copiada con un
+dígito cambiado obligaba a tirar el elemento y volver a darlo de alta, y el historial contaba que se tiró algo
+que nunca se tiró.
+
+- **Va por una función (`update_item`) y no por un UPDATE suelto.** El permiso de UPDATE sobre la tabla ya lo
+  tenía quien pertenece a la nevera, pero un cambio escrito a pelo no deja rastro. Aquí el cambio y su
+  evento `updated` —con lo de antes y lo de ahora de cada campo que cambió— se escriben en la misma
+  transacción. El tipo `updated` ya existía en el enum desde la fase 0, sin usarse.
+- **Se corrige** el nombre, el pasillo, dónde está y la fecha (con su tipo y su origen).
+- **La cantidad solo se corrige en lo que está sin abrir.** En lo empezado, lo que queda es el resultado de
+  lo que se fue usando, cada uso con su evento: reescribirlo dejaría el historial diciendo una cosa y el
+  elemento otra. Para eso está «Usar». Sin abrir, lo comprado y lo que queda son lo mismo y se cambian a la vez.
+- **No se toca** el estado, la nevera, el producto enlazado ni las marcas de tiempo: cada una tiene su acción
+  o su regla. Lo cerrado (agotado o tirado) no se edita, como no admite ninguna otra acción.
+- **Mandar lo que ya había no hace nada ni deja un evento vacío.**
+- **Una fecha que no se toca conserva su origen** (puede venir del catálogo o de una estimación); solo la que
+  se teclea de nuevo la afirma la persona, con «Del envase» o «La puse yo».
+- **El historial dice qué cambió** («cambió la fecha y el nombre»), no cada valor: eso queda en la base de datos.
+
+**El lápiz de editar es casi invisible a propósito** (arriba a la derecha del detalle, en gris tenue): se busca
+cuando hace falta y no debe competir con las acciones de abajo.
+
+### D-38 · El escáner solo acepta comida, y un producto conocido se guarda en una hoja pequeña · 2026-10-13
+
+Dos cosas que salieron de probar el escáner con las manos:
+
+**Solo comida.** El escáner leía cualquier código de barras y ofrecía añadirlo. Opsi guarda comida, así que
+ahora se rechaza lo que no lo es, en dos capas:
+
+- **Por el prefijo, sin preguntar a nadie.** Un EAN-13 que empieza por 977 a 984 (revistas, libros, recibos de
+  devolución, cupones) o por 99 no puede ser comida. La función lo contesta antes de gastar cuota, y la app lo
+  repite antes de llamarla para dar la respuesta al instante. Es la única regla que se sabe con solo el código.
+- **Por lo que dice Open Food Facts.** Un champú o una bombilla llevan un prefijo de país como cualquier yogur.
+  OFF comparte códigos con sus bases hermanas (cosmética, mascotas, otros productos) y, cuando un código es de
+  otra, contesta 404 con «product found with a different product type». Antes se leía como «no existe» y dejaba
+  añadirlo a mano; ahora es «no es comida». Se probó con un código real de cosmética a través de la función.
+
+Dos decisiones: (1) **no se cachea como falta**, porque una falta se contestaría la próxima vez como «no lo
+conozco» y dejaría añadirlo: cada escaneo de ese código vuelve a preguntar a OFF, con la cuota de siempre.
+(2) **No hay botón de «añadirlo de todos modos».** Si OFF clasificara mal una comida, se añade a mano desde el «+»,
+sin código. Lo que NO se puede evitar es que alguien escriba «champú» a mano: el nombre es texto libre.
+
+**La hoja rápida.** Escanear un producto que ya se conoce abría el formulario completo, con siete campos para
+confirmar lo que ya estaba puesto. Ahora sube una hoja pequeña con el nombre, el pasillo, la cantidad y la nevera
+ya puestos, y solo dos cosas que se eligen de un toque, porque son las que cambian de una compra a otra: **dónde**
+se guarda (propuesto por el pasillo: un yogur, a la nevera) y **hasta cuándo** (por defecto, sin fecha: no se
+inventa una). «Está bien, guardar» guarda sin más; «Editar» abre el formulario completo **con lo que se llevaba
+elegido**, para no perderlo.
+
+- El formulario completo se abre ENCIMA del escáner, no lo sustituye: al guardar se vuelve a él para escanear el
+  siguiente, con un aviso de lo guardado, y su cámara se apaga mientras no se ve.
+- La misma hoja sirve para «Ya lo tengo» en la lista de la compra.
+- Los valores que propone son los del formulario completo (`features/alta/valores.ts`): si cada uno tuviera sus
+  reglas, «Editar» abriría otra cosa que la hoja que acaba de enseñar.
+- Lo que llega por la ruta (`donde`, `dias`) es entrada de fuera: solo se acepta una ubicación conocida o un
+  entero de 1 a 1825.
+
+**Los plazos de «la calculo yo»** (1 día, 3 días, 1 semana, 2 semanas, 1 mes) son ya un solo componente
+(`CampoFecha`) que usan el alta y editar. Editar tenía una copia sin los atajos y con los nombres de las opciones
+cambiados («La puse yo»): era el fallo que se vio. Al editar, «la calculo yo» enseña la fecha actual y no la toca
+hasta que se elige un plazo.
 
 ## 3. Convenciones
 
@@ -1739,3 +1833,120 @@ con imán de cada rueda en Android, la animación de las hojas y el lector de pa
 **Se aprendió:** (1) cuando una petición admite dos lecturas con consecuencias distintas, preguntar una
 vez cuesta menos que rehacer: aquí cambió qué se quitaba y qué se mudaba. (2) El puerto 8081 lo tenía un
 `expo start` que no era mío: se usó en lugar de arrancar otro y no se tocó.
+
+### 2026-10-11 (sesión 28) · La lista de la compra (fase 4)
+
+**Cómo fue.** Tras fusionar la PR de los cambios del frontend, se dio el estado de la app y se siguió con la
+fase 4, que es la única que no depende de nada externo (los avisos piden una cuenta de Expo y el chat y los
+tickets una clave de la API de Claude). Se empezó por la base de datos —lo que la RLS no dice— y después la
+pantalla. Ver [D-36](#d-36--la-lista-de-la-compra-nada-se-apunta-solo-y-comprado-entra-al-inventario-en-una-transacción--2026-10-11).
+
+**Hecho:** la migración `20261011100000_lista_de_la_compra` (trigger `check_shopping_item` y la función
+`stock_from_list`), `lista_compra_test.sql`, un caso nuevo en `db:carreras`, la API (`api/lista.ts`), la pestaña
+Lista, el alta rellenada desde una línea, y la oferta de apuntar cuando algo se agota.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **340** (35 nuevos); `db:carreras` **14** (3 nuevos);
+`db:check` 521; y **en el navegador** con la cuenta de desarrollo: apuntar dos líneas, tachar una
+sin guardarla (queda comprada con su fecha en la base de datos), guardar la otra desde «Ya lo tengo» (el
+alta sale con el nombre puesto, y el elemento entra en el inventario **y** la línea queda comprada), y
+terminar una leche → «¿Lo apunto en la lista?» → «Apuntarlo» → línea con `volume · l · 1000`.
+
+**Sin verificar:** nada en un móvil; **apuntar con el ajuste ENCENDIDO desde la interfaz** (sí por pgTAP: el
+trigger lo deja pasar); el tope de 300 con dos inserciones simultáneas; la pestaña con muchas líneas.
+
+**Se aprendió:** (1) `supabase test db` lanzado a la vez que otra ejecución de los mismos tests choca
+con ellos mismos (usuarios repetidos): una sola a la vez. (2) Tras reiniciar Docker, `supabase db reset`
+puede dejar una base vacía si falla a medias (`ContainerRemoveError`): repetirlo con el motor sano, y no
+fiarse de `migration up` sobre una base de la que no se sabe el estado. (3) `Circle` no está exportado por
+`phosphor-react-native` aunque el fichero exista: un círculo vacío se dibuja con un borde.
+
+### 2026-10-12 (sesión 29) · El escáner no responde, la lista sosa y las «i» que sobran
+
+**Qué se vio al probarlo en el móvil.** Tres cosas: el escáner daba «algo ha fallado de nuestra parte»
+(también tecleando el código), la lista de la compra se veía sosa, y las «i» junto a los botones del
+detalle quedaban fatal.
+
+**El escáner: el contenedor de las Edge Functions estaba parado.** Con él abajo, la pasarela contesta
+`503 {"message":"name resolution failed"}`, que no lleva el `{ code, message }` de la función, y la app lo
+traducía al error genérico: sin ninguna pista. Comprobado reproduciéndolo (parar el contenedor, buscar un
+código, ver el mensaje; volver a arrancarlo, 200). La causa de que se parase no es del código: tras reiniciar
+Docker, **`supabase start` da el stack por levantado en cuanto la base de datos responde y no arranca un
+contenedor de funciones que se quedó parado**, y todo lo demás sigue funcionando. Tres cambios:
+
+- La app distingue una respuesta de la pasarela (404, 502, 503, 504 sin el formato de la función) y dice
+  «el buscador no responde, puedes añadirlo a mano», con en desarrollo el comando que lo arregla.
+- `npm run up` comprueba que las funciones están arriba (`supabase status` solo da su URL cuando lo están) y
+  hace `docker start supabase_edge_runtime_opsi` si no.
+- `npm run fn:check` distingue «Supabase caído» de «Supabase arriba pero sin funciones».
+
+**La lista, más viva:** una tarjeta de resumen con el progreso (cuántas cosas faltan y cuántas ya están en
+el carro), lo pendiente **agrupado por pasillo** (se compra de una pasada), cada línea como tarjeta con su
+icono de comida, y unas sugerencias «Se te acabó» a un toque con lo último que se agotó y no está ya en la
+lista. Lo comprado queda plegado como «En el carro».
+
+**Las «i»:** salen todas las de los botones del detalle. Lo que protege a alguien se dice **dentro del
+botón**, en una línea: «24 horas para consumirlo» en Descongelar y «Ya se descongeló: cocínalo antes de
+volver a congelar» en Congelar. Se quitaron además las que explicaban lo que se entiende solo (abrir,
+congelar, sin fecha, el pasillo, de dónde sale la fecha, el producto escaneado, usuario y contraseña, los
+dos de la nevera). `Row` vuelve a tener texto a la vista (`subtitle`) y una «i» aparte (`info`): en Privacidad
+y Acerca de el texto ES el contenido, y detrás de una «i» dejaba la fila vacía. Se quedan las que explican
+algo que no se adivina: de dónde sale la fecha, los detalles de una vez abierto, caducidad frente a consumo
+preferente, el correo, la zona horaria, apuntar lo que se acaba y las de invitar.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; **en el navegador**, la lista nueva con los datos reales de
+la base local, el detalle sin «i» junto a los botones y el mensaje nuevo del escáner con el contenedor parado.
+**Sin verificar:** en el móvil, y `npm run up` arrancando un contenedor parado (el `docker start` sí se hizo
+a mano, pero el script no se ha ejecutado entero).
+
+**Se aprendió:** (1) un error genérico que no distingue la causa es una mala experiencia aunque «no falle»: la
+pasarela tiene su propio formato de error y hay que reconocerlo. (2) Este directorio lo comparte quien
+mantiene el repositorio y la sesión: cambiar de rama aquí cambia lo que ve su servidor de desarrollo (se
+fusionó la PR de la lista antes de seguir, para que `main` la tuviera).
+
+### 2026-10-12 (sesión 30) · Editar un elemento, y la cabecera sin el nombre de la app
+
+**Hecho.** Se quitó el nombre de la app («Opsi») de la cabecera del inventario y de la lista (las pantallas de
+entrar y crear cuenta lo conservan: ahí es la marca). Y se añadió **editar un elemento**
+([D-37](#d-37--un-elemento-se-puede-corregir-con-rastro-y-la-cantidad-solo-sin-abrir--2026-10-12)): la función
+`update_item`, su test (`editar_elemento_test.sql`, 27), la pantalla `editar-elemento/[id]` y un lápiz sutil
+en el detalle.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **367** (27 nuevos); `db:check` 552; y **en el
+navegador** con la cuenta de pruebas: abrir el lápiz, cambiar nombre, pasillo, sitio y fecha, guardar, y ver
+en la base de datos el elemento corregido y el evento `updated` con lo de antes y lo de ahora, y en el
+historial «cambió la fecha, el nombre, el pasillo y dónde está».
+
+**Sin verificar:** nada en un móvil; **la corrección de la cantidad desde la interfaz** (sí por pgTAP: sin abrir
+se cambia, abierto se rechaza); y editar un elemento congelado.
+
+**Se aprendió:** (1) la «i», el lápiz y lo que no debe competir con las acciones se resuelve por tamaño y color,
+no por quitarlo: el detalle tiene ahora una sola cosa tenue arriba a la derecha. (2) Probar una escritura con
+una cuenta de pruebas y borrar luego lo creado: aquí también los eventos, que sobreviven al borrado del
+elemento (`item_id` pasa a nulo) y se quedarían huérfanos en la nevera.
+
+### 2026-10-13 (sesión 31) · Solo comida, hoja rápida y plazos al editar
+
+**Hecho.** Tres cambios de diseño ([D-38](#d-38--el-escáner-solo-acepta-comida-y-un-producto-conocido-se-guarda-en-una-hoja-pequeña--2026-10-13)):
+
+1. **Editar un elemento:** «La calculo yo» no enseñaba los plazos. Ahora el alta y editar comparten el campo de
+   fecha (`CampoFecha`), con «1 día, 3 días, 1 semana, 2 semanas, 1 mes», y editar enseña la fecha actual.
+2. **El escáner solo acepta comida:** por el prefijo (libros, revistas, cupones) y por lo que dice Open Food Facts
+   (cosmética, mascotas, otros productos).
+3. **La hoja rápida:** un producto conocido se confirma en una hoja pequeña, con «Está bien, guardar» y «Editar»,
+   y el escáner sigue abierto para el siguiente. También en «Ya lo tengo» de la lista.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; `test:funciones` **67** (9 nuevos); `fn:check` **21** (un
+libro contesta «no es comida» sin gastar cuota); **en el navegador** con la cuenta de pruebas: un libro y un código
+real de cosmética dan «Eso no es comida»; un producto del catálogo abre la hoja con la nevera preseleccionada;
+«Editar» abre el formulario con lo elegido; guardar desde la hoja y desde el formulario deja el elemento bien y el
+escáner dice qué se guardó; «Ya lo tengo» de la lista guarda y tacha la línea; en editar, «1 día» da la fecha de
+mañana y queda su evento. Lo creado se borró después, eventos incluidos.
+
+**Sin verificar:** nada en un móvil: **la cámara**, que la hoja y el formulario se apilen bien sobre el escáner
+a pantalla completa (iOS tiene manías con dos modales a la vez; por eso la lista espera 300 ms entre una hoja y
+la otra), y que la cámara se apague al abrir el formulario.
+
+**Se aprendió:** (1) OFF distingue «no existe» de «es de otra base» solo en el cuerpo de un 404
+(`status_verbose`); leer el estado y tirar el cuerpo los confundía. (2) Dos copias de un mismo trozo de formulario
+terminan siendo dos formularios: la queja («no salen los plazos») era justa y venía de una copia que no se
+actualizó. (3) Un script de Node con comillas anidadas dentro de `node -e` se rompe: escribirlo en un fichero.
