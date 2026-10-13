@@ -25,15 +25,12 @@ import {
 import { CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
-import {
-  aIso,
-  formatearMientrasEscribe,
-  problemaFecha,
-} from '@/shared/lib/fecha-input';
+import { aIso, deIso, isoEnDias, problemaDias, problemaFecha } from '@/shared/lib/fecha-input';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { queryKeys } from '@/shared/lib/query';
 import { fromBase, toBase, UNITS, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
+import { CampoFecha } from '@/shared/ui/CampoFecha';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
@@ -53,30 +50,6 @@ const LOCATION_OPTIONS: ChipOption<StorageLocation>[] = [
   { value: 'freezer', label: 'Congelador' },
   { value: 'other', label: 'Otro' },
 ];
-
-// El rojo del chip de caducidad no es decoración: es seguridad frente a calidad.
-const KIND_OPTIONS: ChipOption<DateKind>[] = [
-  { value: 'best_before', label: 'Consumo preferente' },
-  { value: 'expiry', label: 'Caducidad', danger: true },
-];
-
-/**
- * De dónde sale una fecha que se TECLEA. Aquí solo hay dos porque son las dos que
- * una persona puede afirmar: la copió del envase, o la puso ella. Las otras
- * (`reference`, `estimate`, `manufacturer`) las pone el sistema, y una fecha que
- * no se toca las conserva (ver `alGuardar`).
- */
-const SOURCE_OPTIONS: ChipOption<DateSource>[] = [
-  { value: 'package', label: 'Del envase' },
-  { value: 'user', label: 'La puse yo' },
-];
-
-/** «2027-01-31» → «31/01/2027», como se teclea. */
-function deIso(iso: string | null): string {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
 
 /**
  * Corregir un elemento que ya está en la nevera.
@@ -152,9 +125,15 @@ function Formulario({ item }: { item: ItemDetail }) {
   const [unit, setUnit] = useState<MeasurementUnit>(item.display_unit);
   const [hasDate, setHasDate] = useState(item.limit_date !== null);
   const [dateText, setDateText] = useState(deIso(item.limit_date));
+  // Los días del modo «la calculo yo»: es otro campo porque «7» ahí es una semana.
+  const [diasText, setDiasText] = useState('');
   const [kind, setKind] = useState<DateKind>(item.date_kind ?? 'best_before');
+  // Qué se pregunta: la fecha impresa, o los días. Una fecha que vino del envase se
+  // enseña como tal; cualquier otra (tecleada, estimada, del catálogo) se enseña en
+  // «la calculo yo», con la fecha que hay a la vista y sin tocarla hasta que se elija
+  // un plazo.
   const [source, setSource] = useState<DateSource>(
-    item.date_source === 'package' || item.date_source === 'user' ? item.date_source : 'user',
+    item.date_source === 'package' || !item.limit_date ? 'package' : 'user',
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -171,27 +150,33 @@ function Formulario({ item }: { item: ItemDetail }) {
     onError: (caught: unknown) => setError(describeDbError(caught)),
   });
 
-  const avisoFecha = hasDate ? problemaFecha(dateText) : null;
-
   function alGuardar() {
     setError(null);
     if (!name.trim()) return setError('Ponle un nombre, aunque sea «eso verde del cajón».');
 
     let limitDate: string | null = null;
+    let dateSource: DateSource | null = null;
     if (hasDate) {
-      const problema = problemaFecha(dateText);
-      if (problema) return setError(problema);
-      limitDate = aIso(dateText);
+      if (source === 'user') {
+        if (diasText === '' && item.limit_date) {
+          // «La calculo yo» sin plazo elegido: la fecha que había se queda como estaba.
+          limitDate = item.limit_date;
+          dateSource = item.date_source ?? 'user';
+        } else {
+          const problema = problemaDias(diasText);
+          if (problema) return setError(problema);
+          limitDate = isoEnDias(Number(diasText));
+          dateSource = 'user';
+        }
+      } else {
+        const problema = problemaFecha(dateText);
+        if (problema) return setError(problema);
+        limitDate = aIso(dateText);
+        // Una fecha que no se tocó conserva su origen (puede ser el del catálogo o el
+        // de una estimación): solo lo que se teclea de nuevo lo afirma la persona.
+        dateSource = limitDate === item.limit_date && item.date_source ? item.date_source : 'package';
+      }
     }
-
-    // Una fecha que no se tocó conserva su origen (puede ser el del catálogo o el
-    // de una estimación): solo lo que se teclea de nuevo lo afirma la persona.
-    const mismaFecha = limitDate === item.limit_date;
-    const dateSource: DateSource | null = !hasDate
-      ? null
-      : mismaFecha && item.date_source
-        ? item.date_source
-        : source;
 
     let cantidad: { quantity: number; displayUnit: MeasurementUnit } | null = null;
     if (sinAbrir) {
@@ -307,32 +292,17 @@ function Formulario({ item }: { item: ItemDetail }) {
             </Pressable>
 
             {hasDate ? (
-              <View style={styles.dateFields}>
-                <TextField
-                  label="La fecha"
-                  hint={avisoFecha ?? undefined}
-                  value={dateText}
-                  onChangeText={(texto) => setDateText(formatearMientrasEscribe(texto))}
-                  placeholder="31/12/2026"
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                  maxLength={10}
-                />
-                <Chips label="De dónde sale" options={SOURCE_OPTIONS} value={source} onChange={setSource} />
-                <Chips
-                  label="De qué tipo"
-                  options={KIND_OPTIONS}
-                  value={kind}
-                  onChange={setKind}
-                  info={{
-                    titulo: 'De qué tipo',
-                    texto: [
-                      'Caducidad: pasada la fecha no se come. Es seguridad, no calidad.',
-                      'Consumo preferente: pasada la fecha es cuestión de calidad, no de seguridad. Lo que baja es el sabor.',
-                    ],
-                  }}
-                />
-              </View>
+              <CampoFecha
+                source={source}
+                onSource={setSource}
+                dateText={dateText}
+                onDateText={setDateText}
+                diasText={diasText}
+                onDiasText={setDiasText}
+                kind={kind}
+                onKind={setKind}
+                actual={item.limit_date}
+              />
             ) : null}
           </Seccion>
 
@@ -432,5 +402,4 @@ const useStyles = makeStyles((c) => ({
   checkboxOn: { backgroundColor: c.brand, borderColor: c.brand },
   check: { color: c.ground, fontSize: 14, fontWeight: '700', lineHeight: 18 },
   toggleTitle: { fontSize: 15, fontWeight: '600', color: c.ink },
-  dateFields: { gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.md },
 }));

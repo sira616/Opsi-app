@@ -220,8 +220,8 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
 **Probado:** 367 tests pgTAP (11 ficheros) contra Supabase local; 552 comprobaciones sin Docker
-(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 58 tests de la
-lógica de la función de búsqueda (`npm run test:funciones`) y 19 contra el runtime de Edge Functions de
+(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 67 tests de la
+lógica de la función de búsqueda (`npm run test:funciones`) y 21 contra el runtime de Edge Functions de
 verdad (`npm run fn:check`). La función, además, **contra Open Food Facts de verdad**. La app, en el
 navegador con dos cuentas. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.
 

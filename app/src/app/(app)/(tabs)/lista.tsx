@@ -35,6 +35,7 @@ import {
   type LineaLista,
   type Sugerencia,
 } from '@/api/lista';
+import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
@@ -103,6 +104,8 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
   const [texto, setTexto] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [elegida, setElegida] = useState<LineaLista | null>(null);
+  // La línea que se está guardando en la nevera, en la hoja rápida.
+  const [rapida, setRapida] = useState<LineaLista | null>(null);
   const [compradasAbiertas, setCompradasAbiertas] = useState(false);
 
   const lista = useQuery({
@@ -349,9 +352,11 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
               icono={<Package size={22} color={c.brand} weight="duotone" />}
               etiqueta="Ya lo tengo: guardarlo en la nevera"
               onPress={() => {
-                const id = elegida.id;
+                const linea = elegida;
                 setElegida(null);
-                router.push({ pathname: '/alta', params: { lista: id } });
+                // Una hoja detrás de otra: se espera a que la primera acabe de bajar
+                // (en iOS, dos `Modal` a la vez no se presentan).
+                setTimeout(() => setRapida(linea), 300);
               }}
             />
             <Opcion
@@ -376,6 +381,32 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
           </View>
         ) : null}
       </HojaInferior>
+
+      {/* Guardarlo en la nevera: la hoja pequeña, con lo que se apuntó ya puesto. */}
+      {rapida ? (
+        <HojaAltaRapida
+          key={rapida.id}
+          onClose={() => setRapida(null)}
+          nombre={rapida.name}
+          productoId={rapida.product_id}
+          unitFamily={rapida.unit_family}
+          netQuantity={null}
+          linea={rapida}
+          onEditar={(elegido) => {
+            const id = rapida.id;
+            setRapida(null);
+            router.push({
+              pathname: '/alta',
+              params: {
+                lista: id,
+                donde: elegido.location,
+                ...(elegido.dias !== null ? { dias: String(elegido.dias) } : {}),
+              },
+            });
+          }}
+          onGuardado={() => setRapida(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

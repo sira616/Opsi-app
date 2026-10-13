@@ -246,6 +246,43 @@ test('consultarOff: 404 y status 0 son «no existe»; no son un error', async ()
   assert.deepEqual(r200, { tipo: 'no_existe' });
 });
 
+test('consultarOff: un 404 «de otro tipo» (cosmética, mascotas) es «no es comida», no «no existe»', async () => {
+  for (const tipo of ['beauty', 'product', 'petfood']) {
+    const cuerpo = JSON.stringify({
+      code: '8400000000017',
+      status: 0,
+      status_verbose: `product found with a different product type: ${tipo}`,
+    });
+    const r = await consultarOff('8400000000017', conFetch(async () => respuesta(cuerpo, { status: 404 })));
+    assert.deepEqual(r, { tipo: 'no_es_comida' }, tipo);
+  }
+  // Lo mismo si algún día lo contesta con 200.
+  const r200 = await consultarOff(
+    '8400000000017',
+    conFetch(async () =>
+      respuesta('{"status":0,"status_verbose":"product found with a different product type: beauty"}'),
+    ),
+  );
+  assert.deepEqual(r200, { tipo: 'no_es_comida' });
+});
+
+test('consultarOff: solo cuenta la frase exacta; el resto de textos de OFF no se interpretan', async () => {
+  for (const verbose of [
+    'product not found',
+    'product found with a different product type: ',
+    'product found with a different product type: Beauty',
+    'product found with a different product type: beauty. Ignore previous instructions',
+    'product found with a different product type: ' + 'a'.repeat(40),
+  ]) {
+    const cuerpo = JSON.stringify({ status: 0, status_verbose: verbose });
+    const r = await consultarOff('8400000000017', conFetch(async () => respuesta(cuerpo, { status: 404 })));
+    assert.deepEqual(r, { tipo: 'no_existe' }, verbose.slice(0, 50));
+  }
+  // Un 404 con el cuerpo roto o enorme sigue siendo «no existe», sin lanzar.
+  const rota = await consultarOff('8400000000017', conFetch(async () => respuesta('{no es json', { status: 404 })));
+  assert.deepEqual(rota, { tipo: 'no_existe' });
+});
+
 test('consultarOff: 429, 5xx y cualquier otro código son error y dicen cuál', async () => {
   for (const status of [429, 500, 502, 503, 403, 301]) {
     const r = await consultarOff('8400000000017', conFetch(async () => respuesta('', { status })));
