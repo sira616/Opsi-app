@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -13,16 +13,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Barcode, Keyboard, Lightning, LightningSlash, X } from 'phosphor-react-native';
+import { Barcode, CheckCircle, Keyboard, Lightning, LightningSlash, X } from 'phosphor-react-native';
 
 import {
   buscarPorCodigo,
   buscarProductoPrivado,
   ErrorBusqueda,
+  type ProductoEscaneado,
 } from '@/api/catalogo';
+import { HojaAltaRapida, type Elegido } from '@/features/alta/HojaAltaRapida';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { normalizarGtin } from '@/shared/lib/gtin';
+import { esCodigoDeNoComida, normalizarGtin } from '@/shared/lib/gtin';
+import { tomarGuardado } from '@/shared/lib/ultimo-guardado';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
@@ -43,12 +46,21 @@ import { fonts, makeStyles, radius, space, touchTarget, useTheme } from '@/share
  *
  * Resolución, de lo más barato a lo más caro (ver `api/catalogo.ts`): un
  * producto privado de la nevera, luego el catálogo global a través de la Edge
- * Function. Si no hay nada, el alta se abre con el código ya puesto.
+ * Function. Un producto conocido se confirma en una hoja pequeña (`HojaAltaRapida`)
+ * con todo ya puesto; si nadie lo conoce, el alta se abre con el código ya puesto.
+ * Un libro, un cupón o lo que el catálogo sabe que no es comida se rechaza: Opsi
+ * solo guarda comida.
+ *
+ * El formulario completo se abre ENCIMA del escáner (no lo sustituye): al guardar se
+ * vuelve a él para seguir con el siguiente producto, y su cámara se apaga mientras
+ * tanto.
  */
 
 type Estado =
   | { tipo: 'leyendo' }
   | { tipo: 'buscando'; codigo: string }
+  | { tipo: 'ficha'; codigo: string; producto: ProductoEscaneado }
+  | { tipo: 'no_comida'; codigo: string }
   | { tipo: 'fallo'; codigo: string; mensaje: string };
 
 /** Tras leer algo, hasta que no se vuelva a aceptar el mismo código. */
@@ -71,6 +83,10 @@ export default function Escanear() {
   const [linterna, setLinterna] = useState(false);
   const [estado, setEstado] = useState<Estado>({ tipo: 'leyendo' });
   const [lecturasMalas, setLecturasMalas] = useState(0);
+  // Lo último que se guardó desde aquí, para decírselo a la persona un momento.
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [enfocada, setEnfocada] = useState(true);
+  const primeraVez = useRef(true);
 
   const ultima = useRef<{ codigo: string; en: number } | null>(null);
   const viva = useRef(true);
@@ -81,28 +97,64 @@ export default function Escanear() {
     };
   }, []);
 
+  // Al volver de rellenar el formulario completo el escáner sigue donde estaba, listo
+  // para el siguiente, y dice qué se acaba de guardar. La cámara solo está encendida
+  // mientras esta pantalla es la que se ve.
+  useFocusEffect(
+    useCallback(() => {
+      setEnfocada(true);
+      if (primeraVez.current) {
+        primeraVez.current = false;
+        // Lo que hubiera guardado antes de abrir el escáner no es de esta visita.
+        tomarGuardado();
+      } else {
+        setEstado({ tipo: 'leyendo' });
+        const guardado = tomarGuardado();
+        if (guardado) setAviso(guardado);
+      }
+      return () => setEnfocada(false);
+    }, []),
+  );
+
+  useEffect(() => {
+    if (aviso === null) return;
+    const temporizador = setTimeout(() => setAviso(null), 3500);
+    return () => clearTimeout(temporizador);
+  }, [aviso]);
+
   const irAAlta = useCallback(
-    (params: { codigo: string; producto?: string }) => {
-      router.replace({ pathname: '/alta', params });
+    (params: { codigo: string; producto?: string; donde?: string; dias?: string }) => {
+      router.push({ pathname: '/alta', params });
     },
     [router],
   );
 
+  // Si la cámara sigue apuntando al mismo código, no se vuelve a abrir al instante.
+  const cerrarFicha = useCallback(() => {
+    if (ultima.current) ultima.current = { ...ultima.current, en: Date.now() + 1500 };
+    setEstado({ tipo: 'leyendo' });
+  }, []);
+
   const resolver = useCallback(
     async (codigo: string) => {
+      // Un libro o un cupón se rechaza al instante, sin preguntar a nadie.
+      if (esCodigoDeNoComida(codigo)) return setEstado({ tipo: 'no_comida', codigo });
+
       setEstado({ tipo: 'buscando', codigo });
       try {
         // 1. Lo que esta nevera ya conoce: lectura normal, sin cuota.
         const privado = await buscarProductoPrivado(activa.id, codigo);
         if (!viva.current) return;
-        if (privado) return irAAlta({ codigo, producto: privado.id });
+        if (privado) return setEstado({ tipo: 'ficha', codigo, producto: privado });
 
         // 2. El catálogo global, vía la Edge Function.
         const r = await buscarPorCodigo(codigo);
         if (!viva.current) return;
-        if (r.encontrado) return irAAlta({ codigo, producto: r.producto.id });
+        if (r.encontrado) return setEstado({ tipo: 'ficha', codigo, producto: r.producto });
+        if (r.noEsComida) return setEstado({ tipo: 'no_comida', codigo });
 
-        // 3. Nadie lo conoce: a mano, con el código puesto.
+        // 3. Nadie lo conoce: a mano, con el código puesto. Se vuelve a leer al regresar.
+        setEstado({ tipo: 'leyendo' });
         irAAlta({ codigo });
       } catch (error) {
         if (!viva.current) return;
@@ -138,13 +190,16 @@ export default function Escanear() {
   const sinPermiso = hayCamara && permiso !== null && !permiso.granted;
   const pendientePermiso = hayCamara && permiso === null;
   const verCamara = hayCamara && !manual && permiso?.granted === true;
+  // Los paneles de entrada (manual, permiso) solo salen cuando no hay otra cosa que
+  // atender: una ficha, un rechazo o un fallo.
+  const libre = estado.tipo === 'leyendo' || estado.tipo === 'buscando';
 
   return (
     <View style={styles.raiz}>
       {/* Sin cámara el fondo es el del tema, no negro. */}
       {verCamara ? null : <View style={[styles.relleno, { backgroundColor: c.ground }]} />}
 
-      {verCamara ? (
+      {verCamara && enfocada ? (
         <CameraView
           style={styles.camara}
           facing="back"
@@ -210,6 +265,23 @@ export default function Escanear() {
             contentContainerStyle={styles.hoja}
             bounces={false}
           >
+            {aviso !== null ? (
+              <View style={styles.aviso} accessibilityLiveRegion="polite">
+                <CheckCircle size={20} color={c.ground} weight="fill" />
+                <Text style={styles.avisoTexto} numberOfLines={2}>
+                  Guardado: {aviso}
+                </Text>
+              </View>
+            ) : null}
+
+            {estado.tipo === 'no_comida' ? (
+              <View style={styles.bloque}>
+                <Text style={styles.hojaTitulo}>Eso no es comida</Text>
+                <Text style={styles.hojaTexto}>Opsi solo guarda comida y bebida.</Text>
+                <Button label="Escanear otro" onPress={() => setEstado({ tipo: 'leyendo' })} />
+              </View>
+            ) : null}
+
             {estado.tipo === 'fallo' ? (
               <View style={styles.bloque}>
                 <ErrorNote message={estado.mensaje} />
@@ -225,7 +297,7 @@ export default function Escanear() {
               </View>
             ) : null}
 
-            {estado.tipo !== 'fallo' && (sinPermiso || pendientePermiso) && !manual ? (
+            {libre && (sinPermiso || pendientePermiso) && !manual ? (
               <View style={styles.bloque}>
                 <Text style={styles.hojaTitulo}>Necesito la cámara para leer el código</Text>
                 <Text style={styles.hojaTexto}>
@@ -240,7 +312,7 @@ export default function Escanear() {
               </View>
             ) : null}
 
-            {manual && estado.tipo !== 'fallo' ? (
+            {manual && libre ? (
               <EntradaManual
                 ocupada={estado.tipo === 'buscando'}
                 onBuscar={(codigo) => void resolver(codigo)}
@@ -248,7 +320,7 @@ export default function Escanear() {
               />
             ) : null}
 
-            {!manual && estado.tipo !== 'fallo' ? (
+            {!manual && libre ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setManual(true)}
@@ -259,7 +331,7 @@ export default function Escanear() {
               </Pressable>
             ) : null}
 
-            {manual && hayCamara && estado.tipo !== 'fallo' ? (
+            {manual && hayCamara && libre ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setManual(false)}
@@ -273,6 +345,32 @@ export default function Escanear() {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
+      {/* Un producto conocido: todo puesto, y un botón para decir que está bien. */}
+      {estado.tipo === 'ficha' ? (
+        <HojaAltaRapida
+          key={estado.producto.id}
+          onClose={cerrarFicha}
+          nombre={estado.producto.name}
+          marca={estado.producto.brand}
+          productoId={estado.producto.id}
+          unitFamily={estado.producto.unit_family}
+          netQuantity={estado.producto.net_quantity}
+          onEditar={(elegido: Elegido) => {
+            const { codigo, producto } = estado;
+            cerrarFicha();
+            irAAlta({
+              codigo,
+              producto: producto.id,
+              donde: elegido.location,
+              ...(elegido.dias !== null ? { dias: String(elegido.dias) } : {}),
+            });
+          }}
+          onGuardado={(nombre) => {
+            cerrarFicha();
+            setAviso(nombre);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -397,6 +495,18 @@ const useStyles = makeStyles((c) => ({
     borderWidth: 1,
     borderColor: c.border,
   },
+  aviso: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    alignSelf: 'center',
+    maxWidth: '100%',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.pill,
+    backgroundColor: c.brand,
+  },
+  avisoTexto: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14, color: c.ground },
   hojaTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: c.ink },
   hojaTexto: { fontSize: 14, lineHeight: 20, color: c.inkMuted },
   enlace: {

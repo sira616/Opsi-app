@@ -89,6 +89,25 @@ export function enDias(dias: number): string {
   return formatearMientrasEscribe(`${iso.slice(8, 10)}${iso.slice(5, 7)}${iso.slice(0, 4)}`);
 }
 
+/** «2027-01-31» → «31/01/2027», como se teclea. Una fecha ausente da el texto vacío. */
+export function deIso(iso: string | null): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Los plazos de «la calculo yo»: la respuesta rápida a «¿cuánto le das de vida?».
+ * Escriben DÍAS, no una fecha. Los usan el alta, editar y la hoja rápida.
+ */
+export const ATAJOS: [string, number][] = [
+  ['1 día', 1],
+  ['3 días', 3],
+  ['1 semana', 7],
+  ['2 semanas', 14],
+  ['1 mes', 30],
+];
+
 /** Cinco años. Más que eso no es una conserva: es un error de tecleo. */
 export const DIAS_MAX = 1825;
 
