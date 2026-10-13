@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-12** (sesión 30)
+> Última actualización: **2026-10-13** (sesión 31)
 
 ---
 
@@ -50,7 +50,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **30 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **11 ficheros pgTAP, 367 tests** contra pgTAP real · `db:check`: **552 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 58 · `fn:check`: 19, en el runtime de Edge Functions de verdad |
+| Tests | **11 ficheros pgTAP, 367 tests** contra pgTAP real · `db:check`: **552 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -811,6 +811,46 @@ que nunca se tiró.
 
 **El lápiz de editar es casi invisible a propósito** (arriba a la derecha del detalle, en gris tenue): se busca
 cuando hace falta y no debe competir con las acciones de abajo.
+
+### D-38 · El escáner solo acepta comida, y un producto conocido se guarda en una hoja pequeña · 2026-10-13
+
+Dos cosas que salieron de probar el escáner con las manos:
+
+**Solo comida.** El escáner leía cualquier código de barras y ofrecía añadirlo. Opsi guarda comida, así que
+ahora se rechaza lo que no lo es, en dos capas:
+
+- **Por el prefijo, sin preguntar a nadie.** Un EAN-13 que empieza por 977 a 984 (revistas, libros, recibos de
+  devolución, cupones) o por 99 no puede ser comida. La función lo contesta antes de gastar cuota, y la app lo
+  repite antes de llamarla para dar la respuesta al instante. Es la única regla que se sabe con solo el código.
+- **Por lo que dice Open Food Facts.** Un champú o una bombilla llevan un prefijo de país como cualquier yogur.
+  OFF comparte códigos con sus bases hermanas (cosmética, mascotas, otros productos) y, cuando un código es de
+  otra, contesta 404 con «product found with a different product type». Antes se leía como «no existe» y dejaba
+  añadirlo a mano; ahora es «no es comida». Se probó con un código real de cosmética a través de la función.
+
+Dos decisiones: (1) **no se cachea como falta**, porque una falta se contestaría la próxima vez como «no lo
+conozco» y dejaría añadirlo: cada escaneo de ese código vuelve a preguntar a OFF, con la cuota de siempre.
+(2) **No hay botón de «añadirlo de todos modos».** Si OFF clasificara mal una comida, se añade a mano desde el «+»,
+sin código. Lo que NO se puede evitar es que alguien escriba «champú» a mano: el nombre es texto libre.
+
+**La hoja rápida.** Escanear un producto que ya se conoce abría el formulario completo, con siete campos para
+confirmar lo que ya estaba puesto. Ahora sube una hoja pequeña con el nombre, el pasillo, la cantidad y la nevera
+ya puestos, y solo dos cosas que se eligen de un toque, porque son las que cambian de una compra a otra: **dónde**
+se guarda (propuesto por el pasillo: un yogur, a la nevera) y **hasta cuándo** (por defecto, sin fecha: no se
+inventa una). «Está bien, guardar» guarda sin más; «Editar» abre el formulario completo **con lo que se llevaba
+elegido**, para no perderlo.
+
+- El formulario completo se abre ENCIMA del escáner, no lo sustituye: al guardar se vuelve a él para escanear el
+  siguiente, con un aviso de lo guardado, y su cámara se apaga mientras no se ve.
+- La misma hoja sirve para «Ya lo tengo» en la lista de la compra.
+- Los valores que propone son los del formulario completo (`features/alta/valores.ts`): si cada uno tuviera sus
+  reglas, «Editar» abriría otra cosa que la hoja que acaba de enseñar.
+- Lo que llega por la ruta (`donde`, `dias`) es entrada de fuera: solo se acepta una ubicación conocida o un
+  entero de 1 a 1825.
+
+**Los plazos de «la calculo yo»** (1 día, 3 días, 1 semana, 2 semanas, 1 mes) son ya un solo componente
+(`CampoFecha`) que usan el alta y editar. Editar tenía una copia sin los atajos y con los nombres de las opciones
+cambiados («La puse yo»): era el fallo que se vio. Al editar, «la calculo yo» enseña la fecha actual y no la toca
+hasta que se elige un plazo.
 
 ## 3. Convenciones
 
@@ -1883,3 +1923,30 @@ se cambia, abierto se rechaza); y editar un elemento congelado.
 no por quitarlo: el detalle tiene ahora una sola cosa tenue arriba a la derecha. (2) Probar una escritura con
 una cuenta de pruebas y borrar luego lo creado: aquí también los eventos, que sobreviven al borrado del
 elemento (`item_id` pasa a nulo) y se quedarían huérfanos en la nevera.
+
+### 2026-10-13 (sesión 31) · Solo comida, hoja rápida y plazos al editar
+
+**Hecho.** Tres cambios de diseño ([D-38](#d-38--el-escáner-solo-acepta-comida-y-un-producto-conocido-se-guarda-en-una-hoja-pequeña--2026-10-13)):
+
+1. **Editar un elemento:** «La calculo yo» no enseñaba los plazos. Ahora el alta y editar comparten el campo de
+   fecha (`CampoFecha`), con «1 día, 3 días, 1 semana, 2 semanas, 1 mes», y editar enseña la fecha actual.
+2. **El escáner solo acepta comida:** por el prefijo (libros, revistas, cupones) y por lo que dice Open Food Facts
+   (cosmética, mascotas, otros productos).
+3. **La hoja rápida:** un producto conocido se confirma en una hoja pequeña, con «Está bien, guardar» y «Editar»,
+   y el escáner sigue abierto para el siguiente. También en «Ya lo tengo» de la lista.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; `test:funciones` **67** (9 nuevos); `fn:check` **21** (un
+libro contesta «no es comida» sin gastar cuota); **en el navegador** con la cuenta de pruebas: un libro y un código
+real de cosmética dan «Eso no es comida»; un producto del catálogo abre la hoja con la nevera preseleccionada;
+«Editar» abre el formulario con lo elegido; guardar desde la hoja y desde el formulario deja el elemento bien y el
+escáner dice qué se guardó; «Ya lo tengo» de la lista guarda y tacha la línea; en editar, «1 día» da la fecha de
+mañana y queda su evento. Lo creado se borró después, eventos incluidos.
+
+**Sin verificar:** nada en un móvil: **la cámara**, que la hoja y el formulario se apilen bien sobre el escáner
+a pantalla completa (iOS tiene manías con dos modales a la vez; por eso la lista espera 300 ms entre una hoja y
+la otra), y que la cámara se apague al abrir el formulario.
+
+**Se aprendió:** (1) OFF distingue «no existe» de «es de otra base» solo en el cuerpo de un 404
+(`status_verbose`); leer el estado y tirar el cuerpo los confundía. (2) Dos copias de un mismo trozo de formulario
+terminan siendo dos formularios: la queja («no salen los plazos») era justa y venía de una copia que no se
+actualizó. (3) Un script de Node con comillas anidadas dentro de `node -e` se rompe: escribirlo en un fichero.
