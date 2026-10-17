@@ -75,6 +75,7 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 | `npm run db:start` / `db:stop` | Arranca o para los contenedores |
 | `npm run db:status` | URLs y claves locales |
 | `npm run db:reset` | **Borra la base y la reconstruye** desde `supabase/migrations/` + `supabase/seed/` |
+| `npm run db:migrate` | Aplica solo las migraciones que falten, **sin borrar los datos** (lo que quieres casi siempre al traer una migración nueva) |
 | `npm run db:test` | Ejecuta los tests pgTAP de `supabase/tests/` |
 | `npm run db:check` | **Comprueba el esquema sin Docker**, en segundos (ver abajo) |
 | `npm run db:diff` | Genera una migración a partir de cambios hechos en Studio |
@@ -249,6 +250,7 @@ realinea las dependencias con las que recomienda el SDK.
 | Síntoma | Causa | Solución |
 |---|---|---|
 | `failed to connect to docker API` | Docker no está arrancado | Abrir Docker Desktop y reintentar |
+| `supabase_storage_opsi container is not ready: unhealthy` al hacer `npm run up` (o `db:reset`), o Docker que no contesta (`docker ps` se cuelga) | **Poca RAM libre**: con menos de ~1 GB libres, los contenedores no llegan a tiempo al chequeo de salud. La base de datos ya quedó bien (migraciones y seed aplicados) | Cierra programas pesados, `wsl --shutdown`, abre Docker Desktop y repite. Mira la RAM con `Get-CimInstance Win32_OperatingSystem` (campo `FreePhysicalMemory`). `npm run up` ya comprueba si lo último quedó aplicado y reinicia Storage solo |
 | `db:start` se queda colgado | Descargando imágenes la primera vez | Esperar; la segunda vez tarda segundos |
 | Puerto 54322 ocupado | Otro proyecto Supabase levantado | `npx supabase stop --project-id <otro>` |
 | El móvil no conecta con la API | `127.0.0.1` es el propio móvil | Poner la IP local del ordenador en `app/.env`. `npm run up` la imprime al terminar |

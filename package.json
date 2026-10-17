@@ -18,6 +18,7 @@
     "db:stop": "supabase stop",
     "db:status": "supabase status",
     "db:reset": "supabase db reset",
+    "db:migrate": "supabase migration up",
     "db:diff": "supabase db diff",
     "db:test": "supabase test db",
     "dev:plan": "node scripts/dev-plan.mjs",
