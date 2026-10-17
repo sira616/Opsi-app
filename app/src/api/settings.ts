@@ -10,6 +10,9 @@
  */
 
 import { supabase } from '@/shared/lib/supabase';
+import type { Acento } from '@/shared/theme/tokens';
+
+export type Plan = 'basic' | 'premium';
 
 export type UserSettings = {
   user_id: string;
@@ -30,6 +33,14 @@ export type UserSettings = {
    * usa para no ofrecer un botón que el servidor va a rechazar.
    */
   household_limit: number;
+  /**
+   * El plan. Es del SERVIDOR y de solo lectura, como `household_limit`: ningún permiso
+   * de columna deja escribirlo. Lo premium lo vuelve a comprobar el servidor; la app
+   * solo lo usa para enseñar candados en vez de botones que van a fallar.
+   */
+  plan: Plan;
+  /** El color elegido. Distinto del verde solo vale con `plan = premium`. */
+  accent: Acento;
 };
 
 export async function fetchSettings(): Promise<UserSettings | null> {
@@ -37,7 +48,7 @@ export async function fetchSettings(): Promise<UserSettings | null> {
     .from('user_settings')
     .select(
       'user_id, username, timezone, digest_enabled, digest_hour, digest_minute, ' +
-        'auto_add_to_shopping_list, locale, household_limit',
+        'auto_add_to_shopping_list, locale, household_limit, plan, accent',
     )
     .maybeSingle();
 
@@ -53,7 +64,7 @@ export async function fetchSettings(): Promise<UserSettings | null> {
  * en el tipo solo serviría para que el error saliera en tiempo de ejecución.
  */
 export type SettingsPatch = Partial<
-  Omit<UserSettings, 'user_id' | 'username' | 'household_limit'>
+  Omit<UserSettings, 'user_id' | 'username' | 'household_limit' | 'plan'>
 >;
 
 /**

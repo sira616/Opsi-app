@@ -2,7 +2,7 @@
   "expo": {
     "name": "Opsi",
     "slug": "opsi",
-    "version": "0.0.1",
+    "version": "0.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,

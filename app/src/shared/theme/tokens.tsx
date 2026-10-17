@@ -108,6 +108,122 @@ const OSCURO: Palette = {
   frostInk: '#B4DCF7',
 };
 
+// ── El color base (Opsi Premium ⭐) ───────────────────────────────────────
+//
+// El verde es el de Opsi y lo tiene todo el mundo; los demás son premium. Cambiar
+// el color base cambia SOLO lo de marca: el rojo de la caducidad, el naranja de
+// aviso y el azul de congelado son semántica de seguridad alimentaria, y no se
+// tocan nunca (un azul de marca junto a un «congelado» azul los confundiría).
+//
+// «Blanco» no es blanco sobre blanco: en claro es un grafito (si no, los botones
+// y los iconos desaparecerían) y en oscuro sí es casi blanco. Es el modo sobrio.
+//
+// Cada pareja pasa el mismo contraste WCAG AA que el verde: `npm run check:contrast`
+// lee este bloque y lo comprueba, claro y oscuro, para cada color.
+export const ACENTOS = ['green', 'blue', 'yellow', 'orange', 'pink', 'white'] as const;
+export type Acento = (typeof ACENTOS)[number];
+
+type Marca = Pick<Palette, 'brand' | 'brandBright' | 'brandSoft' | 'brandInk' | 'onBrand'>;
+
+const PALETAS_ACENTO: Record<Exclude<Acento, 'green'>, { claro: Marca; oscuro: Marca }> = {
+  blue: {
+    claro: {
+      brand: '#1F5FBF',
+      brandBright: '#3B82F6',
+      brandSoft: '#E0ECFF',
+      brandInk: '#123F82',
+      onBrand: '#F6F5F2',
+    },
+    oscuro: {
+      brand: '#7DB0FF',
+      brandBright: '#7DB0FF',
+      brandSoft: '#17263F',
+      brandInk: '#BCD7FF',
+      onBrand: '#0B1A33',
+    },
+  },
+  yellow: {
+    claro: {
+      brand: '#8A6100',
+      brandBright: '#F5B800',
+      brandSoft: '#FBF0C9',
+      brandInk: '#5C4000',
+      onBrand: '#FFFBEA',
+    },
+    oscuro: {
+      brand: '#F5C842',
+      brandBright: '#F5C842',
+      brandSoft: '#332A10',
+      brandInk: '#FBE29A',
+      onBrand: '#2A2000',
+    },
+  },
+  orange: {
+    claro: {
+      brand: '#B34A00',
+      brandBright: '#F97316',
+      brandSoft: '#FDE6D3',
+      brandInk: '#7A3200',
+      onBrand: '#FFF7F0',
+    },
+    oscuro: {
+      brand: '#FFA462',
+      brandBright: '#FFA462',
+      brandSoft: '#35210F',
+      brandInk: '#FFD2AE',
+      onBrand: '#2D1600',
+    },
+  },
+  pink: {
+    claro: {
+      brand: '#B02A64',
+      brandBright: '#EC4899',
+      brandSoft: '#FBE0EC',
+      brandInk: '#7A1B44',
+      onBrand: '#FFF5F9',
+    },
+    oscuro: {
+      brand: '#FF8FBF',
+      brandBright: '#FF8FBF',
+      brandSoft: '#3A1827',
+      brandInk: '#FFC9DF',
+      onBrand: '#3A0A1F',
+    },
+  },
+  white: {
+    claro: {
+      brand: '#2B2F36',
+      brandBright: '#6B7280',
+      brandSoft: '#E9E7E1',
+      brandInk: '#1C1F24',
+      onBrand: '#F6F5F2',
+    },
+    oscuro: {
+      brand: '#F2F3F5',
+      brandBright: '#F2F3F5',
+      brandSoft: '#2A2D33',
+      brandInk: '#E4E6EA',
+      onBrand: '#111316',
+    },
+  },
+};
+
+/** La paleta base con el color de marca que toque. El verde es la base tal cual. */
+function conAcento(base: Palette, esquema: 'light' | 'dark', acento: Acento): Palette {
+  if (acento === 'green') return base;
+  return { ...base, ...PALETAS_ACENTO[acento][esquema === 'dark' ? 'oscuro' : 'claro'] };
+}
+
+/** Lo que se enseña en el selector: el color de marca en claro, y cómo se llama. */
+export const MUESTRAS_ACENTO: Record<Acento, { etiqueta: string; muestra: string }> = {
+  green: { etiqueta: 'Verde', muestra: CLARO.brand },
+  blue: { etiqueta: 'Azul', muestra: PALETAS_ACENTO.blue.claro.brand },
+  yellow: { etiqueta: 'Amarillo', muestra: PALETAS_ACENTO.yellow.claro.brandBright },
+  orange: { etiqueta: 'Naranja', muestra: PALETAS_ACENTO.orange.claro.brand },
+  pink: { etiqueta: 'Rosa', muestra: PALETAS_ACENTO.pink.claro.brand },
+  white: { etiqueta: 'Blanco', muestra: '#FFFFFF' },
+};
+
 // ── Preferencia de aspecto ────────────────────────────────────────────────
 //
 // Se guarda EN EL DISPOSITIVO y no en la cuenta, a propósito: el aspecto es
@@ -118,6 +234,10 @@ const OSCURO: Palette = {
 export type Aspecto = 'system' | 'light' | 'dark';
 
 const CLAVE = 'opsi.aspecto';
+// El color, en el dispositivo como copia: la fuente de verdad es la cuenta (el
+// servidor decide si tiene premium), pero así la app arranca ya con su color en vez
+// de pintarse verde un instante.
+const CLAVE_ACENTO = 'opsi.acento';
 
 type Tema = {
   /** Lo que eligió el usuario. */
@@ -126,6 +246,9 @@ type Tema = {
   esquema: 'light' | 'dark';
   colores: Palette;
   setAspecto: (valor: Aspecto) => void;
+  /** El color base que se pinta. Premium: lo decide quien lo pone, ver `AcentoSync`. */
+  acento: Acento;
+  setAcento: (valor: Acento) => void;
 };
 
 const TemaContext = createContext<Tema | null>(null);
@@ -133,16 +256,18 @@ const TemaContext = createContext<Tema | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const sistema = useColorScheme();
   const [aspecto, setEstado] = useState<Aspecto>('system');
+  const [acento, setAcentoEstado] = useState<Acento>('green');
   const [listo, setListo] = useState(false);
 
   useEffect(() => {
     let vivo = true;
-    void AsyncStorage.getItem(CLAVE)
-      .then((guardado) => {
+    void Promise.all([AsyncStorage.getItem(CLAVE), AsyncStorage.getItem(CLAVE_ACENTO)])
+      .then(([guardado, color]) => {
         if (!vivo) return;
         if (guardado === 'light' || guardado === 'dark' || guardado === 'system') {
           setEstado(guardado);
         }
+        if (ACENTOS.some((a) => a === color)) setAcentoEstado(color as Acento);
         setListo(true);
       })
       // Si el almacenamiento falla —modo incógnito, permisos—, se sigue con
@@ -160,10 +285,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     void AsyncStorage.setItem(CLAVE, valor).catch(() => {});
   }, []);
 
+  const setAcento = useCallback((valor: Acento) => {
+    setAcentoEstado(valor);
+    void AsyncStorage.setItem(CLAVE_ACENTO, valor).catch(() => {});
+  }, []);
+
   const valor = useMemo<Tema>(() => {
     const esquema = aspecto === 'system' ? (sistema === 'dark' ? 'dark' : 'light') : aspecto;
-    return { aspecto, esquema, colores: esquema === 'dark' ? OSCURO : CLARO, setAspecto };
-  }, [aspecto, sistema, setAspecto]);
+    const base = esquema === 'dark' ? OSCURO : CLARO;
+    return {
+      aspecto,
+      esquema,
+      colores: conAcento(base, esquema, acento),
+      setAspecto,
+      acento,
+      setAcento,
+    };
+  }, [aspecto, sistema, setAspecto, acento, setAcento]);
 
   // Nada se pinta hasta saber qué aspecto toca: arrancar en claro y saltar a
   // oscuro medio segundo después se ve como un fogonazo. La lectura tarda unos

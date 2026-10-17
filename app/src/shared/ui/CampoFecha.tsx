@@ -1,16 +1,29 @@
-import { Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, TextInput, View } from 'react-native';
+
+import { Minus, Plus } from 'phosphor-react-native';
 
 import type { DateKind, DateSource } from '@/api/inventory';
 import {
   ATAJOS,
+  DIAS_MAX,
   deIso,
+  diasHasta,
   enDias,
   fechaLegible,
   formatearMientrasEscribe,
   problemaDias,
   problemaFecha,
 } from '@/shared/lib/fecha-input';
-import { fonts, makeStyles, radius, space } from '@/shared/theme/tokens';
+import {
+  fonts,
+  makeStyles,
+  radius,
+  space,
+  tabular,
+  touchTarget,
+  useTheme,
+} from '@/shared/theme/tokens';
 
 import { Chips, type ChipOption } from './Chips';
 import { TextField } from './TextField';
@@ -37,11 +50,34 @@ const SOURCE_OPTIONS: ChipOption<DateSource>[] = [
   { value: 'user', label: 'La calculo yo' },
 ];
 
+/**
+ * La unidad del plazo. Casi todo lo que se guarda dura días o semanas, así que se
+ * cuenta en DÍAS y es lo que sale por omisión; meses y años están a un toque para lo
+ * poco que dura más (una conserva, un congelado). Se cuenta en el calendario —«2 meses»
+ * es el mismo día dos meses después, no 60 días—.
+ */
+type Unidad = 'dias' | 'meses' | 'anios';
+
+const UNIDADES: ChipOption<Unidad>[] = [
+  { value: 'dias', label: 'Días' },
+  { value: 'meses', label: 'Meses' },
+  { value: 'anios', label: 'Años' },
+];
+
+const MAXIMO: Record<Unidad, number> = { dias: DIAS_MAX, meses: 60, anios: 5 };
+
+function nombreDeUnidad(unidad: Unidad, n: number): string {
+  if (unidad === 'dias') return n === 1 ? 'día' : 'días';
+  if (unidad === 'meses') return n === 1 ? 'mes' : 'meses';
+  return n === 1 ? 'año' : 'años';
+}
+
 type Props = {
   source: DateSource;
   onSource: (source: DateSource) => void;
   dateText: string;
   onDateText: (texto: string) => void;
+  /** El plazo en DÍAS, siempre: es lo que valida y guarda quien usa este campo. */
   diasText: string;
   onDiasText: (texto: string) => void;
   kind: DateKind;
@@ -59,6 +95,11 @@ type Props = {
  * editar. Los dos tienen que preguntar lo mismo y con los mismos atajos; antes eran
  * dos copias y una de ellas olvidó los atajos.
  *
+ * En «la calculo yo» el plazo se pone con un − y un + a los lados (un toque por día),
+ * con los atajos arriba para lo corriente y con la unidad (días, meses o años) a mano.
+ * Sea cual sea la unidad, hacia fuera sale SIEMPRE un número de días (`onDiasText`):
+ * así quien lo usa no se entera de que existen los meses.
+ *
  * Quien lo usa decide cuándo enseñarlo (el «Ponerle fecha») y valida al guardar con
  * `problemaFecha` / `problemaDias`: aquí solo se pregunta y se avisa.
  */
@@ -74,13 +115,52 @@ export function CampoFecha({
   actual = null,
 }: Props) {
   const styles = useStyles();
+  const c = useTheme();
+
+  // En meses o años, cuántos son. En días no hace falta: es el propio `diasText`.
+  const [unidad, setUnidad] = useState<Unidad>('dias');
+  const [cuenta, setCuenta] = useState(0);
 
   const porDias = source === 'user';
   const avisoFecha = problemaFecha(dateText);
   const sinTocar = porDias && diasText === '' && actual !== null;
   const avisoDias = sinTocar ? null : problemaDias(diasText);
-  const fechaCalculada = porDias && avisoDias === null && diasText !== '' ? fechaLegible(enDias(Number(diasText))) : null;
+  const fechaCalculada =
+    porDias && avisoDias === null && diasText !== ''
+      ? fechaLegible(enDias(Number(diasText)))
+      : null;
   const fechaActual = sinTocar ? fechaLegible(deIso(actual)) : null;
+
+  const valor = unidad === 'dias' ? Number(diasText || 0) : cuenta;
+
+  /** Pone el plazo en la unidad dada, dentro de sus límites, y avisa en días. */
+  function poner(n: number, en: Unidad = unidad) {
+    const limpio = Math.min(MAXIMO[en], Math.max(1, Math.round(n)));
+    if (en === 'dias') {
+      onDiasText(String(limpio));
+      return;
+    }
+    setCuenta(limpio);
+    onDiasText(String(Math.min(DIAS_MAX, diasHasta(en, limpio))));
+  }
+
+  function cambiarUnidad(nueva: Unidad) {
+    if (nueva === unidad) return;
+    setUnidad(nueva);
+    // A meses o años se empieza en 1; a días se queda el total que ya había.
+    if (nueva !== 'dias') poner(1, nueva);
+  }
+
+  function escribir(texto: string) {
+    const digitos = texto.replace(/\D/g, '').slice(0, 4);
+    if (digitos === '') {
+      setCuenta(0);
+      onDiasText('');
+      return;
+    }
+    if (unidad === 'dias') onDiasText(digitos);
+    else poner(Number(digitos));
+  }
 
   return (
     <View style={styles.campos}>
@@ -90,17 +170,20 @@ export function CampoFecha({
 
       {porDias ? (
         <View style={styles.dias}>
-          {/* Los atajos van ANTES del campo a propósito: cubren la mayoría de los
-              casos de un toque, y quien los use no llega a teclear. */}
+          {/* Los atajos van ANTES del contador a propósito: cubren la mayoría de los
+              casos de un toque, y quien los use no llega a tocar el + ni el −. */}
           <View style={styles.atajos}>
             {ATAJOS.map(([etiqueta, dias]) => {
-              const on = diasText === `${dias}`;
+              const on = unidad === 'dias' && diasText === `${dias}`;
               return (
                 <Pressable
                   key={etiqueta}
                   accessibilityRole="button"
                   accessibilityLabel={`Ponerle ${etiqueta}`}
-                  onPress={() => onDiasText(`${dias}`)}
+                  onPress={() => {
+                    setUnidad('dias');
+                    onDiasText(`${dias}`);
+                  }}
                   style={[styles.atajo, on && styles.atajoOn]}
                 >
                   <Text style={styles.atajoText}>{etiqueta}</Text>
@@ -109,16 +192,60 @@ export function CampoFecha({
             })}
           </View>
 
-          <TextField
-            label="¿Cuánto le das de vida?"
-            hint={avisoDias ?? undefined}
-            value={diasText}
-            onChangeText={(texto) => onDiasText(texto.replace(/\D/g, '').slice(0, 4))}
-            placeholder="7"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={4}
-          />
+          <Text style={styles.etiqueta}>¿Cuánto le das de vida?</Text>
+
+          {/* El − a la izquierda y el + a la derecha, grandes: se toca sin mirar. */}
+          <View style={styles.contador}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Un ${nombreDeUnidad(unidad, 1)} menos`}
+              accessibilityState={{ disabled: valor <= 1 }}
+              disabled={valor <= 1}
+              onPress={() => poner(valor - 1)}
+              style={({ pressed }) => [
+                styles.paso,
+                valor <= 1 && styles.pasoApagado,
+                pressed && styles.pulsado,
+              ]}
+            >
+              <Minus size={22} color={c.brandInk} weight="bold" />
+            </Pressable>
+
+            <View style={styles.cifra}>
+              <TextInput
+                accessibilityLabel={`Plazo en ${nombreDeUnidad(unidad, 2)}`}
+                value={valor > 0 ? String(valor) : ''}
+                onChangeText={escribir}
+                placeholder="—"
+                placeholderTextColor={c.inkFaint}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                maxLength={4}
+                selectTextOnFocus
+                style={styles.cifraInput}
+              />
+              <Text style={styles.cifraUnidad}>{nombreDeUnidad(unidad, valor)}</Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Un ${nombreDeUnidad(unidad, 1)} más`}
+              accessibilityState={{ disabled: valor >= MAXIMO[unidad] }}
+              disabled={valor >= MAXIMO[unidad]}
+              onPress={() => poner(valor + 1)}
+              style={({ pressed }) => [
+                styles.paso,
+                valor >= MAXIMO[unidad] && styles.pasoApagado,
+                pressed && styles.pulsado,
+              ]}
+            >
+              <Plus size={22} color={c.brandInk} weight="bold" />
+            </Pressable>
+          </View>
+
+          <Chips options={UNIDADES} value={unidad} onChange={cambiarUnidad} />
+
+          {avisoDias ? <Text style={styles.aviso}>{avisoDias}</Text> : null}
 
           {/* La cuenta, ya hecha y a la vista. Un número de días se teclea en un
               segundo y se equivoca con un cero de más: ver el día que sale es lo que
@@ -156,9 +283,38 @@ export function CampoFecha({
   );
 }
 
+const PASO = touchTarget + 8;
+
 const useStyles = makeStyles((c) => ({
   campos: { gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.md },
   dias: { gap: space.md },
+  etiqueta: { fontSize: 12.5, color: c.inkMuted },
+
+  contador: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  paso: {
+    width: PASO,
+    height: PASO,
+    borderRadius: PASO / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.brandSoft,
+  },
+  pasoApagado: { opacity: 0.4 },
+  pulsado: { opacity: 0.75 },
+  cifra: { flex: 1, alignItems: 'center', minWidth: 0 },
+  cifraInput: {
+    ...tabular,
+    minWidth: 96,
+    textAlign: 'center',
+    fontFamily: fonts.displaySemi,
+    fontSize: 34,
+    lineHeight: 40,
+    color: c.ink,
+    paddingVertical: 0,
+  },
+  cifraUnidad: { fontFamily: fonts.medium, fontSize: 13, color: c.inkMuted },
+
+  aviso: { fontSize: 11.5, color: c.inkFaint },
   calculo: {
     fontFamily: fonts.semibold,
     fontSize: 12.5,

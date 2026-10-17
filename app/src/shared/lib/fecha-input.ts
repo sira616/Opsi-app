@@ -112,6 +112,26 @@ export const ATAJOS: [string, number][] = [
 export const DIAS_MAX = 1825;
 
 /**
+ * Cuántos días hay de hoy a dentro de N meses o N años, contados en el calendario.
+ *
+ * «Dentro de 2 meses» es el mismo día dos meses después, no 60 días: el plazo de una
+ * conserva se piensa en meses, y 60 días a pelo caería en otra fecha. Si ese día no
+ * existe (31 de enero + 1 mes), se cae en el último del mes en vez de pasar al
+ * siguiente. Todo con fechas de calendario, sin horas, así que el cambio de hora no
+ * mueve nada.
+ */
+export function diasHasta(unidad: 'meses' | 'anios', n: number, hoy: Date = new Date()): number {
+  const meses = unidad === 'anios' ? n * 12 : n;
+  let meta = new Date(hoy.getFullYear(), hoy.getMonth() + meses, hoy.getDate());
+  if (meta.getDate() !== hoy.getDate()) {
+    meta = new Date(hoy.getFullYear(), hoy.getMonth() + meses + 1, 0);
+  }
+  const desde = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const hasta = Date.UTC(meta.getFullYear(), meta.getMonth(), meta.getDate());
+  return Math.round((hasta - desde) / 86_400_000);
+}
+
+/**
  * Qué le pasa a los días escritos, o null si están bien.
  *
  * Es el gemelo de `problemaFecha` para el modo «la calculo yo», y existe por
