@@ -203,10 +203,14 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 
 ## Estado
 
+**Versión 0.4.0.** Mientras no haya una versión pública, el número sube en el segundo dígito con cada hito de
+producto (fases 0, 1, 2 y 4, y ahora Premium) y en el tercero con arreglos. La 1.0.0 será la primera que
+salga a las tiendas. Vive en `app/app.json`, que es de donde la lee la pantalla de ajustes.
+
 **Fases 0, 1 y 2 · hechas.** Lo que hay hoy, y lo que se ha probado de verdad:
 
 - [x] Monorepo con `app/` y `supabase/`, con la CLI de Supabase fijada
-- [x] Esquema con **30 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
+- [x] Esquema con **31 migraciones** y RLS en todas las tablas, con los privilegios por defecto cerrados
 - [x] Alta y login por usuario y contraseña; el alta solo admite usuarios de Opsi
 - [x] Seis acciones RPC: abrir, usar, congelar, descongelar, terminar, tirar
 - [x] Vista `inventory_with_priority` con la fecha límite efectiva, contada desde el día del usuario
@@ -216,10 +220,11 @@ El trabajo se hace en ramas cortas que salen de `main` y vuelven por *pull reque
 - [x] Auditoría de seguridad y una primera pasada de arreglos ([`docs/internal/AUDITORIA-2026-09-24.md`](docs/internal/AUDITORIA-2026-09-24.md))
 - [x] CI en verde, con escáner de secretos y puerta de dependencias
 - [x] **Escáner de códigos de barras**: pantalla con cámara (EAN-13, EAN-8, UPC-A) y entrada a mano, función `lookup-barcode` que consulta Open Food Facts **solo desde el servidor**, filtra la ficha y la guarda en una caché global; un producto que nadie conoce se recuerda en la nevera. Con límites por persona, caché de faltas y un modelo de amenazas con sus tests ([`docs/threat-model.md`](docs/threat-model.md))
+- [x] **Varias listas de la compra** (hasta 3 en el plan básico) y la base de **Opsi Premium ⭐**: color de la app y lo que más gastas. El plan lo decide el servidor; **todavía no se puede contratar** (sin pago)
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 367 tests pgTAP (11 ficheros) contra Supabase local; 552 comprobaciones sin Docker
+**Probado:** 418 tests pgTAP (12 ficheros) contra Supabase local; 607 comprobaciones sin Docker
 (`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 67 tests de la
 lógica de la función de búsqueda (`npm run test:funciones`) y 21 contra el runtime de Edge Functions de
 verdad (`npm run fn:check`). La función, además, **contra Open Food Facts de verdad**. La app, en el

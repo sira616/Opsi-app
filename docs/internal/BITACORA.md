@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-13** (sesión 31)
+> Última actualización: **2026-10-17** (sesión 32)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **30 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **31 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **11 ficheros pgTAP, 367 tests** contra pgTAP real · `db:check`: **552 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **12 ficheros pgTAP, 418 tests** contra pgTAP real · `db:check`: **607 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -851,6 +851,52 @@ elegido**, para no perderlo.
 (`CampoFecha`) que usan el alta y editar. Editar tenía una copia sin los atajos y con los nombres de las opciones
 cambiados («La puse yo»): era el fallo que se vio. Al editar, «la calculo yo» enseña la fecha actual y no la toca
 hasta que se elige un plazo.
+
+### D-39 · Varias listas, el plan en el servidor y Opsi Premium ⭐ · 2026-10-17
+
+Tres peticiones que se apoyan entre sí: poner los días de la caducidad con un − y un +, tener varias listas de
+la compra (hasta 3 en el plan básico) y empezar la sección premium (color de la app, lo que más gastas).
+
+**El plan es del servidor.** `user_settings.plan` (`basic` | `premium`), como `household_limit`: ningún
+permiso de columna lo concede, así que la app no puede escribirlo. Hoy solo lo cambia quien tiene acceso a la
+base de datos (`npm run dev:plan -- <usuario> premium`, solo contra la local). **No hay pago**: la pantalla de
+Premium lo dice («todavía no se puede contratar») en vez de enseñar un botón de compra que no compra nada.
+**Todo lo premium se comprueba en el servidor** y la app solo enseña candados: el color (trigger
+`check_accent`), «lo que más gastas» (`most_used_products`, 42501 sin plan) y el tope de listas.
+
+**Varias listas.** `shopping_lists`; cada nevera nace con «La compra» (trigger `create_default_list`, definer
+porque quien crea la nevera aún no es miembro) y las que ya existían la reciben en la migración. Cada línea
+cuelga de una lista (`list_id`); sin elegir, va a la primera, así que lo que se apunta sin elegir lista (el
+«¿lo apunto?» al agotarse algo) sigue funcionando. Decisiones:
+
+- **Cuenta el plan de quien crea la lista**, no el de la dueña de la nevera: una nevera compartida con una
+  persona premium puede tener más listas, y la básica no podrá crear más hasta que sobre sitio. 3 y 20.
+- **La primera lista cuenta dentro de las 3**, y **no se borra la última**.
+- La lista de una línea tiene que ser de **su misma nevera** (si no, quien está en dos neveras podría colgar
+  una línea de una en la lista de la otra), y las líneas pueden pasar de una lista a otra de la misma nevera
+  (el servidor ya lo permite; la app aún no lo ofrece).
+
+**El color.** Cinco colores premium (azul, amarillo, naranja, rosa, blanco) sobre el verde de siempre. Solo
+cambia lo de **marca**: el rojo de la caducidad, el naranja de aviso y el azul de «congelado» son semántica de
+seguridad alimentaria y no se tocan (un azul de marca junto a un «congelado» azul los confundiría). «Blanco» es un
+grafito en claro —blanco sobre blanco dejaría los botones invisibles— y casi blanco en oscuro. `check:contrast`
+comprueba los diez pares (cinco colores, claro y oscuro) con el mismo AA que el verde, y pasaron a la primera.
+La **cuenta manda** (el servidor decide si hay derecho a él) y el dispositivo guarda una copia para arrancar ya
+con su color; sin premium se pinta el verde aunque la fila diga otro, para no enseñar un color al que ya no se
+tiene derecho.
+
+**Lo que más gastas.** Lo que más veces se ha **agotado** en los últimos 90 días, por nombre sin mayúsculas ni
+espacios de más («Leche» y «leche » son lo mismo), con lo que se **tiró** aparte: comprar algo que luego se tira es
+lo que de verdad cuesta, pero algo solo tirado no sale (no es lo que se gasta).
+
+**Los días, con − y +.** «La calculo yo» pone el plazo con un − a la izquierda y un + a la derecha, grandes,
+además de los atajos (ahora con «1 día») y del campo. La unidad es días por omisión y meses o años están a un
+toque; se cuentan **en el calendario** («2 meses» es el mismo día dos meses después, no 60 días; el 31 de enero
+más un mes es el 28 de febrero). Hacia fuera sale siempre un número de días, así que el alta y editar no se
+enteran de que existen los meses.
+
+**La versión pasa a 0.4.0**: mientras no haya versión pública, el segundo dígito sube con cada hito de producto
+(fases 0, 1, 2 y 4, y la base de Premium) y el tercero con arreglos; la 1.0.0 será la primera de las tiendas.
 
 ## 3. Convenciones
 
@@ -1950,3 +1996,27 @@ la otra), y que la cámara se apague al abrir el formulario.
 (`status_verbose`); leer el estado y tirar el cuerpo los confundía. (2) Dos copias de un mismo trozo de formulario
 terminan siendo dos formularios: la queja («no salen los plazos») era justa y venía de una copia que no se
 actualizó. (3) Un script de Node con comillas anidadas dentro de `node -e` se rompe: escribirlo en un fichero.
+
+### 2026-10-17 (sesión 32) · Días con − y +, varias listas, Opsi Premium ⭐ y versión 0.4.0
+
+**Hecho** ([D-39](#d-39--varias-listas-el-plan-en-el-servidor-y-opsi-premium--2026-10-17)): el contador de días
+con − y +, la unidad (días, meses, años) y «1 día» en los atajos; varias listas de la compra con «Nueva lista», renombrar y
+eliminar, y el tope del plan básico; el plan en el servidor (`dev:plan` para probarlo en local); la pantalla de Premium con
+el color de la app y «lo que más gastas»; y la versión 0.4.0.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **418** (51 nuevos, `listas_premium_test.sql`); `db:check`
+**607**; `check:contrast` con los diez pares nuevos; la cuenta del contador de meses con ocho casos de calendario; y
+**en el navegador** con la cuenta de pruebas: crear tres listas y ver el aviso al intentar la cuarta, con su botón a
+Premium; los colores bloqueados con el plan básico; `dev:plan` a premium, elegir azul (toda la app cambia y la
+cuenta lo guarda), y «lo que más gastas» con datos de prueba (la leche tecleada de tres maneras sale como una);
+el contador en un móvil de 375 px. Lo creado se borró, eventos incluidos, y la cuenta volvió a básico y verde.
+
+**Sin verificar:** nada en un móvil real; **cambiar de cuenta en el mismo móvil** (se vería un instante el color de la
+anterior); ni la carrera de dos personas creando la tercera lista a la vez.
+
+**Se aprendió:** (1) la comprobación de la RLS (`WITH CHECK`) corre **después** de los triggers BEFORE: un trigger
+que lanza su propio error cuando no encuentra algo cambia el código que ve quien no debería llegar ahí (P0002 en vez
+de 42501), y `db:check` lo cazó; la solución es no lanzar nada y dejar que la RLS hable. (2) `now()` es la hora de
+la TRANSACCIÓN: dos filas creadas en el mismo test empatan, y «la primera» deja de estar definida; `clock_timestamp()`.
+(3) `db:reset` borra la base local, y la de la cuenta real vive ahí: para aplicar una migración nueva, `supabase
+migration up`.
