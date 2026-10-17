@@ -29,6 +29,25 @@ function leerPaleta(fuente, nombre) {
   return paleta;
 }
 
+/**
+ * Los colores base premium: `PALETAS_ACENTO` en tokens.tsx. Se pegan sobre la paleta
+ * base y se comprueba el conjunto, que es lo que la app pinta de verdad.
+ */
+function leerAcentos(fuente) {
+  const inicio = fuente.indexOf('const PALETAS_ACENTO');
+  if (inicio === -1) throw new Error('No encuentro PALETAS_ACENTO en tokens.tsx');
+  const fin = fuente.indexOf('\n};', inicio);
+  const cuerpo = fuente.slice(inicio, fin);
+  const acentos = {};
+  const bloque = /(\w+):\s*\{\s*claro:\s*\{([^}]*)\},\s*oscuro:\s*\{([^}]*)\},?\s*\}/g;
+  for (const [, nombre, claro, oscuro] of cuerpo.matchAll(bloque)) {
+    const leer = (texto) =>
+      Object.fromEntries([...texto.matchAll(/(\w+):\s*'(#[0-9A-Fa-f]{6})'/g)].map(([, k, v]) => [k, v]));
+    acentos[nombre] = { claro: leer(claro), oscuro: leer(oscuro) };
+  }
+  return acentos;
+}
+
 // ── Contraste WCAG ────────────────────────────────────────────────────────
 const canales = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const lineal = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -95,9 +114,18 @@ function comprobar(titulo, paleta) {
 }
 
 const fuente = readFileSync(TOKENS, 'utf8');
-const fallos =
-  comprobar('MODO CLARO', leerPaleta(fuente, 'CLARO')) +
-  comprobar('MODO OSCURO', leerPaleta(fuente, 'OSCURO'));
+const claro = leerPaleta(fuente, 'CLARO');
+const oscuro = leerPaleta(fuente, 'OSCURO');
+let fallos = comprobar('MODO CLARO', claro) + comprobar('MODO OSCURO', oscuro);
+
+const acentos = leerAcentos(fuente);
+if (Object.keys(acentos).length !== 6) {
+  throw new Error(`Esperaba 6 colores premium y leí ${Object.keys(acentos).length}`);
+}
+for (const [nombre, { claro: c, oscuro: o }] of Object.entries(acentos)) {
+  fallos += comprobar(`COLOR ${nombre.toUpperCase()} · claro`, { ...claro, ...c });
+  fallos += comprobar(`COLOR ${nombre.toUpperCase()} · oscuro`, { ...oscuro, ...o });
+}
 
 console.log(
   fallos === 0

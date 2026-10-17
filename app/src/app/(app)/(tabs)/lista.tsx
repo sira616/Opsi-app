@@ -28,6 +28,7 @@ import type { Nevera } from '@/api/household';
 import {
   agregarLinea,
   fetchLista,
+  fetchListas,
   fetchSugerencias,
   marcarComprada,
   quitarLinea,
@@ -36,6 +37,8 @@ import {
   type Sugerencia,
 } from '@/api/lista';
 import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
+import { fetchSettings } from '@/api/settings';
+import { SelectorListas } from '@/features/lista/SelectorListas';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
@@ -107,10 +110,22 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
   // La línea que se está guardando en la nevera, en la hoja rápida.
   const [rapida, setRapida] = useState<LineaLista | null>(null);
   const [compradasAbiertas, setCompradasAbiertas] = useState(false);
+  const [listaElegida, setListaElegida] = useState<string | null>(null);
+
+  // Las listas de la nevera, y cuál se está mirando: la elegida si sigue existiendo y,
+  // si no (se acaba de borrar, o aún no se ha elegido), la principal.
+  const listas = useQuery({
+    queryKey: queryKeys.listasDe(nevera.id),
+    queryFn: () => fetchListas(nevera.id),
+  });
+  const ajustes = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+  const listaId =
+    listas.data?.find((l) => l.id === listaElegida)?.id ?? listas.data?.[0]?.id ?? null;
 
   const lista = useQuery({
-    queryKey: queryKeys.listaDe(nevera.id),
-    queryFn: () => fetchLista(nevera.id),
+    queryKey: queryKeys.listaDe(nevera.id, listaId ?? ''),
+    queryFn: () => fetchLista(nevera.id, listaId as string),
+    enabled: listaId !== null,
   });
   // Cuelga de la clave de la lista: cualquier cambio de la lista las refresca a las dos.
   const sugeridas = useQuery({
@@ -147,7 +162,7 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     const nombre = texto.trim();
     if (!nombre || cambiar.isPending) return;
     cambiar.mutate(
-      () => agregarLinea({ householdId: nevera.id, name: nombre }),
+      () => agregarLinea({ householdId: nevera.id, listaId: listaId ?? undefined, name: nombre }),
       // El campo se vacía solo cuando salió bien: si falla, lo escrito se queda.
       { onSuccess: () => setTexto('') },
     );
@@ -157,6 +172,7 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     cambiar.mutate(() =>
       agregarLinea({
         householdId: nevera.id,
+        listaId: listaId ?? undefined,
         name: s.name,
         productId: s.product_id,
         cantidad: { unitFamily: s.unit_family, displayUnit: s.display_unit, quantity: s.initial_quantity },
@@ -173,6 +189,16 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
           </View>
         </View>
         <Text style={t.title}>La compra</Text>
+
+        {listas.data && listaId ? (
+          <SelectorListas
+            householdId={nevera.id}
+            listas={listas.data}
+            activaId={listaId}
+            onElegir={setListaElegida}
+            plan={ajustes.data?.plan ?? 'basic'}
+          />
+        ) : null}
 
         {/* El resumen: cuánto falta de un vistazo, y cuánto llevas. */}
         <View style={[styles.resumen, completa && styles.resumenCompleto]}>
@@ -239,14 +265,21 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
         refreshControl={
           <RefreshControl
             refreshing={lista.isFetching && !lista.isPending}
-            onRefresh={() => void lista.refetch()}
+            onRefresh={() => void Promise.all([listas.refetch(), lista.refetch()])}
             tintColor={c.brand}
           />
         }
       >
-        {lista.isPending ? <ActivityIndicator color={c.brand} style={styles.loader} /> : null}
+        {listas.isPending || (listaId !== null && lista.isPending) ? (
+          <ActivityIndicator color={c.brand} style={styles.loader} />
+        ) : null}
 
-        <ErrorNote message={error ?? (lista.error ? describeDbError(lista.error) : null)} />
+        <ErrorNote
+          message={
+            error ??
+            (listas.error ? describeDbError(listas.error) : lista.error ? describeDbError(lista.error) : null)
+          }
+        />
 
         {/* Lo que se acabó hace poco, a un toque de volver a la lista. */}
         {sugerencias.length > 0 ? (
@@ -272,7 +305,7 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
           </View>
         ) : null}
 
-        {!lista.isPending && !lista.error && todas.length === 0 ? (
+        {listaId !== null && !lista.isPending && !lista.error && todas.length === 0 ? (
           <View style={styles.vacio}>
             <View style={styles.vacioIcono}>
               <ShoppingCart size={30} color={c.brand} weight="duotone" />
@@ -330,7 +363,7 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
                   confirmLabel="Sí, vaciarlo"
                   question="¿Quitar de la lista todo lo ya comprado? No se puede deshacer."
                   busy={cambiar.isPending}
-                  onConfirm={() => cambiar.mutate(() => vaciarCompradas(nevera.id))}
+                  onConfirm={() => cambiar.mutate(() => vaciarCompradas(listaId as string))}
                 />
               </>
             ) : null}

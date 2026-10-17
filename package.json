@@ -2,7 +2,7 @@
   "name": "opsi",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.0.0",
+  "version": "0.4.0",
   "description": "Opsi — gestión de alimentos del hogar. Monorepo: app/ (Expo) + supabase/ (Postgres, Auth, Edge Functions).",
   "workspaces": [
     "app"
@@ -20,6 +20,7 @@
     "db:reset": "supabase db reset",
     "db:diff": "supabase db diff",
     "db:test": "supabase test db",
+    "dev:plan": "node scripts/dev-plan.mjs",
     "db:lint": "supabase db lint --level warning",
     "types": "node scripts/gen-types.mjs",
     "link": "supabase link",

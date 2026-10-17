@@ -1,14 +1,17 @@
+import { useQuery } from '@tanstack/react-query';
 import { Redirect, Stack } from 'expo-router';
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { fetchSettings } from '@/api/settings';
 import { NeveraActivaProvider, useNeveraActiva } from '@/features/neveras/NeveraActiva';
 import { alturaHojaSelector } from '@/features/neveras/SelectorNevera';
 import { describeDbError } from '@/shared/lib/db-errors';
+import { queryKeys } from '@/shared/lib/query';
 import { useSession } from '@/shared/lib/session';
 import { Button } from '@/shared/ui/Button';
-import { makeStyles, space, useTheme, useType } from '@/shared/theme/tokens';
+import { makeStyles, space, useAspecto, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
  * La protección de verdad no está aquí: está en la RLS de la base de datos.
@@ -76,7 +79,9 @@ function Puerta() {
   };
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <>
+      <AcentoSync />
+      <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="alta" options={hoja} />
       {/* La cámara necesita la pantalla entera: una hoja deja el visor a medias. */}
@@ -86,11 +91,34 @@ function Puerta() {
       />
       <Stack.Screen name="elemento/[id]" options={hoja} />
       <Stack.Screen name="editar-elemento/[id]" options={hoja} />
+      <Stack.Screen name="premium" options={hoja} />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
       <Stack.Screen name="nevera/[id]/editar" options={hoja} />
-    </Stack>
+      </Stack>
+    </>
   );
+}
+
+/**
+ * Pone en la app el color que la cuenta tiene elegido.
+ *
+ * El color es premium y lo decide el servidor: aquí solo se aplica. Sin el plan se pinta
+ * el verde aunque la fila diga otra cosa (por ejemplo tras dejar de ser premium), para
+ * que la app nunca enseñe un color al que ya no se tiene derecho. Comparte la consulta de
+ * los ajustes con el resto de pantallas, así que no cuesta una petición más.
+ */
+function AcentoSync() {
+  const { acento, setAcento } = useAspecto();
+  const ajustes = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+  const data = ajustes.data;
+  const efectivo = data ? (data.plan === 'premium' ? data.accent : 'green') : null;
+
+  useEffect(() => {
+    if (efectivo !== null && efectivo !== acento) setAcento(efectivo);
+  }, [efectivo, acento, setAcento]);
+
+  return null;
 }
 
 function Cargando() {

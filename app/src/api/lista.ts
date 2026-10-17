@@ -13,6 +13,9 @@
  * se repite nada de eso: los errores del servidor ya vienen en español y se enseñan
  * tal cual (ver `db-errors.ts`).
  *
+ * Una nevera tiene varias listas (`shopping_lists`): cada línea cuelga de una. El tope
+ * —3 en el plan básico— lo impone el servidor, y su mensaje se enseña tal cual.
+ *
  * Una sola cosa va por función y no por la tabla: pasar de «comprado» a inventario
  * (`stock_from_list`, desde `createItem` con `listaId`), porque son dos escrituras
  * que tienen que pasar juntas o no pasar.
@@ -26,6 +29,46 @@ type Fila = Database['public']['Tables']['shopping_list_items']['Row'];
 
 /** De dónde salió la línea. `auto_restock` solo existe si la persona lo encendió. */
 export type OrigenLinea = 'manual' | 'auto_restock' | 'chat';
+
+/** Una lista de la compra de una nevera. */
+export type Lista = Pick<
+  Database['public']['Tables']['shopping_lists']['Row'],
+  'id' | 'household_id' | 'name' | 'created_at'
+>;
+
+/** Las listas de UNA nevera, la más antigua primero (es la «principal»). */
+export async function fetchListas(householdId: string): Promise<Lista[]> {
+  const { data, error } = await supabase
+    .from('shopping_lists')
+    .select('id, household_id, name, created_at')
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Lista[];
+}
+
+/** Crea una lista y devuelve su id. El servidor impone el tope del plan. */
+export async function crearLista(householdId: string, nombre: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('shopping_lists')
+    .insert({ household_id: householdId, name: nombre.trim() })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function renombrarLista(id: string, nombre: string): Promise<void> {
+  const { error } = await supabase.from('shopping_lists').update({ name: nombre.trim() }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Borra una lista con sus líneas. El servidor no deja borrar la última. */
+export async function borrarLista(id: string): Promise<void> {
+  const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
+  if (error) throw error;
+}
 
 export type LineaLista = Pick<
   Fila,
@@ -41,18 +84,19 @@ const CAMPOS =
   'purchased_at, source, created_at';
 
 /**
- * La lista de UNA nevera: primero lo que falta (lo último apuntado, arriba) y
+ * Una lista de UNA nevera: primero lo que falta (lo último apuntado, arriba) y
  * después lo ya comprado (lo último comprado, arriba).
  *
  * Lleva el id de la nevera por la misma razón que `fetchPriorityList`: la RLS
  * devuelve las líneas de TODAS las neveras de la persona, y sin filtrar la lista
  * del piso se mezclaría con la de casa.
  */
-export async function fetchLista(householdId: string): Promise<LineaLista[]> {
+export async function fetchLista(householdId: string, listaId: string): Promise<LineaLista[]> {
   const { data, error } = await supabase
     .from('shopping_list_items')
     .select(CAMPOS)
     .eq('household_id', householdId)
+    .eq('list_id', listaId)
     .order('is_purchased', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(400);
@@ -81,6 +125,8 @@ export async function fetchLinea(id: string): Promise<LineaLista | null> {
 
 export type NuevaLinea = {
   householdId: string;
+  /** En qué lista. Sin ella, la principal de la nevera (la más antigua). */
+  listaId?: string;
   name: string;
   origen?: OrigenLinea;
   productId?: string | null;
@@ -100,11 +146,14 @@ export type NuevaLinea = {
  */
 export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
   const nombre = nueva.name.trim();
+  const listaId = nueva.listaId ?? (await fetchListas(nueva.householdId))[0]?.id;
+  if (!listaId) throw new Error('Esta nevera no tiene ninguna lista.');
 
   const { data: existentes, error: errorLectura } = await supabase
     .from('shopping_list_items')
     .select('id, name, product_id')
     .eq('household_id', nueva.householdId)
+    .eq('list_id', listaId)
     .eq('is_purchased', false)
     .limit(400);
   if (errorLectura) throw errorLectura;
@@ -118,6 +167,7 @@ export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
 
   const { error } = await supabase.from('shopping_list_items').insert({
     household_id: nueva.householdId,
+    list_id: listaId,
     name: nombre,
     source: nueva.origen ?? 'manual',
     product_id: nueva.productId ?? null,
@@ -143,12 +193,12 @@ export async function quitarLinea(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Quita de golpe todo lo ya comprado de UNA nevera. */
-export async function vaciarCompradas(householdId: string): Promise<void> {
+/** Quita de golpe todo lo ya comprado de UNA lista. */
+export async function vaciarCompradas(listaId: string): Promise<void> {
   const { error } = await supabase
     .from('shopping_list_items')
     .delete()
-    .eq('household_id', householdId)
+    .eq('list_id', listaId)
     .eq('is_purchased', true);
   if (error) throw error;
 }

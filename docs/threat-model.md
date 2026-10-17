@@ -131,6 +131,32 @@ por una o dos líneas: es aceptable para lo que es, y no se ha probado con dos s
 
 ---
 
+## 6 · Varias listas, plan y Opsi Premium ⭐
+
+Una tabla nueva (`shopping_lists`), dos columnas de `user_settings` (`plan`, `accent`) y una función
+(`most_used_products`), en `20261017100000_listas_y_premium`. **Sin Edge Function** y sin pago: el plan solo
+lo cambia quien tiene la base de datos. Lo que importa aquí es que **todo lo premium se decide en el servidor**.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **E**levation | Subirse el plan desde la app (`update user_settings set plan = 'premium'`) | Ningún permiso de columna concede `plan`: ni en INSERT ni en UPDATE (como `household_limit`) | `listas_premium_test.sql` (42501) |
+| **E**levation | Ponerse un color premium sin serlo | Trigger `check_accent`: distinto del verde exige `plan = 'premium'` en la propia fila, que el cliente no cambia. Lo que oculta la app (candados) no es la protección | `listas_premium_test.sql` |
+| **E**levation | Pedir «lo que más gastas» sin premium | `most_used_products` comprueba el plan antes de leer nada (42501, pista `premium`) | `listas_premium_test.sql` |
+| **I**nfo disclosure | Leer lo que más se gasta en la nevera de otra persona, siendo premium | Es SECURITY INVOKER: lee `inventory_events` e `inventory_items` con la RLS de quien llama, y una nevera ajena sale **vacía** | `listas_premium_test.sql` |
+| **T**ampering | Colgar una línea de la lista de OTRA nevera (quien está en dos neveras) | `check_shopping_item` exige que la lista sea de la misma nevera que la línea, al crear y al mover | `listas_premium_test.sql` (P0002) |
+| **E**levation | Crear o renombrar una lista en la nevera de otra persona, o cambiarla de nevera | RLS por `is_household_member`; el permiso de UPDATE es solo `name` y el de INSERT solo `household_id` y `name` | `listas_premium_test.sql` (42501) |
+| **S**poofing | Crear una lista «de parte de» otra persona | El trigger pisa `created_by` con `auth.uid()` | `listas_premium_test.sql` |
+| **D**oS | Acumular listas sin límite | Tope por nevera: 3 con el plan básico, 20 con premium, según quien la **crea**. El de 20 es una red, no un valor de venta | `listas_premium_test.sql` |
+| **D**oS | Quedarse sin ninguna lista | El trigger no deja borrar la última. El borrado en cascada de una nevera entera sí pasa (se mira que la nevera ya no exista) | `listas_premium_test.sql` |
+| **E**levation | `create_default_list` (definer) escribe donde la RLS no dejaría | Solo se dispara al nacer una nevera y solo inserta una fila con **su** id y un nombre fijo; sin permiso de ejecución para nadie | `listas_premium_test.sql` (la nevera nace con su lista) |
+
+**Lo que no cubre:** los dos topes (listas y líneas) cuentan filas dentro del trigger, así que dos inserciones
+**simultáneas** pueden pasarse por una; no se ha probado con dos sesiones. Un fallo del servidor de pagos —que
+no existe todavía— es lo primero que habrá que modelar cuando se añada: quién puede decir «esta cuenta es
+premium», y con qué comprobación.
+
+---
+
 ## Lo que este documento todavía no cubre
 
 `daily-digest` (fase 3), `opsi-chat` (fase 5) y `parse-receipt` (fase 6) no tienen tabla

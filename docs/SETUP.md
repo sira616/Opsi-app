@@ -82,6 +82,7 @@ npm run db:status    # vuelve a imprimir las claves cuando las necesites
 | `npm run db:carreras` | Dos sesiones a la vez sobre lo mismo (necesita Docker) |
 | `npm run test:funciones` | Los tests de la lógica de las Edge Functions, sin Deno ni red |
 | `npm run fn:check` | `lookup-barcode` en el runtime de Edge Functions de verdad (necesita Supabase levantado) |
+| `npm run dev:plan -- <usuario> <basic\|premium>` | Cambia el plan de una cuenta en la base de datos **local**, para probar Opsi Premium ⭐ (el plan solo lo escribe el servidor) |
 | `npm run fn:serve` | Sirve las Edge Functions con `supabase/functions/.env` (para que busque en Open Food Facts) |
 
 `db:reset` es destructivo y se usa constantemente: en local **la base de datos es

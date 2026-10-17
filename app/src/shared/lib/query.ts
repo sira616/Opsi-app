@@ -88,8 +88,18 @@ export const queryKeys = {
    * comprado, que puede venir de cualquiera).
    */
   lista: ['lista'] as const,
-  listaDe: (neveraId: string) => ['lista', neveraId] as const,
+  /**
+   * Sin `listaId` es el prefijo de TODO lo de esa nevera (las listas y las líneas de
+   * cada una), que es lo que se invalida al cambiar algo.
+   */
+  listaDe: (neveraId: string, listaId?: string) =>
+    (listaId ? ['lista', neveraId, listaId] : ['lista', neveraId]) as readonly string[],
+  /** Las listas de una nevera (sus nombres), no las líneas. */
+  listasDe: (neveraId: string) => ['lista', neveraId, 'listas'] as const,
   linea: (id: string) => ['lista', 'linea', id] as const,
+
+  /** Lo que más se gasta en una nevera (premium). */
+  masUsados: (neveraId: string) => ['premium', 'mas-usados', neveraId] as const,
 
   settings: ['settings'] as const,
   correo: ['cuenta', 'correo'] as const,

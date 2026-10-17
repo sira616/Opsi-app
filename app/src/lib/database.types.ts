@@ -247,14 +247,14 @@ isOneToOne: false
                   ]
                 },"shopping_list_items": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"display_unit": Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id": string,"is_purchased": boolean,"name": string,"product_id": string | null,"purchased_at": string | null,"quantity": number | null,"source": string,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
+                    "created_at": string,"created_by": string | null,"display_unit": Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id": string,"is_purchased": boolean,"list_id": string,"name": string,"product_id": string | null,"purchased_at": string | null,"quantity": number | null,"source": string,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id"?: string,"is_purchased"?: boolean,"name": string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id"?: string,"is_purchased"?: boolean,"list_id": string,"name": string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id"?: string,"id"?: string,"is_purchased"?: boolean,"name"?: string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id"?: string,"id"?: string,"is_purchased"?: boolean,"list_id"?: string,"name"?: string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -264,6 +264,12 @@ isOneToOne: false
       referencedRelation: "households"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "shopping_list_items_list_id_fkey"
+      columns: ["list_id"]
+isOneToOne: false
+      referencedRelation: "shopping_lists"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "shopping_list_items_product_id_fkey"
       columns: ["product_id"]
 isOneToOne: false
@@ -271,16 +277,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"user_settings": {
+                },"shopping_lists": {
                   Row: {
-                    "auto_add_to_shopping_list": boolean,"created_at": string,"digest_enabled": boolean,"digest_hour": number,"digest_minute": number,"household_limit": number,"locale": string,"push_token": string | null,"push_token_updated_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"username": string
+                    "created_at": string,"created_by": string | null,"household_id": string,"id": string,"name": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"username": string
+                    "created_at"?: string,"created_by"?: string | null,"household_id": string,"id"?: string,"name": string,"updated_at"?: string
                   }
                   Update: {
-                    "auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"username"?: string
+                    "created_at"?: string,"created_by"?: string | null,"household_id"?: string,"id"?: string,"name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shopping_lists_household_id_fkey"
+      columns: ["household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"user_settings": {
+                  Row: {
+                    "accent": string,"auto_add_to_shopping_list": boolean,"created_at": string,"digest_enabled": boolean,"digest_hour": number,"digest_minute": number,"household_limit": number,"locale": string,"plan": string,"push_token": string | null,"push_token_updated_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"username": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accent"?: string,"auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"plan"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"username": string
+                  }
+                  Update: {
+                    "accent"?: string,"auto_add_to_shopping_list"?: boolean,"created_at"?: string,"digest_enabled"?: boolean,"digest_hour"?: number,"digest_minute"?: number,"household_limit"?: number,"locale"?: string,"plan"?: string,"push_token"?: string | null,"push_token_updated_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"username"?: string
                   }
                   Relationships: [
                     
@@ -527,6 +553,11 @@ isOneToOne: false
 "mi_correo":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"most_used_products":
+{ Args: { "p_days"?: number,"p_household_id": string,"p_limit"?: number }; Returns: {
+              "discarded_count": number,"finished_count": number,"last_at": string,"product_name": string
+            }[]
+                           },
 "my_households":
 { Args: Record<PropertyKey, never>; Returns: {
               "icon": string,"id": string,"kind": Database["public"]['Enums']["household_kind"],"member_count": number,"member_limit": number,"name": string,"role": Database["public"]['Enums']["household_role"]
@@ -536,6 +567,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "created_at": string,"expires_at": string,"household_icon": string,"household_id": string,"household_name": string,"id": string,"inviter_username": string
             }[]
+                           },
+"my_plan":
+{ Args: Record<PropertyKey, never>; Returns: string
                            },
 "open_item":
 { Args: { "p_item_id": string }; Returns: {
