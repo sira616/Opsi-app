@@ -34,7 +34,8 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `/` | — | Redirige según haya sesión |
 | `(app)/(tabs)/inventario` | Sesión | «Consumir primero» de la nevera activa |
 | `(app)/(tabs)/ajustes` | Sesión | Perfil, aspecto, avisos, mis neveras, cuenta, privacidad |
-| `(app)/(tabs)/lista` | Sesión | La lista de la compra de la nevera activa |
+| `(app)/(tabs)/lista` | Sesión | Las listas de la compra de la nevera activa |
+| `(app)/premium` | Sesión | Opsi Premium ⭐: color de la app y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
 | `(app)/(tabs)/chat` | Sesión | «Próximamente» (fase 5) |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
@@ -63,8 +64,9 @@ que **puede intentar**; la RLS decide además **sobre qué filas**.
 | `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; `service_role` solo lo lee y lo escribe vía `upsert_global_product()` |
 | `lookup_usage` | Tabla | **Nada** (ni leer) | Contadores del límite de consultas del escáner. Sin política ni permiso para ningún rol: solo la tocan `consume_lookup_quota()` y `consume_off_slot()`. Se purga a los 2 días |
 | `barcode_misses` | Tabla | **Nada** (ni leer) | Caché de códigos que Open Food Facts no conoce. Sin política ni permiso; no guarda quién preguntó. Se purga a los 7 días |
-| `shopping_list_items` | Tabla | Las cuatro | RLS por nevera. Un trigger (`check_shopping_item`) impone lo que la RLS no: `auto_restock` solo si la persona lo encendió, `created_by` siempre quien escribe, producto global o de la misma nevera, y un tope de 300 líneas por nevera |
-| `user_settings` | Tabla | Leer lo suyo; escribir **columna a columna** | `household_limit` y `username` no son editables; zona horaria validada por trigger |
+| `shopping_list_items` | Tabla | Las cuatro | RLS por nevera. Un trigger (`check_shopping_item`) impone lo que la RLS no: `auto_restock` solo si la persona lo encendió, `created_by` siempre quien escribe, producto global o de la misma nevera, **la lista es de la misma nevera que la línea** (sin lista, va a la primera) y un tope de 300 líneas por nevera |
+| `shopping_lists` | Tabla | Leer, borrar, crear (nevera y nombre) y renombrar | RLS por nevera. Un trigger (`check_shopping_list`) pone `created_by`, impone el **tope de 3 listas por nevera en el plan básico (20 en premium)** y no deja borrar la última. Una lista no cambia de nevera (el permiso de UPDATE es solo el nombre) |
+| `user_settings` | Tabla | Leer lo suyo; escribir **columna a columna** | `household_limit`, `username` y **`plan`** no son editables (ningún permiso de columna los concede); el color (`accent`) sí, pero todos menos el verde exigen `plan = premium` (trigger `check_accent`); zona horaria validada por trigger |
 | `category_shelf_life_reference`, `open_shelf_life_reference` | Tabla | Leer | Referencias de solo lectura |
 
 ### Funciones que puede llamar una persona con sesión
@@ -80,6 +82,8 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 | `require_item`, `record_inventory_event` | invoker | Auxiliares de las acciones |
 | `shelf_life_for_item` | invoker | La RLS del elemento |
 | `today_for_user` | invoker | Lee solo la zona horaria de quien llama |
+| `my_plan` | invoker | El plan (`basic` o `premium`) de quien llama, de su propia fila; sin fila, `basic` |
+| `most_used_products` | invoker | **Premium** (si no, 42501): lo que más se ha agotado en una nevera en los últimos días. Lee con la RLS de quien llama, así que una nevera ajena sale vacía |
 | `my_households` | invoker | Solo las neveras de quien llama |
 | `create_shared_household` | definer | Límite de neveras por persona (`household_limit`), con bloqueo para que dos llamadas a la vez no lo superen |
 | `update_household` | definer | Solo el dueño; solo nombre e icono, y el icono de la lista cerrada |
@@ -109,6 +113,9 @@ Sin permiso de ejecución para `anon` ni `authenticated`.
 | `handle_new_user` | Trigger de alta: solo admite correos sintéticos, saca el nombre del correo, crea la nevera privada |
 | `touch_updated_at` | Trigger de `updated_at` |
 | `check_shopping_item` | Trigger de la lista de la compra: ver la tabla `shopping_list_items` |
+| `check_shopping_list` | Trigger de las listas: ver la tabla `shopping_lists` |
+| `check_accent` | Trigger de `user_settings`: un color que no sea el verde exige premium |
+| `create_default_list` | Trigger de `households` (**definer**: quien crea la nevera aún no es miembro): cada nevera nace con su lista «La compra» |
 
 ### Funciones que solo ejecuta `service_role` (el escáner)
 
