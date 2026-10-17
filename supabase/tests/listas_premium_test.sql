@@ -265,6 +265,17 @@ select throws_ok(
 );
 
 select lives_ok(
+  $$update public.user_settings set accent = 'purple'$$,
+  'los colores son los de las princesas: el morado de Karen vale...'
+);
+
+select throws_ok(
+  $$update public.user_settings set accent = 'white'$$,
+  '23514', null,
+  '...y el blanco, que no es de ninguna, ya no existe'
+);
+
+select lives_ok(
   $$insert into public.shopping_lists (household_id, name)
     select current_setting('opsi.priv_ana')::uuid, 'L' || g from generate_series(1, 19) g$$,
   'se llega a 20 listas'

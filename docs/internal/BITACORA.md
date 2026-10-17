@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **31 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **32 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **12 ficheros pgTAP, 418 tests** contra pgTAP real · `db:check`: **607 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **12 ficheros pgTAP, 420 tests** contra pgTAP real · `db:check`: **610 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -876,14 +876,16 @@ cuelga de una lista (`list_id`); sin elegir, va a la primera, así que lo que se
   una línea de una en la lista de la otra), y las líneas pueden pasar de una lista a otra de la misma nevera
   (el servidor ya lo permite; la app aún no lo ofrece).
 
-**El color.** Cinco colores premium (azul, amarillo, naranja, rosa, blanco) sobre el verde de siempre. Solo
-cambia lo de **marca**: el rojo de la caducidad, el naranja de aviso y el azul de «congelado» son semántica de
-seguridad alimentaria y no se tocan (un azul de marca junto a un «congelado» azul los confundiría). «Blanco» es un
-grafito en claro —blanco sobre blanco dejaría los botones invisibles— y casi blanco en oscuro. `check:contrast`
-comprueba los diez pares (cinco colores, claro y oscuro) con el mismo AA que el verde, y pasaron a la primera.
-La **cuenta manda** (el servidor decide si hay derecho a él) y el dispositivo guarda una copia para arrancar ya
-con su color; sin premium se pinta el verde aunque la fila diga otro, para no enseñar un color al que ya no se
-tiene derecho.
+**El color.** Son los colores de las perlas de las siete princesas sirena de **Pichi Pichi Pitch**: Lucia (rosa),
+Hanon (azul aguamarina), Rina (verde), Karen (morado), Noel (índigo), Coco (amarillo) y Sara (naranja). El verde de Rina
+es el de Opsi y lo tiene todo el mundo; los otros seis son premium. (La primera versión tenía azul, amarillo, naranja,
+rosa y blanco: el blanco no es de ninguna princesa y salió; entraron el morado y el índigo, en la migración
+`20261017110000`.) Solo cambia lo de **marca**: el rojo de la caducidad, el naranja de aviso y el azul de «congelado» son
+semántica de seguridad alimentaria y no se tocan. Por eso **no hay un rojo** (ninguna princesa lo es, y un rojo de marca
+junto a una caducidad la haría pasar por un botón) y el azul de Hanon es un aguamarina que tira a verde, no el azul de
+«congelado». `check:contrast` comprueba los doce pares (seis colores, claro y oscuro) con el mismo AA que el verde. La
+**cuenta manda** (el servidor decide si hay derecho a él) y el dispositivo guarda una copia para arrancar ya con su color;
+sin premium se pinta el verde aunque la fila diga otro, para no enseñar un color al que ya no se tiene derecho.
 
 **Lo que más gastas.** Lo que más veces se ha **agotado** en los últimos 90 días, por nombre sin mayúsculas ni
 espacios de más («Leche» y «leche » son lo mismo), con lo que se **tiró** aparte: comprar algo que luego se tira es
@@ -2004,11 +2006,11 @@ con − y +, la unidad (días, meses, años) y «1 día» en los atajos; varias 
 eliminar, y el tope del plan básico; el plan en el servidor (`dev:plan` para probarlo en local); la pantalla de Premium con
 el color de la app y «lo que más gastas»; y la versión 0.4.0.
 
-**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **418** (51 nuevos, `listas_premium_test.sql`); `db:check`
-**607**; `check:contrast` con los diez pares nuevos; la cuenta del contador de meses con ocho casos de calendario; y
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **420** (53 nuevos, `listas_premium_test.sql`); `db:check`
+**610**; `check:contrast` con los doce pares de colores; la cuenta del contador de meses con ocho casos de calendario; y
 **en el navegador** con la cuenta de pruebas: crear tres listas y ver el aviso al intentar la cuarta, con su botón a
-Premium; los colores bloqueados con el plan básico; `dev:plan` a premium, elegir azul (toda la app cambia y la
-cuenta lo guarda), y «lo que más gastas» con datos de prueba (la leche tecleada de tres maneras sale como una);
+Premium; los colores bloqueados con el plan básico; `dev:plan` a premium, elegir un color (toda la app cambia y la
+cuenta lo guarda; los siete de las princesas se vieron en un móvil de 375 px), y «lo que más gastas» con datos de prueba (la leche tecleada de tres maneras sale como una);
 el contador en un móvil de 375 px. Lo creado se borró, eventos incluidos, y la cuenta volvió a básico y verde.
 
 **Sin verificar:** nada en un móvil real; **cambiar de cuenta en el mismo móvil** (se vería un instante el color de la

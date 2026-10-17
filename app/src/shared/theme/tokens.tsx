@@ -110,36 +110,87 @@ const OSCURO: Palette = {
 
 // ── El color base (Opsi Premium ⭐) ───────────────────────────────────────
 //
-// El verde es el de Opsi y lo tiene todo el mundo; los demás son premium. Cambiar
-// el color base cambia SOLO lo de marca: el rojo de la caducidad, el naranja de
-// aviso y el azul de congelado son semántica de seguridad alimentaria, y no se
-// tocan nunca (un azul de marca junto a un «congelado» azul los confundiría).
+// Son los colores de las siete princesas sirena de Pichi Pichi Pitch, cada uno el de
+// su perla: Lucia (rosa), Hanon (azul aguamarina), Rina (verde), Karen (morado), Noel
+// (índigo), Coco (amarillo) y Sara (naranja). El verde de Rina es el de Opsi y lo
+// tiene todo el mundo; los otros seis son premium.
 //
-// «Blanco» no es blanco sobre blanco: en claro es un grafito (si no, los botones
-// y los iconos desaparecerían) y en oscuro sí es casi blanco. Es el modo sobrio.
+// Cambiar el color base cambia SOLO lo de marca: el rojo de la caducidad, el naranja
+// de aviso y el azul de congelado son semántica de seguridad alimentaria y no se
+// tocan. Por eso no hay un rojo (ninguna princesa lo es, y un rojo de marca junto a una
+// caducidad la haría pasar por un botón), y el azul de Hanon es un aguamarina que tira
+// a verde, no el azul de «congelado».
 //
 // Cada pareja pasa el mismo contraste WCAG AA que el verde: `npm run check:contrast`
 // lee este bloque y lo comprueba, claro y oscuro, para cada color.
-export const ACENTOS = ['green', 'blue', 'yellow', 'orange', 'pink', 'white'] as const;
+export const ACENTOS = ['green', 'pink', 'blue', 'purple', 'indigo', 'yellow', 'orange'] as const;
 export type Acento = (typeof ACENTOS)[number];
 
 type Marca = Pick<Palette, 'brand' | 'brandBright' | 'brandSoft' | 'brandInk' | 'onBrand'>;
 
 const PALETAS_ACENTO: Record<Exclude<Acento, 'green'>, { claro: Marca; oscuro: Marca }> = {
-  blue: {
+  pink: {
     claro: {
-      brand: '#1F5FBF',
-      brandBright: '#3B82F6',
-      brandSoft: '#E0ECFF',
-      brandInk: '#123F82',
-      onBrand: '#F6F5F2',
+      brand: '#B02A64',
+      brandBright: '#EC4899',
+      brandSoft: '#FBE0EC',
+      brandInk: '#7A1B44',
+      onBrand: '#FFF5F9',
     },
     oscuro: {
-      brand: '#7DB0FF',
-      brandBright: '#7DB0FF',
-      brandSoft: '#17263F',
-      brandInk: '#BCD7FF',
-      onBrand: '#0B1A33',
+      brand: '#FF8FBF',
+      brandBright: '#FF8FBF',
+      brandSoft: '#3A1827',
+      brandInk: '#FFC9DF',
+      onBrand: '#3A0A1F',
+    },
+  },
+  blue: {
+    claro: {
+      brand: '#09787E',
+      brandBright: '#22B8C6',
+      brandSoft: '#DDF3F5',
+      brandInk: '#0A5156',
+      onBrand: '#F2FBFB',
+    },
+    oscuro: {
+      brand: '#5ED6D0',
+      brandBright: '#5ED6D0',
+      brandSoft: '#123234',
+      brandInk: '#A9ECE8',
+      onBrand: '#06262A',
+    },
+  },
+  purple: {
+    claro: {
+      brand: '#8A2FB0',
+      brandBright: '#B45CE0',
+      brandSoft: '#F0E1F8',
+      brandInk: '#5C1D78',
+      onBrand: '#FAF5FD',
+    },
+    oscuro: {
+      brand: '#D28CF2',
+      brandBright: '#D28CF2',
+      brandSoft: '#2E1838',
+      brandInk: '#EBC6FA',
+      onBrand: '#2A0B38',
+    },
+  },
+  indigo: {
+    claro: {
+      brand: '#4338B8',
+      brandBright: '#6366F1',
+      brandSoft: '#E4E3FB',
+      brandInk: '#2B2478',
+      onBrand: '#F6F5FF',
+    },
+    oscuro: {
+      brand: '#9B9AF5',
+      brandBright: '#9B9AF5',
+      brandSoft: '#1F1F45',
+      brandInk: '#CFCEFF',
+      onBrand: '#14133A',
     },
   },
   yellow: {
@@ -174,38 +225,6 @@ const PALETAS_ACENTO: Record<Exclude<Acento, 'green'>, { claro: Marca; oscuro: M
       onBrand: '#2D1600',
     },
   },
-  pink: {
-    claro: {
-      brand: '#B02A64',
-      brandBright: '#EC4899',
-      brandSoft: '#FBE0EC',
-      brandInk: '#7A1B44',
-      onBrand: '#FFF5F9',
-    },
-    oscuro: {
-      brand: '#FF8FBF',
-      brandBright: '#FF8FBF',
-      brandSoft: '#3A1827',
-      brandInk: '#FFC9DF',
-      onBrand: '#3A0A1F',
-    },
-  },
-  white: {
-    claro: {
-      brand: '#2B2F36',
-      brandBright: '#6B7280',
-      brandSoft: '#E9E7E1',
-      brandInk: '#1C1F24',
-      onBrand: '#F6F5F2',
-    },
-    oscuro: {
-      brand: '#F2F3F5',
-      brandBright: '#F2F3F5',
-      brandSoft: '#2A2D33',
-      brandInk: '#E4E6EA',
-      onBrand: '#111316',
-    },
-  },
 };
 
 /** La paleta base con el color de marca que toque. El verde es la base tal cual. */
@@ -217,11 +236,12 @@ function conAcento(base: Palette, esquema: 'light' | 'dark', acento: Acento): Pa
 /** Lo que se enseña en el selector: el color de marca en claro, y cómo se llama. */
 export const MUESTRAS_ACENTO: Record<Acento, { etiqueta: string; muestra: string }> = {
   green: { etiqueta: 'Verde', muestra: CLARO.brand },
-  blue: { etiqueta: 'Azul', muestra: PALETAS_ACENTO.blue.claro.brand },
+  pink: { etiqueta: 'Rosa', muestra: PALETAS_ACENTO.pink.claro.brandBright },
+  blue: { etiqueta: 'Azul', muestra: PALETAS_ACENTO.blue.claro.brandBright },
+  purple: { etiqueta: 'Morado', muestra: PALETAS_ACENTO.purple.claro.brandBright },
+  indigo: { etiqueta: 'Índigo', muestra: PALETAS_ACENTO.indigo.claro.brandBright },
   yellow: { etiqueta: 'Amarillo', muestra: PALETAS_ACENTO.yellow.claro.brandBright },
-  orange: { etiqueta: 'Naranja', muestra: PALETAS_ACENTO.orange.claro.brand },
-  pink: { etiqueta: 'Rosa', muestra: PALETAS_ACENTO.pink.claro.brand },
-  white: { etiqueta: 'Blanco', muestra: '#FFFFFF' },
+  orange: { etiqueta: 'Naranja', muestra: PALETAS_ACENTO.orange.claro.brandBright },
 };
 
 // ── Preferencia de aspecto ────────────────────────────────────────────────

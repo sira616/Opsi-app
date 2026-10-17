@@ -119,8 +119,8 @@ const oscuro = leerPaleta(fuente, 'OSCURO');
 let fallos = comprobar('MODO CLARO', claro) + comprobar('MODO OSCURO', oscuro);
 
 const acentos = leerAcentos(fuente);
-if (Object.keys(acentos).length !== 5) {
-  throw new Error(`Esperaba 5 colores premium y leí ${Object.keys(acentos).length}`);
+if (Object.keys(acentos).length !== 6) {
+  throw new Error(`Esperaba 6 colores premium y leí ${Object.keys(acentos).length}`);
 }
 for (const [nombre, { claro: c, oscuro: o }] of Object.entries(acentos)) {
   fallos += comprobar(`COLOR ${nombre.toUpperCase()} · claro`, { ...claro, ...c });

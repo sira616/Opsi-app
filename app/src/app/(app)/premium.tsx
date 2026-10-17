@@ -135,14 +135,13 @@ export default function Premium() {
                       style={[
                         styles.muestra,
                         { backgroundColor: muestra },
-                        color === 'white' && styles.muestraBlanca,
                         bloqueado && styles.muestraBloqueada,
                       ]}
                     >
                       {on ? (
                         <Check
                           size={18}
-                          color={color === 'white' || color === 'yellow' ? '#16181A' : '#FFFFFF'}
+                          color={color === 'yellow' ? '#16181A' : '#FFFFFF'}
                           weight="bold"
                         />
                       ) : null}
@@ -257,7 +256,6 @@ const useStyles = makeStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  muestraBlanca: { borderWidth: 1, borderColor: c.borderStrong },
   muestraBloqueada: { opacity: 0.55 },
   estrella: {
     position: 'absolute',
