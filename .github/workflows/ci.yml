@@ -198,6 +198,14 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # Lo que gitleaks no puede saber: que un valor de aspecto inocente es una
+      # contraseña. Falla si hay una contraseña escrita en el seed, las guías o los
+      # ejemplos de entorno, si vuelve una que ya estuvo publicada, o si alguien añade
+      # una exención nueva al escáner de secretos sin querer. Existe porque el seed de
+      # desarrollo llevó una contraseña en claro en un repositorio público.
+      - name: Ninguna contraseña escrita en el repositorio
+        run: npm run check:credenciales
+
       # Falla ante cualquier aviso alto o crítico SIN exención vigente. Las
       # exenciones están en docs/security-waivers.json, con motivo y fecha límite.
       - name: Avisos de dependencias

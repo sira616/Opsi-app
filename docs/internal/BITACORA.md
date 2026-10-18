@@ -439,10 +439,9 @@ sigue cubriéndolas todas.
 porque el cliente tiene que componer el correo **antes** de tener sesión, que es
 justamente cuando no puede preguntarle nada a la base de datos.
 
-**Usuario de desarrollo:** `syreta` / `opsi-dev-2026`, sembrado en
-`supabase/seed/03_usuario_dev.sql`. Es una contraseña conocida escrita en el repositorio:
-vale solo para el Supabase local y hay que borrar ese fichero antes de sembrar en la nube.
-Queda anotado en los pendientes.
+**Usuario de desarrollo:** `syreta`, sembrado en `supabase/seed/03_usuario_dev.sql`. *(Este párrafo
+decía la contraseña, que estaba escrita en el repositorio; ver [D-42](#d-42--ninguna-contraseña-en-el-repositorio--2026-10-18).
+Hoy el seed no lleva ninguna y la de cada ordenador se genera al azar.)*
 
 **Q7 sigue abierta y sube un poco de prioridad**: quien no añada un correo no tiene forma
 de recuperar la contraseña.
@@ -964,6 +963,45 @@ tirado ya no lleva tarjeta (decía «No sé cuándo vence» de algo que ya no es
 **El escáner.** Los botones de cerrar y de la linterna se pegaban al notch y no se podían tocar. La barra baja ahora un mínimo propio
 (lo que mide una barra de estado: la real en Android, ~47 en iPhone con recorte) además del área segura, porque dentro de un modal a
 pantalla completa algunos móviles dan 0; y los botones tienen más zona de toque. **No se ha podido ver en un móvil con notch.**
+
+### D-42 · Ninguna contraseña en el repositorio · 2026-10-18
+
+**Qué pasó.** El seed de desarrollo (`supabase/seed/03_usuario_dev.sql`) llevaba **una contraseña en claro** para las
+cuentas `syreta` y `compi`, repetida en dos guías (`SETUP.md`, `MOVIL.md`) y en la bitácora. Entró en el commit
+`30df84a` el **2026-09-21** y el repositorio era **público desde su creación (2026-09-19)**: estuvo a la vista de cualquiera
+**casi un mes**, hasta que se hizo privado el 2026-10-18. Las cuentas solo existen en el Supabase LOCAL (no hay proyecto
+en la nube), así que lo expuesto era la base de desarrollo de un ordenador y nada más; pero era un fallo, y evitable.
+
+**Por qué no lo cazó nada.** Dos cosas, las dos nuestras:
+
+1. **Se anotó como pendiente en lugar de impedirse.** «Borrar el seed antes de publicar» estaba en `PENDIENTES.md` desde el
+   primer día, con el repositorio ya público: el aviso decía que había que quitarlo *antes de publicar* cuando ya estaba
+   publicado. Una nota en un documento no es un control.
+2. **El escáner de secretos tenía una excepción para esa contraseña** (`.gitleaks.toml`), añadida «a propósito» porque el
+   valor «solo existe en local». Una puerta con una excepción para lo único que debía cazar no es una puerta.
+
+**Qué cambia.**
+
+- **Ya no hay ninguna contraseña en el repositorio.** El seed crea las cuentas con una contraseña aleatoria descartada; la
+  real la genera `npm run dev:cuentas` (lo llama `npm run up`) **al azar en cada ordenador**, la guarda en
+  `.dev-cuentas.local` (git lo ignora) y la escribe en la base local. Las guías lo explican sin valor alguno.
+- **La excepción del escáner se borra**, y la contraseña publicada **se rota**: se verificó que con ella ya no se puede entrar
+  (HTTP 400) y con la nueva sí.
+- **Una puerta nueva en la CI** (`npm run check:credenciales`, trabajo «Secretos y dependencias»): falla si hay una
+  contraseña escrita en el seed, las guías o los ejemplos de entorno, si vuelve una de las que ya estuvieron publicadas (se
+  guarda su SHA-256, que no la revela), o si alguien añade una excepción nueva a `.gitleaks.toml`. **Probada por mutación**:
+  abrir cada agujero a propósito (un `crypt('…')` con literal, un «contraseña: valor», una excepción nueva, la contraseña
+  vieja suelta, una tabla con una contraseña) y ver que salta.
+
+**Lo que NO se arregla con esto (y hay que decidir).**
+
+- **Sigue en la historia de git.** Hacer el repositorio privado corta el acceso de ahora, no lo ya visto: el tráfico de los
+  últimos 14 días marcaba 418 clones de 129 clonadores distintos (la mayoría serán bots y la propia CI; no se puede
+  distinguir) y ningún fork ni estrella. La contraseña ya no abre nada (rotada), pero **antes de volver a hacerlo público hay
+  que purgar la historia** (`git filter-repo --replace-text` sobre todas las ramas y *force-push*, con las PR abiertas
+  rehechas) o publicar un repositorio nuevo desde una foto limpia.
+- **`main` ya no está protegida**: la protección de ramas no existe en un repositorio privado de una cuenta gratuita (GitHub
+  responde 403). Hasta que sea público otra vez o se pase a Pro, nada impide empujar a `main` ni exige las 4 comprobaciones.
 
 ### D-43 · Tus productos como almacén, elegir nevera al guardarlos y «lo que más gastas» con tope · 2026-10-18
 
@@ -2155,6 +2193,22 @@ sobre una pantalla de pila, y la tarjeta de fecha con algo ya abierto o con el c
 valen dentro de una plantilla: escritos tal cual en un fichero TSX son un error de sintaxis (lo dijo Metro).
 (2) Verificar el flujo de «terminar» pasa por la confirmación («Sí, se ha terminado»): la primera vez se probó con un texto que
 no existía y se vio «no pasa nada» cuando lo que no pasaba era el clic.
+
+### 2026-10-18 (sesión 35) · La contraseña de desarrollo, fuera del repositorio
+
+**Hecho** ([D-42](#d-42--ninguna-contraseña-en-el-repositorio--2026-10-18)): se averiguó desde cuándo estaba expuesta
+(commit `30df84a`, 2026-09-21; repositorio público desde 2026-09-19), se quitó de los cinco ficheros que la tenían, se borró la
+excepción del escáner de secretos, se generan contraseñas aleatorias por ordenador (`npm run dev:cuentas`), se **rotó** la
+publicada y se añadió la puerta `check:credenciales` a la CI, probada por mutación.
+
+**Verificado aquí:** la contraseña publicada da HTTP 400 contra el Auth local y la nueva 200, para `syreta` y `compi`; la puerta
+pasa sobre el árbol limpio y **falla** al abrir cada uno de los cinco agujeros; `db:check` con el seed nuevo.
+
+**Sin verificar:** `npm run up` entero con la contraseña aleatoria (se probó la función y la base, no el script completo con un
+reset), y el trabajo de la CI con el paso nuevo (se verá en la PR).
+
+**Se aprendió:** una excepción en un escáner de secretos para un valor concreto lo ciega justo para ese valor, y «anotado en
+pendientes» no protege nada: lo que no puede pasar tiene que fallar en la CI.
 
 ### 2026-10-18 (sesión 36) · Almacén de productos, nevera al guardar, «lo que más gastas» con tope y menos texto
 

@@ -1,8 +1,17 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Usuarios de desarrollo.
 --
---     usuario:     syreta   contraseña: opsi-dev-2026
---     usuario:     compi    contraseña: opsi-dev-2026
+--     usuario:     syreta
+--     usuario:     compi
+--
+-- SIN CONTRASEÑA CONOCIDA. Este fichero crea las dos cuentas con una contraseña
+-- ALEATORIA que nadie sabe, y la contraseña de verdad la pone `npm run dev:cuentas`
+-- (lo llama `npm run up`): la genera al azar en TU ordenador, la guarda en un fichero
+-- que git ignora (`.dev-cuentas.local`) y la escribe en la base local. Así no hay
+-- ninguna contraseña en el repositorio, ni en su historia futura.
+--
+-- Antes la contraseña estaba aquí, en claro, y el repositorio era público: cualquiera
+-- podía leerla. Ver `scripts/check-credenciales.mjs`, que ahora lo impide en la CI.
 --
 -- Son DOS y no uno desde que existen las neveras compartidas: crear una,
 -- invitar, aceptar sin salir de la propia, echar y los dos límites (neveras por
@@ -48,16 +57,17 @@ declare
   v_usuario  text;
   v_id       uuid;
   v_email    text;
-  v_password text := 'opsi-dev-2026';
+  -- Aleatoria y descartada: no se guarda en ningún sitio. Las cuentas quedan sin
+  -- contraseña usable hasta que `npm run dev:cuentas` les pone la de esta máquina.
+  v_password text := gen_random_uuid()::text;
 begin
   -- ── La guarda: esto solo se siembra en el Supabase LOCAL ─────────────────
   --
-  -- Estas cuentas tienen una contraseña escrita en el repositorio. El aviso de
-  -- arriba dice que hay que borrar el fichero antes de enlazar un proyecto de la
-  -- nube, pero eso depende de acordarse en el momento de más prisa: la CLI sube
-  -- los seeds con `supabase db push --include-seed` y con `supabase db reset
-  -- --linked` (que además «empieza limpio», que es justo lo que uno hace al
-  -- estrenar un proyecto).
+  -- Estas son cuentas de desarrollo y no deben existir en un proyecto de la nube.
+  -- Depender de acordarse de borrar el fichero antes de enlazar uno es frágil en el
+  -- momento de más prisa: la CLI sube los seeds con `supabase db push --include-seed`
+  -- y con `supabase db reset --linked` (que además «empieza limpio», que es justo lo
+  -- que uno hace al estrenar un proyecto).
   --
   -- La base local trae `app.settings.jwt_secret` con el secreto por defecto de la
   -- CLI, que es público; un proyecto en la nube tiene otro, o ninguno. Si no es

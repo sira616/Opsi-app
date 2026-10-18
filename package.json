@@ -22,6 +22,7 @@
     "db:diff": "supabase db diff",
     "db:test": "supabase test db",
     "dev:plan": "node scripts/dev-plan.mjs",
+    "dev:cuentas": "node scripts/dev-cuentas.mjs",
     "db:lint": "supabase db lint --level warning",
     "types": "node scripts/gen-types.mjs",
     "link": "supabase link",
@@ -34,6 +35,7 @@
     "app:tunnel": "npm run --workspace app start -- --tunnel",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:gtin": "node scripts/check-gtin.mjs",
+    "check:credenciales": "node scripts/check-credenciales.mjs",
     "test:funciones": "node --test \"supabase/functions/**/*.test.ts\"",
     "test:app": "node --test \"app/src/**/*.test.ts\""
   },
