@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-19** (sesión 34)
+> Última actualización: **2026-10-18** (sesión 34)
 
 ---
 
@@ -50,7 +50,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **34 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **13 ficheros pgTAP, 446 tests** contra pgTAP real · `db:check`: **641 comprobaciones** · `test:app`: 10, la lógica de calendario en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **13 ficheros pgTAP, 446 tests** contra pgTAP real · `db:check`: **641 comprobaciones** en PGlite · `test:app`: 10, la lógica de calendario · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -934,7 +934,7 @@ lo que hay?». Se borra `chat.tsx`, que era un «Próximamente».
 
 **La versión pasa a 0.5.0** (nuevo hito: el catálogo personal de Premium).
 
-### D-41 · Tus productos como inventario con ficha, elegir lista al apuntar, una sola tarjeta de fecha y 10 listas · 2026-10-19
+### D-41 · Tus productos como inventario con ficha, elegir lista al apuntar, una sola tarjeta de fecha y 10 listas · 2026-10-18
 
 Cinco peticiones y una corrección sobre lo que hacía «apuntar».
 
@@ -2108,9 +2108,9 @@ calendario como hoja en nativo y la hoja de opciones sobre una pestaña con la b
 **Se aprendió:** `$$` dentro de un `node -e "…"` en bash se convierte en el PID del proceso y rompe un SQL; un SQL con
 dólares se escribe con la herramienta de edición, nunca por la línea de comandos.
 
-### 2026-10-19 (sesión 34) · Productos con ficha, elegir lista, una tarjeta de fecha, 10 listas y el escáner
+### 2026-10-18 (sesión 34) · Productos con ficha, elegir lista, una tarjeta de fecha, 10 listas y el escáner
 
-**Hecho** ([D-41](#d-41--tus-productos-como-inventario-con-ficha-elegir-lista-al-apuntar-una-sola-tarjeta-de-fecha-y-10-listas--2026-10-19)):
+**Hecho** ([D-41](#d-41--tus-productos-como-inventario-con-ficha-elegir-lista-al-apuntar-una-sola-tarjeta-de-fecha-y-10-listas--2026-10-18)):
 la pantalla de productos con su ficha y su filtro de escaneados y a mano; la elección de lista (o listas) al apuntar, al agotar algo
 y desde la ficha; la tarjeta única de fecha; premium a 10 listas; y los botones de arriba del escáner.
 
