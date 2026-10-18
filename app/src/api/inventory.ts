@@ -85,6 +85,12 @@ export type PriorityItem = {
   opened_at: string | null;
   /** Cuándo empezó la congelación en curso. La lista cuenta desde aquí. */
   frozen_at: string | null;
+  /**
+   * Cuándo se descongeló por última vez. Se queda puesto aunque el estado cambie (al
+   * usar una parte o abrirlo deja de ser «descongelado»), y es lo que impide
+   * recomendar congelar de nuevo algo que ya se descongeló.
+   */
+  thawed_at: string | null;
 };
 
 /** Lo del detalle: todo lo de la lista más las fechas candidatas. */
@@ -97,7 +103,6 @@ export type ItemDetail = PriorityItem & {
    */
   household_id: string;
   frozen_days: number;
-  thawed_at: string | null;
   limit_date: string | null;
   date_kind: DateKind | null;
   date_source: DateSource | null;
@@ -164,7 +169,7 @@ export type Autor = Pick<
 const PRIORITY_FIELDS =
   'id, name, state, location, unit_family, display_unit, initial_quantity, ' +
   'remaining_quantity, priority, effective_limit_date, effective_date_reason, ' +
-  'effective_date_source, date_kind, days_left, frozen_at, category, opened_at';
+  'effective_date_source, date_kind, days_left, frozen_at, thawed_at, category, opened_at';
 
 /**
  * Lo que alimenta «Consumir primero» EN UNA NEVERA.
