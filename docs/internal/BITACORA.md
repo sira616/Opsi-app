@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-18** (sesión 33)
+> Última actualización: **2026-10-19** (sesión 34)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **33 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **34 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **13 ficheros pgTAP, 439 tests** contra pgTAP real · `db:check`: **633 comprobaciones** · `test:app`: 10, la lógica de calendario en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **13 ficheros pgTAP, 446 tests** contra pgTAP real · `db:check`: **641 comprobaciones** · `test:app`: 10, la lógica de calendario en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -933,6 +933,37 @@ rastro. Si se quiere guardar algo sin añadirlo, entonces sí hará falta una ta
 lo que hay?». Se borra `chat.tsx`, que era un «Próximamente».
 
 **La versión pasa a 0.5.0** (nuevo hito: el catálogo personal de Premium).
+
+### D-41 · Tus productos como inventario con ficha, elegir lista al apuntar, una sola tarjeta de fecha y 10 listas · 2026-10-19
+
+Cinco peticiones y una corrección sobre lo que hacía «apuntar».
+
+**Tus productos, un inventario con ficha.** Deja de ser una lista corta dentro de Premium y pasa a ser su propia pantalla
+(`/productos`): buscador, filtro **Todos / Escaneados / A mano** (con su cuenta) y una ficha por producto. La ficha dice de dónde
+sale («Escaneado · ficha de Open Food Facts», «Escaneado · ficha guardada en tu nevera» o «Lo añadiste a mano»), su código si lo
+tiene, el pasillo, la cantidad de la última vez, **cuánto hay ahora en la nevera**, y cuántas veces y cuándo lo añadiste. De
+ella se guarda en la nevera (la hoja rápida) o se apunta en la lista. «Escaneado» es tener código de barras; lo escrito a mano
+no lo tiene. `my_known_products` cambia lo que devuelve (hubo que borrarla y crearla, no se puede cambiar el tipo con
+`create or replace`). **Sin foto del producto** a propósito: el móvil no llama a terceros (el catálogo solo lo consulta el
+servidor), y cargar una imagen de Open Food Facts sería hacerlo.
+
+**Elegir en qué lista se apunta.** Lo que se apunta —desde la ficha, y al agotar algo— sale con una casilla por lista, con la
+principal marcada, y se apunta en **todas las elegidas**. Con una sola lista no hay nada que elegir y se hace directamente.
+Esto responde a la queja de que «apuntar» solo recomendaba el producto: apuntar **añade la línea** a cada lista elegida
+(verificado: una línea en cada una); lo que recomienda son las sugerencias de «Se te acabó» de dentro de la lista. Si la persona
+tiene encendido apuntar lo que se acaba, se apunta solo, sin preguntar, y va a la lista principal: elegir es de cuando se pregunta.
+
+**Una sola tarjeta de fecha.** «Fecha límite» y «Una vez abierto» eran dos tarjetas que se pisaban. Ahora es una: cuándo vence
+(grande, con el día debajo) y, solo si todavía sirve —sin abrir y sin vencer—, una línea «Una vez abierto: 3 días» (con «mejor en
+la nevera» si no es donde lo tienes). Abierto, la fecha de arriba ya lleva ese plazo, y repetirlo sería contarlo dos veces. De dónde
+sale cada dato va detrás de **una** «i». Lo único a la vista que protege a alguien: «No te lo comas» si está caducado. Lo agotado o
+tirado ya no lleva tarjeta (decía «No sé cuándo vence» de algo que ya no está).
+
+**Listas: 3 y 10.** El tope de premium baja de 20 a 10 (migración `20261019100000`).
+
+**El escáner.** Los botones de cerrar y de la linterna se pegaban al notch y no se podían tocar. La barra baja ahora un mínimo propio
+(lo que mide una barra de estado: la real en Android, ~47 en iPhone con recorte) además del área segura, porque dentro de un modal a
+pantalla completa algunos móviles dan 0; y los botones tienen más zona de toque. **No se ha podido ver en un móvil con notch.**
 
 ## 3. Convenciones
 
@@ -2076,3 +2107,24 @@ calendario como hoja en nativo y la hoja de opciones sobre una pestaña con la b
 
 **Se aprendió:** `$$` dentro de un `node -e "…"` en bash se convierte en el PID del proceso y rompe un SQL; un SQL con
 dólares se escribe con la herramienta de edición, nunca por la línea de comandos.
+
+### 2026-10-19 (sesión 34) · Productos con ficha, elegir lista, una tarjeta de fecha, 10 listas y el escáner
+
+**Hecho** ([D-41](#d-41--tus-productos-como-inventario-con-ficha-elegir-lista-al-apuntar-una-sola-tarjeta-de-fecha-y-10-listas--2026-10-19)):
+la pantalla de productos con su ficha y su filtro de escaneados y a mano; la elección de lista (o listas) al apuntar, al agotar algo
+y desde la ficha; la tarjeta única de fecha; premium a 10 listas; y los botones de arriba del escáner.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **446** (los de la ficha: código, origen, cuánto hay ahora, la primera
+y la última vez; y los 10 de premium); `db:check` **641**; y **en el navegador** con la cuenta de pruebas: «tus productos» con uno
+escaneado y uno a mano (etiquetas, filtro, ficha con su código); «apuntarlo en la lista» con dos listas, eligiendo las dos (una línea
+en cada una en la base de datos); terminar un elemento y que salga «¿En qué lista lo apunto?» con las dos, y apuntarlo en las dos
+(también verificado en la base de datos); y la tarjeta única de fecha («En 5 días», el día, «Una vez abierto: 3 días»). Lo
+creado se borró, eventos y la segunda lista incluidos.
+
+**Sin verificar:** nada en un móvil. **El escáner con notch** (se subió el margen, pero no se ha visto en uno), la ficha como hoja
+sobre una pantalla de pila, y la tarjeta de fecha con algo ya abierto o con el consumo preferente pasado.
+
+**Se aprendió:** (1) los escapes de una plantilla de JavaScript (la barra invertida delante de la comilla y del dólar con llave) solo
+valen dentro de una plantilla: escritos tal cual en un fichero TSX son un error de sintaxis (lo dijo Metro).
+(2) Verificar el flujo de «terminar» pasa por la confirmación («Sí, se ha terminado»): la primera vez se probó con un texto que
+no existía y se vio «no pasa nada» cuando lo que no pasaba era el clic.
