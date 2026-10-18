@@ -12,6 +12,7 @@ import { fetchSettings } from '@/api/settings';
 import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
 import { Nota } from '@/features/ajustes/ui';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { productoParaNevera } from '@/features/productos/destino';
 import { HojaFicha } from '@/features/productos/HojaFicha';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { IconoComida } from '@/shared/lib/iconos-comida';
@@ -23,12 +24,13 @@ import { fonts, makeStyles, radius, space, tabular, touchTarget, useTheme, useTy
 type Filtro = 'todos' | 'escaneados' | 'a_mano';
 
 /**
- * Tus productos: un inventario de lo que has añadido, con su ficha.
+ * Tus productos: el almacén de lo que has registrado, con su ficha.
  *
  * Distingue lo **escaneado** (tiene código de barras y ficha de catálogo) de lo **añadido
  * a mano** (solo un nombre), con un filtro y una etiqueta en cada fila. Tocar uno abre su
- * ficha —de dónde sale, su código, cuántas veces lo has añadido y cuánto hay ahora— desde
- * la que se guarda en la nevera o se apunta en una o en varias listas.
+ * ficha —de dónde sale, su código, su pasillo y su cantidad— desde la que se guarda en una
+ * nevera (la que se elija) o se apunta en una o en varias listas. No cuenta nada: ni cuántas
+ * veces se ha comprado ni cuánto hay ahora; para eso está el inventario de la nevera.
  *
  * Es de Premium ⭐ y lo comprueba el servidor (`my_known_products`); aquí el candado solo
  * evita pedir lo que se va a rechazar. No hay una tabla: sale de los elementos que ya
@@ -40,12 +42,13 @@ export default function Productos() {
   const c = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { activa } = useNeveraActual();
+  const { neveras, activa } = useNeveraActual();
 
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [busca, setBusca] = useState('');
   const [elegido, setElegido] = useState<ProductoConocido | null>(null);
-  const [rapida, setRapida] = useState<ProductoConocido | null>(null);
+  // El producto que se va a guardar y en qué nevera: la hoja rápida necesita las dos cosas.
+  const [rapida, setRapida] = useState<{ p: ProductoConocido; neveraId: string } | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,8 +62,6 @@ export default function Productos() {
   });
 
   const todos = consulta.data ?? [];
-  const escaneados = todos.filter((p) => p.escaneado).length;
-  const aMano = todos.length - escaneados;
 
   const texto = busca.trim().toLowerCase();
   const visibles = todos.filter(
@@ -73,17 +74,17 @@ export default function Productos() {
   );
 
   const apuntar = useMutation({
-    mutationFn: ({ p, listaIds }: { p: ProductoConocido; listaIds: string[] }) =>
+    mutationFn: ({ p, neveraId, listaIds }: { p: ProductoConocido; neveraId: string; listaIds: string[] }) =>
       agregarLineaEnListas(
         {
-          householdId: activa.id,
+          householdId: neveraId,
           name: p.nombre,
-          productId: p.productoId,
+          productId: productoParaNevera(p, neveraId, activa.id),
           cantidad: { unitFamily: p.unitFamily, displayUnit: p.displayUnit, quantity: p.cantidad },
         },
         listaIds,
       ),
-    async onSuccess(resultados, { p }) {
+    async onSuccess(resultados, { p, neveraId }) {
       setError(null);
       const nuevas = resultados.filter(Boolean).length;
       setResultado(
@@ -94,7 +95,7 @@ export default function Productos() {
             : `${p.nombre}: apuntado en ${nuevas} ${nuevas === 1 ? 'lista' : 'listas'}.`,
       );
       setElegido(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.listaDe(activa.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.listaDe(neveraId) });
     },
   });
 
@@ -114,11 +115,7 @@ export default function Productos() {
           <Text style={t.title}>Tus productos</Text>
           <Star size={24} color={c.brandBright} weight="fill" />
         </View>
-        {premium && todos.length > 0 ? (
-          <Text style={t.bodySmall}>
-            {todos.length} {todos.length === 1 ? 'producto' : 'productos'} en {activa.name}
-          </Text>
-        ) : null}
+        {premium && neveras.length > 1 ? <Text style={t.bodySmall}>{activa.name}</Text> : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -129,8 +126,7 @@ export default function Productos() {
           <View style={styles.bloqueo}>
             <Lock size={22} color={c.inkMuted} weight="duotone" />
             <Text style={styles.texto}>
-              Con Opsi Premium ⭐ tienes aquí un inventario de todo lo que has añadido, con su ficha, para
-              guardarlo en la nevera o apuntarlo en la lista de un toque.
+              Con Opsi Premium ⭐ tienes un almacén con los productos que has registrado y su ficha.
             </Text>
           </View>
         ) : null}
@@ -152,14 +148,9 @@ export default function Productos() {
             </View>
 
             <View style={styles.filtros}>
-              <Filtrar valor="todos" actual={filtro} onElegir={setFiltro} etiqueta={`Todos ${todos.length}`} />
-              <Filtrar
-                valor="escaneados"
-                actual={filtro}
-                onElegir={setFiltro}
-                etiqueta={`Escaneados ${escaneados}`}
-              />
-              <Filtrar valor="a_mano" actual={filtro} onElegir={setFiltro} etiqueta={`A mano ${aMano}`} />
+              <Filtrar valor="todos" actual={filtro} onElegir={setFiltro} etiqueta="Todos" />
+              <Filtrar valor="escaneados" actual={filtro} onElegir={setFiltro} etiqueta="Escaneados" />
+              <Filtrar valor="a_mano" actual={filtro} onElegir={setFiltro} etiqueta="A mano" />
             </View>
 
             {resultado ? <Nota texto={resultado} tono="bien" alerta /> : null}
@@ -168,9 +159,7 @@ export default function Productos() {
             {consulta.error ? <ErrorNote message={describeDbError(consulta.error)} /> : null}
 
             {!consulta.isPending && !consulta.error && todos.length === 0 ? (
-              <Text style={styles.texto}>
-                Aquí saldrá lo que añadas a {activa.name}, escaneado o a mano, con su ficha.
-              </Text>
+              <Text style={styles.texto}>Aquí aparecerán los productos que guardes en {activa.name}.</Text>
             ) : null}
             {todos.length > 0 && visibles.length === 0 ? (
               <Text style={styles.texto}>No hay nada que coincida.</Text>
@@ -208,12 +197,8 @@ export default function Productos() {
                         {p.escaneado ? 'Escaneado' : 'A mano'}
                       </Text>
                     </View>
-                    {p.enLaNevera > 0 ? (
-                      <Text style={styles.stock}>Tienes {p.enLaNevera}</Text>
-                    ) : null}
                   </View>
                 </View>
-                <Text style={styles.veces}>×{p.veces}</Text>
               </Pressable>
             ))}
           </>
@@ -224,44 +209,49 @@ export default function Productos() {
         <HojaFicha
           key={elegido.productoId ?? elegido.nombre}
           producto={elegido}
-          householdId={activa.id}
+          neveras={neveras}
+          activaId={activa.id}
           onClose={() => setElegido(null)}
-          onApuntar={async (p, listaIds) => {
-            await apuntar.mutateAsync({ p, listaIds });
+          onApuntar={async (p, neveraId, listaIds) => {
+            await apuntar.mutateAsync({ p, neveraId, listaIds });
           }}
-          onGuardar={(p) => {
+          onGuardar={(p, neveraId) => {
             setElegido(null);
             // Una hoja detrás de otra: se espera a que la primera acabe de bajar
             // (en iOS, dos `Modal` a la vez no se presentan).
-            setTimeout(() => setRapida(p), 300);
+            setTimeout(() => setRapida({ p, neveraId }), 300);
           }}
         />
       ) : null}
 
       {rapida ? (
         <HojaAltaRapida
-          key={rapida.productoId ?? rapida.nombre}
+          key={`${rapida.neveraId}:${rapida.p.productoId ?? rapida.p.nombre}`}
           onClose={() => setRapida(null)}
-          nombre={rapida.nombre}
-          marca={rapida.marca}
-          productoId={rapida.productoId}
-          unitFamily={rapida.unitFamily}
-          netQuantity={rapida.cantidad}
+          nombre={rapida.p.nombre}
+          marca={rapida.p.marca}
+          productoId={productoParaNevera(rapida.p, rapida.neveraId, activa.id)}
+          unitFamily={rapida.p.unitFamily}
+          netQuantity={rapida.p.cantidad}
+          neveraId={rapida.neveraId}
           onEditar={(e) => {
-            const p = rapida;
+            const { p, neveraId } = rapida;
+            const productoId = productoParaNevera(p, neveraId, activa.id);
             setRapida(null);
             router.push({
               pathname: '/alta',
               params: {
-                ...(p.productoId ? { producto: p.productoId } : { nombre: p.nombre }),
+                ...(productoId ? { producto: productoId } : { nombre: p.nombre }),
+                nevera: neveraId,
                 donde: e.location,
                 ...(e.dias !== null ? { dias: String(e.dias) } : {}),
               },
             });
           }}
           onGuardado={(nombre) => {
+            const destino = neveras.find((n) => n.id === rapida.neveraId) ?? activa;
             setRapida(null);
-            setResultado(`${nombre}: guardado en la nevera.`);
+            setResultado(`${nombre}: guardado en ${destino.name}.`);
           }}
         />
       ) : null}
@@ -375,6 +365,4 @@ const useStyles = makeStyles((c) => ({
   etiquetaEscaneado: { backgroundColor: c.brandSoft },
   etiquetaTexto: { fontFamily: fonts.semibold, fontSize: 11, color: c.inkMuted },
   etiquetaTextoEscaneado: { color: c.brandInk },
-  stock: { fontSize: 11.5, fontWeight: '600', color: c.inkMuted },
-  veces: { ...tabular, fontFamily: fonts.semibold, fontSize: 13.5, color: c.brandInk },
 }));

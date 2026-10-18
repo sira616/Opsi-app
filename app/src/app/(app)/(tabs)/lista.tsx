@@ -212,7 +212,7 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
           <View style={styles.resumenTexto}>
             <Text style={styles.resumenTitulo}>
               {completa
-                ? '¡Lista completa!'
+                ? 'Lista completa'
                 : pendientes.length === 0
                   ? 'Nada que comprar'
                   : `${pendientes.length} ${pendientes.length === 1 ? 'cosa' : 'cosas'} por comprar`}

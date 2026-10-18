@@ -29,11 +29,18 @@ export type ProductoGastado = {
 /** El periodo que se mira. Tres meses: lo bastante para que se note, sin que mande lo viejo. */
 export const DIAS_PERIODO = 90;
 
-export async function fetchMasUsados(householdId: string): Promise<ProductoGastado[]> {
+/** Cuántos salen en la pestaña de Premium. La lista completa tiene su pantalla. */
+export const GASTOS_EN_RESUMEN = 5;
+
+/**
+ * Lo más agotado en una nevera, del más gastado al menos. `limite` es cuántos pide: 6 para
+ * el resumen (5 y uno más, para saber si hay «ver todos») y 200 para la lista entera.
+ */
+export async function fetchMasUsados(householdId: string, limite: number): Promise<ProductoGastado[]> {
   const { data, error } = await supabase.rpc('most_used_products', {
     p_household_id: householdId,
     p_days: DIAS_PERIODO,
-    p_limit: 10,
+    p_limit: limite,
   });
   if (error) throw error;
   return ((data ?? []) as FilaGasto[]).map((fila) => ({
@@ -44,7 +51,11 @@ export async function fetchMasUsados(householdId: string): Promise<ProductoGasta
   }));
 }
 
-/** Algo que ya añadiste, listo para volver a guardarlo o apuntarlo de un toque. */
+/**
+ * Un producto del almacén: lo que ya has añadido alguna vez, con su ficha, listo para volver
+ * a guardarlo o apuntarlo. Es un almacén de productos, no un recuento: no lleva cuántas
+ * veces se ha comprado ni cuánto hay ahora.
+ */
 export type ProductoConocido = {
   /** El producto del catálogo, si se escaneó. Lo escrito a mano no lo tiene. */
   productoId: string | null;
@@ -61,15 +72,10 @@ export type ProductoConocido = {
   displayUnit: MeasurementUnit;
   /** Lo que traía la última vez, en unidad base. */
   cantidad: number;
-  veces: number;
-  primeraVez: string;
-  ultimaVez: string;
-  /** Cuánto tienes AHORA en la nevera (lo agotado y lo tirado no cuenta). */
-  enLaNevera: number;
 };
 
 /**
- * Lo que ha añadido ESTA persona a una nevera, sin repetidos y lo último primero.
+ * Lo que ha añadido ESTA persona a una nevera, sin repetidos y por orden alfabético.
  *
  * No hay una tabla de «productos guardados»: sale de los elementos que ya añadió (ver
  * `my_known_products`), así que no hay nada que mantener al día. Lo que se escaneó y nunca
@@ -81,7 +87,7 @@ export async function fetchProductosConocidos(householdId: string): Promise<Prod
     p_limit: 200,
   });
   if (error) throw error;
-  return ((data ?? []) as FilaConocido[]).map((fila) => ({
+  const productos: ProductoConocido[] = ((data ?? []) as FilaConocido[]).map((fila) => ({
     productoId: fila.product_id,
     nombre: fila.product_name,
     marca: fila.brand,
@@ -92,9 +98,6 @@ export async function fetchProductosConocidos(householdId: string): Promise<Prod
     unitFamily: fila.unit_family as UnitFamily,
     displayUnit: fila.display_unit as MeasurementUnit,
     cantidad: Number(fila.quantity),
-    veces: fila.times_added,
-    primeraVez: fila.first_added_at,
-    ultimaVez: fila.last_added_at,
-    enLaNevera: fila.in_stock,
   }));
+  return productos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }

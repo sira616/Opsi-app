@@ -126,8 +126,8 @@ function BloqueCorreo() {
         title="Correo"
         info={
           confirmado
-            ? 'Confirmado. Con él puedes recuperar la contraseña si la olvidas.'
-            : 'Sin correo no hay forma de recuperar la contraseña. Es lo único para lo que se usa.'
+            ? 'Sirve para recuperar la contraseña.'
+            : 'Sin correo no se puede recuperar la contraseña.'
         }
         right={
           confirmado ? (

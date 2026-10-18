@@ -29,32 +29,26 @@ export function SeccionPrivacidad() {
     <Section title="Privacidad y datos">
       <Row
         title="Qué guardo"
-        subtitle="Lo que metes en la nevera, tu lista, el historial de lo que ha pasado con cada cosa y tus ajustes. Nada más."
+        subtitle="Lo que metes en la nevera, tu lista, el historial de cada cosa y tus ajustes."
       />
 
       <Bloque>
         <Row
           title="Qué no sale de este aparato"
-          subtitle="El aspecto claro u oscuro se guarda aquí, no en tu cuenta. Por eso cada aparato puede ir a lo suyo."
+          subtitle="El aspecto claro u oscuro se guarda aquí, no en tu cuenta."
         />
       </Bloque>
 
       <Bloque>
         <Row
           title="Exportar tus datos"
-          subtitle="Llevarte tu inventario, tu lista y tu historial en un fichero, sin tener que copiarlo a mano."
+          subtitle="Llevarte tu inventario, tu lista y tu historial en un fichero."
         />
-        <NotaProximamente
-          fase="Pendiente"
-          que="Todavía no se puede. Falta la pieza que guarda el fichero en el móvil, y una exportación que solo funcione en el navegador no sirve de mucho."
-        />
+        <NotaProximamente fase="Pendiente" que="Todavía no se puede." />
       </Bloque>
 
       <Bloque>
-        <Row
-          title="Borrar tu cuenta"
-          subtitle="Todavía no se puede desde la app. Falta una pieza del servidor y no te puedo dar fecha."
-        />
+        <Row title="Borrar tu cuenta" subtitle="Todavía no se puede desde la app." />
       </Bloque>
     </Section>
   );

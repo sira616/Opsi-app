@@ -3,11 +3,12 @@ import { Text, View } from 'react-native';
 
 import { Barcode, PencilSimple } from 'phosphor-react-native';
 
+import type { Nevera } from '@/api/household';
 import type { ProductoConocido } from '@/api/premium';
 import { CargandoListas, ElegirListas, useListasElegidas } from '@/features/lista/ElegirListas';
+import { ElegirNevera } from '@/features/neveras/ElegirNevera';
 import { etiquetaCategoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
-import { describeDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { formatQuantity } from '@/shared/lib/units';
@@ -18,49 +19,51 @@ import { fonts, makeStyles, radius, space, tabular, useTheme } from '@/shared/th
 
 type Props = {
   producto: ProductoConocido;
-  householdId: string;
-  /** Guardarlo en la nevera: el padre cierra esta hoja y abre la rápida. */
-  onGuardar: (producto: ProductoConocido) => void;
-  /** Apuntarlo en las listas elegidas. Si falla, lanza. */
-  onApuntar: (producto: ProductoConocido, listaIds: string[]) => Promise<void>;
+  /** Las neveras entre las que elegir adónde va, y la que se está mirando (la de salida). */
+  neveras: Nevera[];
+  activaId: string;
+  /** Guardarlo en la nevera elegida: el padre cierra esta hoja y abre la rápida. */
+  onGuardar: (producto: ProductoConocido, neveraId: string) => void;
+  /** Apuntarlo en las listas elegidas de la nevera elegida. Si falla, lanza. */
+  onApuntar: (producto: ProductoConocido, neveraId: string, listaIds: string[]) => Promise<void>;
   onClose: () => void;
 };
 
 /** De dónde sale el producto, dicho para leerse. */
 export function describirOrigen(p: ProductoConocido): string {
-  if (!p.escaneado) return 'Lo añadiste a mano';
-  return p.origen === 'openfoodfacts'
-    ? 'Escaneado · ficha de Open Food Facts'
-    : 'Escaneado · ficha guardada en tu nevera';
+  if (!p.escaneado) return 'Añadido a mano';
+  return p.origen === 'openfoodfacts' ? 'Escaneado · Open Food Facts' : 'Escaneado';
 }
 
 /**
- * La ficha de un producto de «tus productos»: lo que se sabe de él y qué hacer con él.
+ * La ficha de un producto del almacén: lo que se sabe de él y qué hacer con él.
  *
- * Los datos son los de verdad (`my_known_products`): de dónde salió, su código si lo
- * tiene, su pasillo, cuántas veces lo has añadido y cuánto hay ahora en la nevera. Nada
- * de lo que sale aquí es inventado, y lo que no se sabe (el código de algo escrito a
- * mano) no se enseña como un hueco sino que no sale.
+ * Solo datos del producto: de dónde sale, su código si lo tiene, su pasillo y su cantidad.
+ * Sin recuentos (cuántas veces se ha comprado, cuánto hay): esto es un almacén de lo
+ * registrado, no un historial. Lo que no se sabe (el código de algo escrito a mano) no sale.
  *
- * Dos acciones, en la misma hoja: guardarlo en la nevera (con la hoja rápida) o apuntarlo
- * en la lista. Para apuntarlo la hoja pasa a elegir la lista (o las listas) sin abrir otra
- * encima: en iOS dos hojas a la vez no se presentan.
+ * Dos acciones, y las dos pueden ir a **otra nevera** que la que se está mirando: si hay
+ * más de una, se elige adónde. Para apuntarlo la hoja pasa a elegir la lista (o las listas)
+ * sin abrir otra encima: en iOS dos hojas a la vez no se presentan.
  */
-export function HojaFicha({ producto: p, householdId, onGuardar, onApuntar, onClose }: Props) {
+export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar, onClose }: Props) {
   const styles = useStyles();
   const c = useTheme();
-  const { listas, elegidas, alternar, cargando, error: errorListas } = useListasElegidas(householdId);
+  const [destino, setDestino] = useState(activaId);
+  const { listas, elegidas, alternar, cargando, error: errorListas } = useListasElegidas(destino);
   const [eligiendo, setEligiendo] = useState(false);
   const [apuntando, setApuntando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const variasListas = listas.length > 1;
+  const variasNeveras = neveras.length > 1;
+  const nombreDestino = neveras.find((n) => n.id === destino)?.name ?? '';
 
   async function apuntar(ids: string[]) {
     setApuntando(true);
     setError(null);
     try {
-      await onApuntar(p, ids);
+      await onApuntar(p, destino, ids);
     } catch (caught) {
       setError(describeDbError(caught));
       setApuntando(false);
@@ -94,11 +97,7 @@ export function HojaFicha({ producto: p, householdId, onGuardar, onApuntar, onCl
       {eligiendo ? (
         <>
           {cargando ? <CargandoListas /> : null}
-          {variasListas ? (
-            <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} />
-          ) : (
-            <Text style={styles.valor}>Se apunta en la lista de la compra.</Text>
-          )}
+          {variasListas ? <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} /> : null}
           <ErrorNote message={error ?? errorListas} />
           <View style={styles.botones}>
             <Button
@@ -119,7 +118,7 @@ export function HojaFicha({ producto: p, householdId, onGuardar, onApuntar, onCl
                 <Text style={styles.valor}>{etiquetaCategoria(p.categoria)}</Text>
               </View>
             </Dato>
-            <Dato etiqueta="Cantidad de la última vez">
+            <Dato etiqueta="Cantidad">
               <Text style={styles.valor}>{formatQuantity(p.cantidad, p.displayUnit)}</Text>
             </Dato>
             {p.codigo ? (
@@ -127,21 +126,15 @@ export function HojaFicha({ producto: p, householdId, onGuardar, onApuntar, onCl
                 <Text style={[styles.valor, styles.codigo]}>{p.codigo}</Text>
               </Dato>
             ) : null}
-            <Dato etiqueta="Ahora en la nevera">
-              <Text style={styles.valor}>
-                {p.enLaNevera === 0 ? 'Nada' : p.enLaNevera === 1 ? '1' : String(p.enLaNevera)}
-              </Text>
-            </Dato>
-            <Dato etiqueta="Lo has añadido">
-              <Text style={styles.valor}>
-                {p.veces === 1 ? 'Una vez' : `${p.veces} veces`}
-                {describeDesde(p.ultimaVez) ? ` · la última, ${describeDesde(p.ultimaVez)}` : ''}
-              </Text>
-            </Dato>
           </View>
 
+          <ElegirNevera neveras={neveras} valor={destino} onValor={setDestino} />
+
           <View style={styles.botones}>
-            <Button label="Guardarlo en la nevera" onPress={() => onGuardar(p)} />
+            <Button
+              label={variasNeveras ? `Guardarlo en ${nombreDestino}` : 'Guardarlo en la nevera'}
+              onPress={() => onGuardar(p, destino)}
+            />
             <Button
               label="Apuntarlo en la lista"
               variant="quiet"

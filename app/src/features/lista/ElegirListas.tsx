@@ -22,19 +22,26 @@ export function useListasElegidas(householdId: string) {
     queryKey: queryKeys.listasDe(householdId),
     queryFn: () => fetchListas(householdId),
   });
-  const [elegidas, setElegidas] = useState<string[] | null>(null);
+  // Lo elegido va ligado a la NEVERA para la que se eligió: si se cambia de nevera, lo
+  // elegido en la anterior no vale y se vuelve a la principal.
+  const [seleccion, setSeleccion] = useState<{ para: string; ids: string[] } | null>(null);
 
   const listas = consulta.data ?? [];
   const principal = listas[0]?.id;
+  const elegidas = seleccion && seleccion.para === householdId ? seleccion.ids : null;
   // Lo elegido que ya no existe (se borró la lista) se descarta.
   const validas = (elegidas ?? (principal ? [principal] : [])).filter((id) =>
     listas.some((l) => l.id === id),
   );
 
   function alternar(id: string) {
-    setElegidas((actual) => {
-      const base = actual ?? (principal ? [principal] : []);
-      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    setSeleccion((actual) => {
+      const previas = actual && actual.para === householdId ? actual.ids : null;
+      const base = previas ?? (principal ? [principal] : []);
+      return {
+        para: householdId,
+        ids: base.includes(id) ? base.filter((x) => x !== id) : [...base, id],
+      };
     });
   }
 

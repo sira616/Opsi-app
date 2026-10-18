@@ -66,7 +66,7 @@ export function HojaApuntar({ item, resultado, onApuntar, onClose }: Props) {
       <Text style={styles.texto}>
         {resultado
           ? `«${item.name}» está en ${resultado.listas === 1 ? 'la lista' : 'las listas'} de la compra.`
-          : `Se te ha acabado «${item.name}».${variasListas ? ' Elige dónde apuntarlo.' : ''}`}
+          : `Se te ha acabado «${item.name}».`}
       </Text>
 
       {resultado ? (
