@@ -50,7 +50,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **34 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **13 ficheros pgTAP, 446 tests** contra pgTAP real · `db:check`: **641 comprobaciones** en PGlite · `test:app`: 10, la lógica de calendario · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **13 ficheros pgTAP, 448 tests** contra pgTAP real · `db:check`: **644 comprobaciones** en PGlite · `test:app`: 14, la lógica de calendario y el destino de un producto · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -964,6 +964,33 @@ tirado ya no lleva tarjeta (decía «No sé cuándo vence» de algo que ya no es
 **El escáner.** Los botones de cerrar y de la linterna se pegaban al notch y no se podían tocar. La barra baja ahora un mínimo propio
 (lo que mide una barra de estado: la real en Android, ~47 en iPhone con recorte) además del área segura, porque dentro de un modal a
 pantalla completa algunos móviles dan 0; y los botones tienen más zona de toque. **No se ha podido ver en un móvil con notch.**
+
+### D-43 · Tus productos como almacén, elegir nevera al guardarlos y «lo que más gastas» con tope · 2026-10-18
+
+Cuatro peticiones sobre lo que acababa de salir en D-41.
+
+**Tus productos es un almacén, no un historial.** Fuera de la fila y de la ficha: cuántas veces se ha añadido, la primera y la
+última vez, cuánto hay ahora en la nevera. La ficha dice de dónde sale, su código si lo tiene, el pasillo y la cantidad; nada
+más. Las cuentas de los filtros («Escaneados 3») tampoco: el filtro basta. El orden pasa a ser **alfabético**, que es como se
+busca en un almacén. `my_known_products` sigue devolviendo los contadores (no se tocó la base de datos); la app ya no los pide.
+
+**Elegir nevera.** La ficha lleva una fila de neveras (solo si hay más de una) y el botón dice adónde va: «Guardarlo en Piso». Vale
+para las dos acciones: guardarlo (la hoja rápida y el formulario completo, que recibe la nevera por la ruta) y apuntarlo (las
+listas que se ofrecen son las de la nevera elegida; la elección va ligada a ella, y si se cambia de nevera se vuelve a la principal).
+**Una regla que no es obvia:** un producto escaneado se enlaza a su ficha del catálogo solo si esa ficha es del catálogo global
+(`openfoodfacts`) o se guarda en la misma nevera de la que sale. Un código que nadie conocía se recuerda como ficha **privada** de su
+nevera, y el servidor la rechazaría desde otra; en ese caso se guarda solo con el nombre. Vive en `features/productos/destino.ts`, con
+sus tests. La nevera que llega por la ruta del alta solo vale si la persona la tiene: un id suelto no manda a ninguna otra parte.
+
+**«Lo que más gastas»: cinco y «Ver todos».** La pestaña de Premium enseña los cinco primeros y, si hay más, «Ver todos», que abre
+una pantalla (`/gastos`) con la lista entera, del más gastado al menos. `most_used_products` aceptaba hasta 100 productos y ahora
+200 (migración `20261020100000`); la pestaña pide 6 para saber si hay más. Es de Premium igual que antes y lo decide el servidor.
+
+**Textos de relleno.** Fuera «1 escaneado · 5 a mano» del apartado de productos, la frase que repetía lo que ya decía la lista
+(«Lo que más has terminado en… en los últimos 90 días»), «Gracias por apoyar Opsi», «Elige dónde apuntarlo» (el título de la hoja ya
+lo preguntaba), el «¡» de «¡Lista completa!» y varias frases de Privacidad y de Cuenta que explicaban de más. La regla queda escrita
+en `docs/VOZ.md`. **No se tocaron** los textos que esa guía da por aprobados («modo monje», «Por ahí no sale nada», el resumen diario):
+son decisión de voz, no relleno, y quitarlos es cosa de quien lo pida.
 
 ## 3. Convenciones
 
@@ -2128,3 +2155,25 @@ sobre una pantalla de pila, y la tarjeta de fecha con algo ya abierto o con el c
 valen dentro de una plantilla: escritos tal cual en un fichero TSX son un error de sintaxis (lo dijo Metro).
 (2) Verificar el flujo de «terminar» pasa por la confirmación («Sí, se ha terminado»): la primera vez se probó con un texto que
 no existía y se vio «no pasa nada» cuando lo que no pasaba era el clic.
+
+### 2026-10-18 (sesión 36) · Almacén de productos, nevera al guardar, «lo que más gastas» con tope y menos texto
+
+**Hecho** ([D-43](#d-43--tus-productos-como-almacén-elegir-nevera-al-guardarlos-y-lo-que-más-gastas-con-tope--2026-10-18)): la ficha y
+la fila de «tus productos» sin contadores, con orden alfabético; la nevera elegible al guardar o apuntar un producto (con la regla de
+qué productos se pueden enlazar a otra nevera, y su prueba); los cinco primeros de «lo que más gastas» con «Ver todos» y su pantalla;
+`most_used_products` hasta 200; y la limpieza de textos de relleno, con la regla escrita en `docs/VOZ.md`.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **448** (los dos del límite de 200 productos y su rechazo en 201);
+`db:check` **644**; `test:app` **14** (los cuatro del destino de un producto); y **en el navegador** con la cuenta de pruebas y dos
+neveras: la pestaña de Premium con los cinco primeros de ocho y «Ver todos»; la pantalla con los ocho, del más gastado al menos;
+«tus productos» sin «×N» ni «Tienes N»; la ficha con la fila de neveras y el botón «Guardarlo en zzprueba piso»; guardarlo y
+comprobar en la base de datos que cae en esa nevera y no en la de salida; apuntarlo en la lista de la otra nevera (una línea en
+ella, ninguna en la de salida); y el formulario completo abierto con la nevera por la ruta («Se guarda en «zzprueba piso»»). Lo
+creado se borró (elementos, líneas y la segunda nevera) y la cuenta volvió a básica y verde.
+
+**Sin verificar:** nada en un móvil. Un producto escaneado con ficha **privada** guardado en otra nevera (la regla está probada,
+pero no se hizo con un código real) y la fila de neveras con muchas neveras de nombre largo.
+
+**Se aprendió:** (1) escribir con la herramienta de edición un comentario con acentos graves escapados (barra invertida delante)
+deja las barras en el fichero: se coló una en un comentario de `api/premium.ts` y se vio al releerlo. (2) Antes de «limpiar»
+textos conviene mirar `docs/VOZ.md`: parte de lo que parecía relleno era voz aprobada, y se revirtió.

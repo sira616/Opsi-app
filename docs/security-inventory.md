@@ -35,7 +35,8 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/(tabs)/inventario` | Sesión | «Consumir primero» de la nevera activa |
 | `(app)/(tabs)/ajustes` | Sesión | Perfil, aspecto, avisos, mis neveras, cuenta, privacidad |
 | `(app)/(tabs)/lista` | Sesión | Las listas de la compra de la nevera activa |
-| `(app)/productos` | Sesión | Tus productos ⭐: inventario con buscador, filtro (escaneados / a mano) y una ficha por producto, desde la que se guarda en la nevera o se apunta en una o varias listas. Premium lo decide el servidor |
+| `(app)/productos` | Sesión | Tus productos ⭐: almacén con buscador, filtro (escaneados / a mano) y una ficha por producto, desde la que se guarda en la nevera que se elija o se apunta en una o varias listas de ella. Premium lo decide el servidor |
+| `(app)/gastos` | Sesión | Lo que más gastas ⭐, entero: la pestaña de Premium enseña cinco y esta pantalla la lista completa. Premium lo decide el servidor |
 | `(app)/(tabs)/premium` | Sesión | Pestaña de Opsi Premium ⭐ (donde estaba el chat): color de la app, tus productos y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
@@ -84,7 +85,7 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 | `today_for_user` | invoker | Lee solo la zona horaria de quien llama |
 | `my_plan` | invoker | El plan (`basic` o `premium`) de quien llama, de su propia fila; sin fila, `basic` |
 | `my_known_products` | invoker | **Premium** (si no, 42501): la **ficha** de lo que **ha añadido quien llama** a una nevera, sin repetidos (código y origen —escaneado o a mano—, pasillo, veces y cuánto hay ahora). No hay tabla: sale de `inventory_items` con su RLS y `created_by = auth.uid()`, así que lo de otra persona o de otra nevera no sale. Lo que hay ahora cuenta toda la nevera: es de la nevera |
-| `most_used_products` | invoker | **Premium** (si no, 42501): lo que más se ha agotado en una nevera en los últimos días. Lee con la RLS de quien llama, así que una nevera ajena sale vacía |
+| `most_used_products` | invoker | **Premium** (si no, 42501): lo que más se ha agotado en una nevera en los últimos días (hasta 200 productos por llamada). Lee con la RLS de quien llama, así que una nevera ajena sale vacía |
 | `my_households` | invoker | Solo las neveras de quien llama |
 | `create_shared_household` | definer | Límite de neveras por persona (`household_limit`), con bloqueo para que dos llamadas a la vez no lo superen |
 | `update_household` | definer | Solo el dueño; solo nombre e icono, y el icono de la lista cerrada |
