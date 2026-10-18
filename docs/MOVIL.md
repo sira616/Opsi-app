@@ -220,8 +220,8 @@ Pulsa el botón **+** de arriba a la derecha y da de alta algo:
 - **Cuánto** — `1`, y elige **l**
 - **Dónde está** — Nevera
 - **Qué pasillo** — se adivina sola del nombre; tócala solo si no acierta
-- **Ponerle fecha** — márcalo, usa el atajo *3 días*, tipo *Consumo preferente*,
-  origen *Lo pone el envase*
+- **Ponerle fecha** — márcalo: sale con la fecha de hoy. Toca el **+** tres veces (o toca la fecha
+  y elige el día en el calendario), tipo *Consumo preferente*
 
 Guarda y aparecerá en la lista. Tócalo para abrir el detalle, donde están las seis
 acciones: abrir, usar cantidad, congelar, descongelar, terminar y tirar.
