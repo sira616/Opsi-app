@@ -194,11 +194,9 @@ pero la pantalla se queda en blanco o cargando, mira ahí primero.
 
 ## Paso 7 · Entrar
 
-Hay una cuenta de desarrollo ya creada por los seeds:
-
-| Usuario | Contraseña |
-|---|---|
-| `syreta` | `opsi-dev-2026` |
+Hay dos cuentas de desarrollo creadas por los seeds, `syreta` y `compi`. Su contraseña es
+**aleatoria y de tu ordenador**: `npm run up` la imprime al terminar, y `npm run dev:cuentas`
+la vuelve a enseñar. No está escrita en ningún sitio del repositorio.
 
 Si prefieres la tuya, pulsa **Crear una**:
 

@@ -1,6 +1,9 @@
 # Dependencias
 node_modules/
 
+# Contraseñas de las cuentas de desarrollo de ESTE ordenador (las genera npm run dev:cuentas)
+.dev-cuentas.local
+
 # Entorno (nunca se versionan claves)
 .env
 .env.*

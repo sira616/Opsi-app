@@ -22,6 +22,8 @@ import { networkInterfaces } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { asegurarCuentas } from './dev-cuentas.mjs';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_FILE = join(ROOT, 'app', '.env');
 
@@ -177,6 +179,19 @@ if (supabase(['db', 'reset']).status !== 0) {
   );
 }
 
+// ── Las cuentas de desarrollo ─────────────────────────────────────────────
+//
+// El seed las crea con una contraseña aleatoria que nadie sabe (no hay ninguna escrita en
+// el repositorio). La de verdad es de este ordenador: se genera al azar la primera vez, se
+// guarda en `.dev-cuentas.local` (git la ignora) y se aplica aquí tras cada reset.
+const cuentas = asegurarCuentas();
+console.log(
+  cuentas.ok
+    ? green('\n  ✓ Cuentas de desarrollo listas (syreta y compi). Contraseñas abajo.')
+    : red(`\n  ✗ No he podido poner la contraseña de las cuentas de desarrollo: ${cuentas.motivo}`) +
+        dim('\n    Cuando Supabase esté arriba:  npm run dev:cuentas'),
+);
+
 // ── 3. Escribir app/.env ──────────────────────────────────────────────────
 step(3, 'Configurando app/.env…');
 
@@ -278,6 +293,12 @@ console.log(`\n${green(bold('Todo levantado.'))}\n`);
 console.log(`  API      ${apiUrl}`);
 console.log(`  Studio   ${studio}`);
 if (mail) console.log(`  Correo   ${mail}`);
+if (cuentas.ok) {
+  console.log(`\n${bold('Cuentas de desarrollo')} ${dim('(solo este ordenador; en .dev-cuentas.local)')}`);
+  for (const [usuario, contrasena] of Object.entries(cuentas.contrasenas)) {
+    console.log(`  ${usuario.padEnd(8)} ${contrasena}`);
+  }
+}
 // El móvil no puede llegar a 127.0.0.1, así que si la URL apunta ahí hay que
 // decirlo ANTES de que lo descubra con un error que no explica nada.
 if (!personalizada) {

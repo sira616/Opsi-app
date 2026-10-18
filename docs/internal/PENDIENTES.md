@@ -219,7 +219,9 @@ tú.
 
 | | Qué | Por qué |
 |:--:|---|---|
-| 🔴 | **Borrar `supabase/seed/03_usuario_dev.sql`** | Siembra `syreta` con una contraseña escrita en el repositorio. Vale para el Supabase local; sembrarlo en la nube sería regalar una cuenta |
+| ✅ | ~~Borrar `supabase/seed/03_usuario_dev.sql`~~ | **Resuelto 2026-10-18** ([D-42](BITACORA.md#d-42--ninguna-contraseña-en-el-repositorio--2026-10-18)): el seed ya no lleva ninguna contraseña (las genera `npm run dev:cuentas` al azar por ordenador) y la CI lo vigila (`check:credenciales`). Falta borrar el fichero **solo** si algún día se enlaza un proyecto de la nube: el seed ya se niega a sembrar fuera del Supabase local |
+| 🔴 | **La contraseña de desarrollo sigue en la HISTORIA de git** | Estuvo en el repositorio público del 2026-09-21 al 2026-10-18 (commit `30df84a` y los siguientes). Ya está **rotada** y no abre nada, pero está en todos los commits viejos: **antes de volver a hacerlo público hay que purgar la historia** (`git filter-repo --replace-text` sobre todas las ramas y *force-push*, rehaciendo las PR abiertas) o publicar un repositorio nuevo desde una foto limpia |
+| 🔴 | **`main` no está protegida mientras el repositorio sea privado** | La protección de ramas no existe en un repositorio privado de una cuenta gratuita (GitHub responde 403): nada exige ya las 4 comprobaciones ni impide empujar a `main`. Se recupera haciéndolo público otra vez (tras purgar la historia) o con GitHub Pro. Mientras tanto, se sigue yendo siempre por PR |
 | 🟠 | SMTP real | Sin él, quien no añada un correo en Ajustes no puede recuperar su contraseña. Ver Q7 y [D-19](BITACORA.md#d-19--el-usuario-es-la-identidad-el-correo-es-opcional--2026-09-21-matiza-d-13) |
 | 🟠 | **Borrado de cuenta y de datos** | No existe ninguna vía para que un usuario borre su hogar y su historial. Con datos personales en Europa, esto no es opcional. Tampoco hay política de retención |
 | 🟠 | Proyecto de Supabase en **región EU** | Decidido, pero el proyecto aún no está creado |
