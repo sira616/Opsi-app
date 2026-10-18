@@ -10,7 +10,7 @@ import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { adivinarCategoria, etiquetaCategoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { ATAJOS, enDias, fechaLegible, isoEnDias } from '@/shared/lib/fecha-input';
+import { etiquetaFecha, hoyIso, sumarDias } from '@/shared/lib/calendario';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
@@ -20,7 +20,7 @@ import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { HojaInferior } from '@/shared/ui/HojaInferior';
 import { fonts, makeStyles, radius, space, touchTarget, useTheme } from '@/shared/theme/tokens';
 
-import { cantidadInicial, ubicacionSugerida } from './valores';
+import { ATAJOS, cantidadInicial, ubicacionSugerida } from './valores';
 
 const DONDE: { value: StorageLocation; label: string }[] = [
   { value: 'pantry', label: 'Despensa' },
@@ -99,7 +99,7 @@ export function HojaAltaRapida({
         quantity: toBase(Number(cantidad.quantity.replace(',', '.')), cantidad.unit),
         location,
         category: categoria,
-        limitDate: dias === null ? null : isoEnDias(dias),
+        limitDate: dias === null ? null : sumarDias(hoyIso(), dias),
         // Los días los pone una persona: ni del envase ni de la app.
         dateKind: dias === null ? null : 'best_before',
         dateSource: dias === null ? null : 'user',
@@ -109,6 +109,7 @@ export function HojaAltaRapida({
     async onSuccess() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(activa.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.premium }),
         linea ? queryClient.invalidateQueries({ queryKey: queryKeys.lista }) : Promise.resolve(),
       ]);
       onGuardado(nombre);
@@ -177,7 +178,7 @@ export function HojaAltaRapida({
           ))}
         </View>
         {dias !== null ? (
-          <Text style={styles.calculo}>Se guardará el {fechaLegible(enDias(dias))}.</Text>
+          <Text style={styles.calculo}>Se guardará el {etiquetaFecha(sumarDias(hoyIso(), dias))}.</Text>
         ) : null}
       </View>
 

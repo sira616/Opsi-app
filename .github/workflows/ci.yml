@@ -69,6 +69,10 @@ jobs:
       - name: Pruebas de las Edge Functions
         run: npm run test:funciones
 
+      # Las cuentas de calendario del selector de fecha: puras, sin React Native.
+      - name: Pruebas de la lógica de la app
+        run: npm run test:app
+
   # ── El veredicto de verdad: Supabase real en Docker ─────────────────────
   base-de-datos:
     name: Base de datos (Supabase real)

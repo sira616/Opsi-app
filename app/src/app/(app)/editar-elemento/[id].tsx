@@ -25,7 +25,7 @@ import {
 import { CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { aIso, deIso, isoEnDias, problemaDias, problemaFecha } from '@/shared/lib/fecha-input';
+import { hoyIso } from '@/shared/lib/calendario';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { queryKeys } from '@/shared/lib/query';
 import { fromBase, toBase, UNITS, type MeasurementUnit } from '@/shared/lib/units';
@@ -124,17 +124,9 @@ function Formulario({ item }: { item: ItemDetail }) {
   );
   const [unit, setUnit] = useState<MeasurementUnit>(item.display_unit);
   const [hasDate, setHasDate] = useState(item.limit_date !== null);
-  const [dateText, setDateText] = useState(deIso(item.limit_date));
-  // Los días del modo «la calculo yo»: es otro campo porque «7» ahí es una semana.
-  const [diasText, setDiasText] = useState('');
+  // La fecha que ya tiene, o la de hoy si se le va a poner una.
+  const [fecha, setFecha] = useState(item.limit_date ?? hoyIso());
   const [kind, setKind] = useState<DateKind>(item.date_kind ?? 'best_before');
-  // Qué se pregunta: la fecha impresa, o los días. Una fecha que vino del envase se
-  // enseña como tal; cualquier otra (tecleada, estimada, del catálogo) se enseña en
-  // «la calculo yo», con la fecha que hay a la vista y sin tocarla hasta que se elija
-  // un plazo.
-  const [source, setSource] = useState<DateSource>(
-    item.date_source === 'package' || !item.limit_date ? 'package' : 'user',
-  );
   const [error, setError] = useState<string | null>(null);
 
   const guardar = useMutation({
@@ -154,29 +146,14 @@ function Formulario({ item }: { item: ItemDetail }) {
     setError(null);
     if (!name.trim()) return setError('Ponle un nombre, aunque sea «eso verde del cajón».');
 
-    let limitDate: string | null = null;
-    let dateSource: DateSource | null = null;
-    if (hasDate) {
-      if (source === 'user') {
-        if (diasText === '' && item.limit_date) {
-          // «La calculo yo» sin plazo elegido: la fecha que había se queda como estaba.
-          limitDate = item.limit_date;
-          dateSource = item.date_source ?? 'user';
-        } else {
-          const problema = problemaDias(diasText);
-          if (problema) return setError(problema);
-          limitDate = isoEnDias(Number(diasText));
-          dateSource = 'user';
-        }
-      } else {
-        const problema = problemaFecha(dateText);
-        if (problema) return setError(problema);
-        limitDate = aIso(dateText);
-        // Una fecha que no se tocó conserva su origen (puede ser el del catálogo o el
-        // de una estimación): solo lo que se teclea de nuevo lo afirma la persona.
-        dateSource = limitDate === item.limit_date && item.date_source ? item.date_source : 'package';
-      }
-    }
+    // Una fecha que no se tocó conserva su origen (puede ser el del catálogo o el de una
+    // estimación): solo la que se cambia la afirma la persona.
+    const limitDate = hasDate ? fecha : null;
+    const dateSource: DateSource | null = !hasDate
+      ? null
+      : fecha === item.limit_date && item.date_source
+        ? item.date_source
+        : 'user';
 
     let cantidad: { quantity: number; displayUnit: MeasurementUnit } | null = null;
     if (sinAbrir) {
@@ -292,17 +269,7 @@ function Formulario({ item }: { item: ItemDetail }) {
             </Pressable>
 
             {hasDate ? (
-              <CampoFecha
-                source={source}
-                onSource={setSource}
-                dateText={dateText}
-                onDateText={setDateText}
-                diasText={diasText}
-                onDiasText={setDiasText}
-                kind={kind}
-                onKind={setKind}
-                actual={item.limit_date}
-              />
+              <CampoFecha fecha={fecha} onFecha={setFecha} kind={kind} onKind={setKind} />
             ) : null}
           </Seccion>
 

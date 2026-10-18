@@ -17,7 +17,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -113,8 +113,68 @@ if (supabase(['start']).status !== 0) {
 // ── 2. Migraciones y seed ─────────────────────────────────────────────────
 step(2, 'Aplicando migraciones y datos de ejemplo…');
 
+const DB_CONTAINER = process.env.OPSI_DB_CONTAINER ?? 'supabase_db_opsi';
+const STORAGE_CONTAINER = 'supabase_storage_opsi';
+
+/** Lo que devuelve un SQL contra la base local, o null si no se pudo preguntar. */
+function sqlLocal(sql) {
+  const r = spawnSync(
+    'docker',
+    ['exec', '-i', DB_CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1'],
+    { input: sql, encoding: 'utf8' },
+  );
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+
+function dormir(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** La salud de un contenedor según Docker: «healthy», «unhealthy», «starting»… */
+function salud(contenedor) {
+  const r = spawnSync('docker', ['inspect', '-f', '{{.State.Health.Status}}', contenedor], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : 'desconocida';
+}
+
+/**
+ * `supabase db reset` aplica las migraciones y el seed y, AL FINAL, espera a que
+ * Storage esté sano. A veces no lo está («supabase_storage_opsi container is not
+ * ready: unhealthy») y la CLI da todo por fallido cuando la base de datos ya quedó
+ * perfecta. Eso se comprueba antes de rendirse: si la última migración del repo está
+ * aplicada y el seed está, se reinicia Storage y se sigue. Si no, el fallo es de
+ * verdad (una migración rota) y se dice como antes.
+ */
+function dbQuedoBien() {
+  const ficheros = readdirSync(join(ROOT, 'supabase', 'migrations'))
+    .filter((f) => /^\d+_.+\.sql$/.test(f))
+    .sort();
+  const ultima = ficheros.at(-1)?.split('_')[0];
+  const aplicada = sqlLocal('select max(version) from supabase_migrations.schema_migrations;');
+  const conSeed = sqlLocal('select count(*) from public.user_settings;');
+  return Boolean(ultima) && aplicada === ultima && Number(conSeed) > 0;
+}
+
 if (supabase(['db', 'reset']).status !== 0) {
-  die('supabase db reset ha fallado.', 'El error de arriba dice qué migración lo rompió.');
+  if (!dbQuedoBien()) {
+    die('supabase db reset ha fallado.', 'El error de arriba dice qué migración lo rompió.');
+  }
+
+  console.log(
+    `\n${dim('  El reset falló DESPUÉS de aplicar todo: las migraciones y el seed están, y lo que no ha pasado')}` +
+      `\n${dim('  el chequeo de salud es Storage. Lo reinicio y sigo.')}`,
+  );
+  spawnSync('docker', ['restart', STORAGE_CONTAINER], { stdio: 'ignore', shell: true });
+  let estado = salud(STORAGE_CONTAINER);
+  for (let i = 0; i < 20 && estado !== 'healthy'; i++) {
+    dormir(3000);
+    estado = salud(STORAGE_CONTAINER);
+  }
+  console.log(
+    estado === 'healthy'
+      ? green('  ✓ Storage sano. La base de datos está lista.')
+      : red(`  ✗ Storage sigue ${estado}.`) +
+          dim('\n    La app todavía no usa Storage, así que se puede seguir. Si no, reinicia Docker Desktop y repite.'),
+  );
 }
 
 // ── 3. Escribir app/.env ──────────────────────────────────────────────────

@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchSettings, updateSettings, type SettingsPatch } from '@/api/settings';
 import { SeccionAcercaDe } from '@/features/ajustes/SeccionAcercaDe';
 import { SeccionAspecto } from '@/features/ajustes/SeccionAspecto';
-import { SeccionPremium } from '@/features/ajustes/SeccionPremium';
 import { SeccionAvisos } from '@/features/ajustes/SeccionAvisos';
 import { SeccionCuenta } from '@/features/ajustes/SeccionCuenta';
 import { SeccionListaCompra } from '@/features/ajustes/SeccionListaCompra';
@@ -90,8 +89,6 @@ export default function Ajustes() {
 
         {settings.isPending ? <ActivityIndicator color={c.brand} /> : null}
         <ErrorNote message={error ?? (settings.error ? describeDbError(settings.error) : null)} />
-
-        <SeccionPremium plan={data?.plan ?? null} />
 
         <SeccionAspecto />
 

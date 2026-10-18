@@ -35,8 +35,7 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/(tabs)/inventario` | Sesión | «Consumir primero» de la nevera activa |
 | `(app)/(tabs)/ajustes` | Sesión | Perfil, aspecto, avisos, mis neveras, cuenta, privacidad |
 | `(app)/(tabs)/lista` | Sesión | Las listas de la compra de la nevera activa |
-| `(app)/premium` | Sesión | Opsi Premium ⭐: color de la app y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
-| `(app)/(tabs)/chat` | Sesión | «Próximamente» (fase 5) |
+| `(app)/(tabs)/premium` | Sesión | Pestaña de Opsi Premium ⭐ (donde estaba el chat): color de la app, tus productos y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
 | `(app)/elemento/[id]` | Sesión | Detalle y acciones de un elemento |
@@ -83,6 +82,7 @@ Se llaman por RPC (`supabase.rpc`). `anon` no puede ejecutar ninguna.
 | `shelf_life_for_item` | invoker | La RLS del elemento |
 | `today_for_user` | invoker | Lee solo la zona horaria de quien llama |
 | `my_plan` | invoker | El plan (`basic` o `premium`) de quien llama, de su propia fila; sin fila, `basic` |
+| `my_known_products` | invoker | **Premium** (si no, 42501): lo que **ha añadido quien llama** a una nevera, sin repetidos. No hay tabla: sale de `inventory_items` con su RLS y `created_by = auth.uid()`, así que lo de otra persona o de otra nevera no sale |
 | `most_used_products` | invoker | **Premium** (si no, 42501): lo que más se ha agotado en una nevera en los últimos días. Lee con la RLS de quien llama, así que una nevera ajena sale vacía |
 | `my_households` | invoker | Solo las neveras de quien llama |
 | `create_shared_household` | definer | Límite de neveras por persona (`household_limit`), con bloqueo para que dos llamadas a la vez no lo superen |

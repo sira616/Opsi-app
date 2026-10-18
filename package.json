@@ -2,7 +2,7 @@
   "name": "opsi",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Opsi — gestión de alimentos del hogar. Monorepo: app/ (Expo) + supabase/ (Postgres, Auth, Edge Functions).",
   "workspaces": [
     "app"
@@ -18,6 +18,7 @@
     "db:stop": "supabase stop",
     "db:status": "supabase status",
     "db:reset": "supabase db reset",
+    "db:migrate": "supabase migration up",
     "db:diff": "supabase db diff",
     "db:test": "supabase test db",
     "dev:plan": "node scripts/dev-plan.mjs",
@@ -33,7 +34,8 @@
     "app:tunnel": "npm run --workspace app start -- --tunnel",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:gtin": "node scripts/check-gtin.mjs",
-    "test:funciones": "node --test \"supabase/functions/**/*.test.ts\""
+    "test:funciones": "node --test \"supabase/functions/**/*.test.ts\"",
+    "test:app": "node --test \"app/src/**/*.test.ts\""
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

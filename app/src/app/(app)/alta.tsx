@@ -20,7 +20,6 @@ import {
   createItem,
   fetchProducto,
   type DateKind,
-  type DateSource,
   type NewItem,
   type ProductoCatalogo,
   type StorageLocation,
@@ -28,6 +27,7 @@ import {
 import {
   cantidadInicial,
   diasDeRuta,
+  nombreDeRuta,
   ubicacionDeRuta,
   ubicacionSugerida,
 } from '@/features/alta/valores';
@@ -35,7 +35,7 @@ import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { aIso, isoEnDias, problemaDias, problemaFecha } from '@/shared/lib/fecha-input';
+import { hoyIso, sumarDias } from '@/shared/lib/calendario';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
@@ -97,6 +97,7 @@ export default function AltaManual() {
     lista?: string;
     donde?: string;
     dias?: string;
+    nombre?: string;
   }>();
   const codigo = codigoDeRuta(params.codigo);
   const listaId = idDeRuta(params.lista);
@@ -135,6 +136,7 @@ export default function AltaManual() {
       fichaFallo={fichaQ.isError}
       linea={linea}
       listaId={listaId}
+      nombreInicial={nombreDeRuta(params.nombre)}
       inicialDonde={ubicacionDeRuta(params.donde)}
       inicialDias={diasDeRuta(params.dias)}
     />
@@ -148,6 +150,7 @@ function Formulario({
   fichaFallo,
   linea,
   listaId,
+  nombreInicial,
   inicialDonde,
   inicialDias,
 }: {
@@ -158,6 +161,8 @@ function Formulario({
   /** La línea de la lista de la que se parte, si se viene de ahí. */
   linea: LineaLista | null;
   listaId: string | null;
+  /** El nombre con el que se abre, si se viene de «tus productos» con algo escrito a mano. */
+  nombreInicial: string | null;
   /** Lo que se llevaba elegido en la hoja rápida, si se viene de ahí. */
   inicialDonde: StorageLocation | null;
   inicialDias: number | null;
@@ -172,7 +177,7 @@ function Formulario({
   const { activa } = useNeveraActual();
 
   const inicial = cantidadInicial(ficha, linea);
-  const [name, setName] = useState(ficha?.name ?? linea?.name ?? '');
+  const [name, setName] = useState(ficha?.name ?? linea?.name ?? nombreInicial ?? '');
   const [quantity, setQuantity] = useState(inicial.quantity);
   const [unit, setUnit] = useState<MeasurementUnit>(inicial.unit);
   // Dónde se guarda se propone a partir del pasillo (un yogur, a la nevera) y solo
@@ -191,12 +196,11 @@ function Formulario({
   // tiene su propio grupo en la lista: obligar a inventarse una sería
   // exactamente lo que el proyecto se niega a hacer.
   const [hasDate, setHasDate] = useState(inicialDias !== null);
-  const [dateText, setDateText] = useState('');
-  // Los días del modo «la calculo yo». Es otro estado y no el mismo campo
-  // porque son otra cosa: «7» ahí significa una semana, no el día 7.
-  const [diasText, setDiasText] = useState(inicialDias !== null ? String(inicialDias) : '');
+  // El campo nace con el día de hoy, listo para moverlo con el − y el + o para elegir
+  // otro en el calendario. Si se viene de la hoja rápida con un plazo elegido, nace ya
+  // con él.
+  const [fecha, setFecha] = useState(inicialDias !== null ? sumarDias(hoyIso(), inicialDias) : hoyIso());
   const [kind, setKind] = useState<DateKind>('best_before');
-  const [source, setSource] = useState<DateSource>(inicialDias !== null ? 'user' : 'package');
 
   const [error, setError] = useState<string | null>(null);
 
@@ -226,6 +230,8 @@ function Formulario({
       recordarGuardado(guardado.name);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(guardado.householdId) }),
+        // «Tus productos» y «lo que más gastas» cuentan lo que se añade.
+        queryClient.invalidateQueries({ queryKey: queryKeys.premium }),
         // Si venía de la lista, esa línea acaba de quedar comprada.
         listaId ? queryClient.invalidateQueries({ queryKey: queryKeys.lista }) : Promise.resolve(),
       ]);
@@ -236,10 +242,6 @@ function Formulario({
     },
   });
 
-  // El formulario tiene dos modos y cada uno valida lo suyo. Mezclarlos sería
-  // el bug de antes al revés: pedir una fecha donde se escriben días.
-  const porDias = source === 'user';
-
   function onSubmit() {
     setError(null);
 
@@ -247,19 +249,6 @@ function Formulario({
     if (!name.trim()) return setError('Ponle un nombre, aunque sea «eso verde del cajón».');
     if (!Number.isFinite(amount) || amount <= 0) {
       return setError('Pon una cantidad mayor que cero.');
-    }
-
-    let limitDate: string | null = null;
-    if (hasDate) {
-      if (porDias) {
-        const problema = problemaDias(diasText);
-        if (problema) return setError(problema);
-        limitDate = isoEnDias(Number(diasText));
-      } else {
-        const problema = problemaFecha(dateText);
-        if (problema) return setError(problema);
-        limitDate = aIso(dateText);
-      }
     }
 
     mutation.mutate({
@@ -272,9 +261,11 @@ function Formulario({
       quantity: toBase(amount, unit),
       location,
       category,
-      limitDate,
+      // La fecha que se ve en el campo, o ninguna: nunca una que nadie haya puesto.
+      limitDate: hasDate ? fecha : null,
       dateKind: hasDate ? kind : null,
-      dateSource: hasDate ? source : null,
+      // Ya no se pregunta de dónde sale: la puso la persona.
+      dateSource: hasDate ? 'user' : null,
     });
   }
 
@@ -473,16 +464,7 @@ function Formulario({
             </Pressable>
 
             {hasDate ? (
-              <CampoFecha
-                source={source}
-                onSource={setSource}
-                dateText={dateText}
-                onDateText={setDateText}
-                diasText={diasText}
-                onDiasText={setDiasText}
-                kind={kind}
-                onKind={setKind}
-              />
+              <CampoFecha fecha={fecha} onFecha={setFecha} kind={kind} onKind={setKind} />
             ) : null}
           </Seccion>
 

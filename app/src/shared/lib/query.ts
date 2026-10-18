@@ -98,8 +98,12 @@ export const queryKeys = {
   listasDe: (neveraId: string) => ['lista', neveraId, 'listas'] as const,
   linea: (id: string) => ['lista', 'linea', id] as const,
 
+  /** Todo lo de Premium (prefijo): al añadir algo, «tus productos» y «lo que más gastas» cambian. */
+  premium: ['premium'] as const,
   /** Lo que más se gasta en una nevera (premium). */
   masUsados: (neveraId: string) => ['premium', 'mas-usados', neveraId] as const,
+  /** Lo que ya has añadido a una nevera, sin repetidos (premium). */
+  productosConocidos: (neveraId: string) => ['premium', 'productos', neveraId] as const,
 
   settings: ['settings'] as const,
   correo: ['cuenta', 'correo'] as const,

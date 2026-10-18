@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-17** (sesión 32)
+> Última actualización: **2026-10-18** (sesión 33)
 
 ---
 
@@ -47,10 +47,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **32 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **33 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **12 ficheros pgTAP, 420 tests** contra pgTAP real · `db:check`: **610 comprobaciones** en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **13 ficheros pgTAP, 439 tests** contra pgTAP real · `db:check`: **633 comprobaciones** · `test:app`: 10, la lógica de calendario en PGlite · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -899,6 +899,40 @@ enteran de que existen los meses.
 
 **La versión pasa a 0.4.0**: mientras no haya versión pública, el segundo dígito sube con cada hito de producto
 (fases 0, 1, 2 y 4, y la base de Premium) y el tercero con arreglos; la 1.0.0 será la primera de las tiendas.
+
+### D-40 · Una sola fecha, con − y +; «tus productos»; Premium en la barra · 2026-10-18
+
+Tres cambios que se pidieron juntos.
+
+**La fecha, un solo campo.** Se quita lo de «Lo pone el envase» y «La calculo yo» (y con ello el contador de días,
+meses y años de D-39). El campo **nace con la fecha de hoy**; se toca para elegir otro día en un calendario, y un
+**−** a la izquierda y un **+** a la derecha mueven el día de uno en uno (mantenidos, corren: 420 ms de espera y luego
+cada 90). Entra de la misma manera una fecha impresa en el envase (el calendario salta a ella) y un «esto aguanta unos
+días» (unos toques de +). «Ponerle fecha» sigue siendo opcional y apagado: una fecha no se inventa, y con la de hoy
+puesta de salida habría sido fácil guardar una por descuido.
+
+- **Calendario propio, no el del móvil.** Se ve igual en iOS, en Android y en el navegador (donde React Native no tiene
+  el del sistema), sigue el color elegido y se puede probar donde se desarrolla. Lo que se pierde es el aspecto nativo;
+  si se prefiere, se cambia `Calendario` por `@react-native-community/datetimepicker` sin tocar nada más.
+- **Rango:** de hace un año a dentro de cinco. Se puede elegir una fecha pasada (algo que ya caducó), y se dice en rojo.
+- **Ya no se pregunta de dónde sale.** Lo que se guarda desde el formulario es siempre `user` (la puso la persona);
+  `package`, `estimate` y `reference` siguen en el esquema para lo que ponga el sistema, y al editar una fecha sin
+  tocar conserva el origen que tenía. Lo que importa para la seguridad —caducidad o consumo preferente— sigue
+  preguntándose.
+- La cuenta de calendario vive en `shared/lib/calendario.ts`, sin dependencias, con 10 tests (`npm run test:app`, ya en la
+  CI): meses, bisiestos, el cambio de hora y un mes de seis semanas que empieza en lunes.
+
+**Tus productos (premium).** Lo que ya has añadido, para volver a guardarlo en la nevera o apuntarlo en la lista de un
+toque. **No hay tabla nueva**: `my_known_products` agrupa los elementos que añadió **esa persona** (`created_by`), por
+producto del catálogo o, si no hay, por el nombre sin mayúsculas. Una tabla de «favoritos» habría que mantenerla al día
+con los elementos y un día diría otra cosa. Lo que NO sale es lo que se escaneó y no se llegó a guardar: escanear no deja
+rastro. Si se quiere guardar algo sin añadirlo, entonces sí hará falta una tabla.
+
+**Premium, en la barra.** Pasa a ser la tercera pestaña, donde estaba el chat («Opsi»), y sale de Ajustes. El chat
+(fase 5) no vuelve como una sección sino como una burbuja u opción dentro de la nevera, donde se pregunta «¿qué ceno con
+lo que hay?». Se borra `chat.tsx`, que era un «Próximamente».
+
+**La versión pasa a 0.5.0** (nuevo hito: el catálogo personal de Premium).
 
 ## 3. Convenciones
 
@@ -2022,3 +2056,23 @@ de 42501), y `db:check` lo cazó; la solución es no lanzar nada y dejar que la 
 la TRANSACCIÓN: dos filas creadas en el mismo test empatan, y «la primera» deja de estar definida; `clock_timestamp()`.
 (3) `db:reset` borra la base local, y la de la cuenta real vive ahí: para aplicar una migración nueva, `supabase
 migration up`.
+
+### 2026-10-18 (sesión 33) · Una fecha con − y +, tus productos y Premium en la barra
+
+**Hecho** ([D-40](#d-40--una-sola-fecha-con---y--tus-productos-premium-en-la-barra--2026-10-18)): el campo de fecha nuevo
+con su calendario, «tus productos» (`my_known_products`, 19 tests), Premium como pestaña en el sitio del chat, y la
+versión 0.5.0. También el arreglo de `npm run up` (si el reset solo falla por Storage ya no se da por roto) que se quedó
+fuera de la PR anterior, y `npm run db:migrate`.
+
+**Verificado aquí:** `typecheck` y `lint` limpios; pgTAP **439**; `db:check` **633**; `test:app` **10**; y **en el navegador**
+con la cuenta de pruebas: la barra con Inventario, Lista, Premium y Ajustes; «tus productos» con la leche y el pan
+(agrupando lo tecleado distinto); «apuntarlo en la lista» y «guardarlo en la nevera» desde ahí, y «Editar» abriendo el
+alta con el nombre y el plazo; el campo de fecha en un móvil de 375 px (nace con hoy, − y + de uno en uno, el calendario
+cambia de mes y elige día, y el día queda guardado en la base de datos); y editar con la fecha ya puesta. Lo creado se
+borró, eventos incluidos.
+
+**Sin verificar:** nada en un móvil real. **Mantener pulsado el − o el +** (se probó el toque, no la repetición), el
+calendario como hoja en nativo y la hoja de opciones sobre una pestaña con la barra flotante.
+
+**Se aprendió:** `$$` dentro de un `node -e "…"` en bash se convierte en el PID del proceso y rompe un SQL; un SQL con
+dólares se escribe con la herramienta de edición, nunca por la línea de comandos.
