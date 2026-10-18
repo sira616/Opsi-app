@@ -136,6 +136,54 @@ select is(
   'lo último que añadiste va primero'
 );
 
+-- La ficha: de dónde sale, y cuánto hay ahora.
+select is(
+  (select barcode from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where product_name = 'Yogur natural'),
+  '849999000111',
+  'lo escaneado trae su código de barras'
+);
+
+select is(
+  (select data_source from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where product_name = 'Yogur natural'),
+  'user',
+  'y de dónde salió'
+);
+
+select is(
+  (select barcode from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where product_name = 'Pan'),
+  null,
+  'lo escrito a mano no tiene código'
+);
+
+select is(
+  (select in_stock from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where lower(product_name) = 'leche'),
+  2,
+  'hay dos leches en la nevera ahora'
+);
+
+select lives_ok(
+  $$select public.finish_item((select id from public.inventory_items where initial_quantity = 1000 and lower(trim(name)) = 'leche'))$$,
+  'se acaba una'
+);
+
+select is(
+  (select in_stock from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where lower(product_name) = 'leche'),
+  1,
+  'y lo agotado ya no cuenta como lo que tienes'
+);
+
+select is(
+  (select first_added_at < last_added_at from public.my_known_products(current_setting('opsi.priv_ana')::uuid)
+    where lower(product_name) = 'leche'),
+  true,
+  'la primera vez es anterior a la última'
+);
+
 select is(
   (select count(*) from public.my_known_products(current_setting('opsi.priv_ana')::uuid, 2)),
   2::bigint,
@@ -178,9 +226,9 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$select * from public.my_known_products(current_setting('opsi.priv_ana')::uuid, 101)$$,
+  $$select * from public.my_known_products(current_setting('opsi.priv_ana')::uuid, 201)$$,
   '22023', null,
-  'y pedir más de cien'
+  'y pedir más de doscientos'
 );
 
 reset role;

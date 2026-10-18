@@ -18,11 +18,11 @@ import { fonts, makeStyles, radius, space, touchTarget, useTheme } from '@/share
 
 /**
  * Cuántas listas caben. El servidor es quien manda (`check_shopping_list`: 3 en el plan
- * básico, 20 en premium); estos números solo sirven para no ofrecer un botón que va a
+ * básico, 10 en premium); estos números solo sirven para no ofrecer un botón que va a
  * fallar y para decir el motivo. Si algún día cambian allí y no aquí, el servidor
  * rechaza igualmente y el mensaje sale tal cual.
  */
-const LIMITE: Record<Plan, number> = { basic: 3, premium: 20 };
+const LIMITE: Record<Plan, number> = { basic: 3, premium: 10 };
 
 type Props = {
   householdId: string;

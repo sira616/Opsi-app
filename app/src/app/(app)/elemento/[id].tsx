@@ -16,22 +16,20 @@ import {
 } from 'phosphor-react-native';
 
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
-import { agregarLinea } from '@/api/lista';
+import { agregarLinea, agregarLineaEnListas } from '@/api/lista';
 import { fetchSettings } from '@/api/settings';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
 import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
-import { TarjetaConservacion } from '@/features/elemento/TarjetaConservacion';
+import { HojaApuntar, type ResultadoApuntar } from '@/features/elemento/HojaApuntar';
+import { TarjetaFecha } from '@/features/elemento/TarjetaFecha';
 import { IconoComida } from '@/shared/lib/iconos-comida';
-import { describeDateSource, describeDaysLeft, describeDesde, diasDesde } from '@/shared/lib/dates';
+import { describeDesde } from '@/shared/lib/dates';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { formatQuantity } from '@/shared/lib/units';
-import { Button } from '@/shared/ui/Button';
 import { ConfirmAction } from '@/shared/ui/ConfirmAction';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { HojaInferior } from '@/shared/ui/HojaInferior';
-import { Info } from '@/shared/ui/Info';
 import {
   fonts,
   makeStyles,
@@ -63,9 +61,9 @@ export default function Detalle() {
 
   const [error, setError] = useState<string | null>(null);
   const [hojaUsar, setHojaUsar] = useState(false);
-  // Lo que se acaba de hacer con la lista al agotarse algo: preguntar, o avisar de
-  // que ya se apuntó (solo si la persona tiene encendido apuntar lo que se acaba).
-  const [lista, setLista] = useState<null | { paso: 'pregunta' } | { paso: 'hecho'; nuevo: boolean }>(
+  // Lo que se acaba de hacer con la lista al agotarse algo: preguntar en qué lista(s), o
+  // avisar de lo que se apuntó (solo si la persona tiene encendido apuntar lo que se acaba).
+  const [lista, setLista] = useState<null | { paso: 'pregunta' } | { paso: 'hecho'; resultado: ResultadoApuntar }>(
     null,
   );
 
@@ -121,7 +119,9 @@ export default function Detalle() {
       return;
     }
     try {
-      setLista({ paso: 'hecho', nuevo: await apuntarEnLista('auto_restock') });
+      // Apuntado solo, sin preguntar: va a la lista principal. Elegir lista es de cuando se pregunta.
+      const nuevo = await apuntarEnLista('auto_restock');
+      setLista({ paso: 'hecho', resultado: { listas: 1, nuevas: nuevo ? 1 : 0 } });
     } catch (caught) {
       setLista(null);
       setError(describeDbError(caught));
@@ -142,6 +142,27 @@ export default function Detalle() {
     });
     await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
     return nuevo;
+  }
+
+  /** Apunta lo que se ha acabado en las listas elegidas, y dice en cuántas era nuevo. */
+  async function apuntarEnListas(listaIds: string[]): Promise<void> {
+    const e = item.data;
+    if (!e) return;
+    const resultados = await agregarLineaEnListas(
+      {
+        householdId: e.household_id,
+        name: e.name,
+        origen: 'manual',
+        productId: e.product_id,
+        cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
+      },
+      listaIds,
+    );
+    await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
+    setLista({
+      paso: 'hecho',
+      resultado: { listas: resultados.length, nuevas: resultados.filter(Boolean).length },
+    });
   }
 
   if (item.isPending) {
@@ -288,14 +309,7 @@ export default function Detalle() {
           </View>
         </View>
 
-        <FechaLimite item={data} />
-
-        {/* La conservación tras abrir se calla en dos casos, y los dos por lo
-            mismo: diría algo que contradice a lo de arriba. Congelado, porque
-            la cuenta atrás está parada y «guárdalo en la nevera» sonaría a
-            sacarlo; cerrado, porque a lo tirado o agotado no se le aconseja
-            nada. */}
-        {!closedOut && !congelado ? <TarjetaConservacion item={data} /> : null}
+        <TarjetaFecha item={data} />
 
         <ErrorNote message={error} />
 
@@ -393,42 +407,15 @@ export default function Detalle() {
         <Historial item={data} />
       </ScrollView>
 
-      {/* Al agotarse algo: ofrecer apuntarlo, o decir que ya se apuntó. */}
-      <HojaInferior
-        visible={lista !== null}
-        onClose={() => setLista(null)}
-        titulo={
-          lista?.paso === 'hecho'
-            ? lista.nuevo
-              ? 'Apuntado en la lista'
-              : 'Ya estaba en la lista'
-            : '¿Lo apunto en la lista?'
-        }
-      >
-        <Text style={styles.listaTexto}>
-          {lista?.paso === 'hecho'
-            ? `«${data.name}» está en la lista de la compra.`
-            : `Se te ha acabado «${data.name}». ¿Lo apunto en la lista de la compra?`}
-        </Text>
-        {lista?.paso === 'pregunta' ? (
-          <>
-            <Button
-              label="Apuntarlo"
-              onPress={async () => {
-                try {
-                  setLista({ paso: 'hecho', nuevo: await apuntarEnLista('manual') });
-                } catch (caught) {
-                  setLista(null);
-                  setError(describeDbError(caught));
-                }
-              }}
-            />
-            <Button label="Ahora no" variant="quiet" onPress={() => setLista(null)} />
-          </>
-        ) : (
-          <Button label="Vale" onPress={() => setLista(null)} />
-        )}
-      </HojaInferior>
+      {/* Al agotarse algo: apuntarlo en la lista (o las listas) que se elijan, o decir que ya se apuntó. */}
+      {lista !== null ? (
+        <HojaApuntar
+          item={data}
+          resultado={lista.paso === 'hecho' ? lista.resultado : null}
+          onApuntar={apuntarEnListas}
+          onClose={() => setLista(null)}
+        />
+      ) : null}
 
       <HojaUsar
         visible={hojaUsar}
@@ -444,92 +431,6 @@ export default function Detalle() {
         onAviso={setError}
       />
     </SafeAreaView>
-  );
-}
-
-/**
- * La parte que justifica que esta pantalla exista.
- *
- * Enseña la fecha límite efectiva Y de dónde sale. Que un brick abierto venza
- * antes de lo que pone el envase parece un error hasta que se explica, y un
- * número sin explicación es justo lo que el proyecto no quiere dar.
- */
-function FechaLimite({ item }: { item: ItemDetail }) {
-  const styles = useStyles();
-  const c = useTheme();
-  const urgent = item.priority === 'high';
-
-  // De dónde salió la fecha de partida. Decir «la que trae el envase» de una
-  // fecha que puso el usuario es inventarse el dato justo que este proyecto se
-  // comprometió a enseñar tal cual.
-  const departida = item.effective_date_source === 'user' ? 'La que pusiste tú' : 'La del envase';
-
-  const explanation =
-    item.effective_date_reason === 'after_thawing'
-      ? 'Se descongeló, y lo descongelado se consume en 24 horas: eso manda sobre cualquier otra fecha.'
-      : item.effective_date_reason === 'after_opening'
-        ? 'Está abierto, y lo que aguanta abierto se acaba antes que la fecha que tenía puesta.'
-        : item.frozen_days > 0
-          ? `${departida}, retrasada los ${item.frozen_days} días que pasó congelado.`
-          : `${departida}.`;
-
-  if (item.state === 'frozen') {
-    // Dos cuentas distintas, y confundirlas sería mentir: `dentro` son los días
-    // del tramo EN CURSO, y frozen_days los de tramos anteriores ya cerrados.
-    const dentro = diasDesde(item.frozen_at);
-    const desde = describeDesde(item.frozen_at);
-
-    return (
-      <View style={[styles.dateCard, styles.dateCardFrozen]}>
-        <View style={styles.frozenHead}>
-          <Snowflake size={15} color={c.frost} weight="fill" />
-          <Text style={[styles.dateLabel, styles.dateLabelFrozen, styles.dateLabelTexto]}>
-            En el congelador
-          </Text>
-        </View>
-
-        <Text style={styles.dateValue}>
-          {dentro === null
-            ? 'Sin cuenta atrás'
-            : dentro === 0
-              ? 'Desde hoy'
-              : `${dentro} ${dentro === 1 ? 'día' : 'días'}`}
-        </Text>
-
-        {desde && dentro !== null && dentro > 0 ? (
-          <Text style={styles.frozenSince}>Lo congelaste {desde}.</Text>
-        ) : null}
-
-      </View>
-    );
-  }
-
-  if (item.effective_limit_date === null) {
-    return (
-      <View style={[styles.dateCard, styles.dateCardNeutral]}>
-        <View style={styles.frozenHead}>
-          <Text style={[styles.dateLabel, styles.dateLabelTexto]}>Sin fecha</Text>
-        </View>
-        <Text style={styles.dateValue}>No sé cuándo vence</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.dateCard, urgent ? styles.dateCardUrgent : styles.dateCardNeutral]}>
-      <View style={styles.frozenHead}>
-        <Text style={[styles.dateLabel, styles.dateLabelTexto, urgent && styles.dateLabelUrgent]}>
-          {item.date_kind === 'expiry' && item.effective_date_reason === 'label'
-            ? 'Caduca'
-            : 'Fecha límite'}{' '}
-          · {describeDateSource(item.effective_date_source)}
-        </Text>
-        <Info titulo="De dónde sale esta fecha" texto={explanation} />
-      </View>
-      <Text style={[styles.dateValue, urgent && styles.dateValueUrgent]}>
-        {describeDaysLeft(item.days_left)}
-      </Text>
-    </View>
   );
 }
 
@@ -640,24 +541,6 @@ const useStyles = makeStyles((c) => ({
   bar: { height: 8, borderRadius: 4, backgroundColor: c.surfaceAlt, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
 
-  dateCard: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.xs + 2 },
-  dateCardNeutral: { backgroundColor: c.surface, borderColor: c.border },
-  dateCardFrozen: { backgroundColor: c.frostSoft, borderColor: c.frost },
-  dateCardUrgent: { backgroundColor: c.expirySoft, borderColor: c.expiryLine },
-  dateLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-    color: c.inkMuted,
-  },
-  dateLabelUrgent: { color: c.expiry },
-  dateLabelFrozen: { color: c.frostInk },
-  dateValue: { ...tabular, fontSize: 22, fontWeight: '600', color: c.ink },
-  dateValueUrgent: { color: c.expiry },
-  frozenHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
-  dateLabelTexto: { flex: 1 },
-  frozenSince: { fontSize: 13, fontWeight: '600', color: c.frostInk },
 
   sectionTitle: {
     fontSize: 11,
