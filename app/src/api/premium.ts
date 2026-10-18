@@ -9,6 +9,7 @@
  */
 
 import type { Database } from '@/lib/database.types';
+import type { Categoria } from '@/shared/lib/categorias';
 import { supabase } from '@/shared/lib/supabase';
 import type { MeasurementUnit, UnitFamily } from '@/shared/lib/units';
 
@@ -49,12 +50,22 @@ export type ProductoConocido = {
   productoId: string | null;
   nombre: string;
   marca: string | null;
+  /** El código de barras. Solo lo escaneado lo tiene. */
+  codigo: string | null;
+  /** De dónde salió la ficha del producto: `openfoodfacts` (catálogo) o `user` (de tu nevera). */
+  origen: string | null;
+  /** Escaneado (tiene código) o añadido a mano. Es lo que separa las dos listas. */
+  escaneado: boolean;
+  categoria: Categoria;
   unitFamily: UnitFamily;
   displayUnit: MeasurementUnit;
   /** Lo que traía la última vez, en unidad base. */
   cantidad: number;
   veces: number;
+  primeraVez: string;
   ultimaVez: string;
+  /** Cuánto tienes AHORA en la nevera (lo agotado y lo tirado no cuenta). */
+  enLaNevera: number;
 };
 
 /**
@@ -67,17 +78,23 @@ export type ProductoConocido = {
 export async function fetchProductosConocidos(householdId: string): Promise<ProductoConocido[]> {
   const { data, error } = await supabase.rpc('my_known_products', {
     p_household_id: householdId,
-    p_limit: 40,
+    p_limit: 200,
   });
   if (error) throw error;
   return ((data ?? []) as FilaConocido[]).map((fila) => ({
     productoId: fila.product_id,
     nombre: fila.product_name,
     marca: fila.brand,
+    codigo: fila.barcode,
+    origen: fila.data_source,
+    escaneado: fila.barcode !== null,
+    categoria: fila.category as Categoria,
     unitFamily: fila.unit_family as UnitFamily,
     displayUnit: fila.display_unit as MeasurementUnit,
     cantidad: Number(fila.quantity),
     veces: fila.times_added,
+    primeraVez: fila.first_added_at,
     ultimaVez: fila.last_added_at,
+    enLaNevera: fila.in_stock,
   }));
 }

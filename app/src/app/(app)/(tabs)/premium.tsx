@@ -4,25 +4,20 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Check, ListChecks, Lock, Package, Star } from 'phosphor-react-native';
+import { CaretRight, Check, Lock, Package, Star } from 'phosphor-react-native';
 
-import { agregarLinea } from '@/api/lista';
 import {
   DIAS_PERIODO,
   fetchMasUsados,
   fetchProductosConocidos,
-  type ProductoConocido,
 } from '@/api/premium';
 import { fetchSettings, updateSettings } from '@/api/settings';
-import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
 import { Nota, Row, Section } from '@/features/ajustes/ui';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { queryKeys } from '@/shared/lib/query';
-import { formatQuantity } from '@/shared/lib/units';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
-import { HojaInferior } from '@/shared/ui/HojaInferior';
 import {
   ACENTOS,
   MUESTRAS_ACENTO,
@@ -65,12 +60,6 @@ export default function Premium() {
   const [error, setError] = useState<string | null>(null);
   // Lo que no se puede por no tener premium no es un fallo: se dice sin rojo.
   const [aviso, setAviso] = useState<string | null>(null);
-  // «Tus productos»: el que se ha tocado (para elegir qué hacer con él), el que se está
-  // guardando en la nevera, y lo que acaba de pasar.
-  const [elegido, setElegido] = useState<ProductoConocido | null>(null);
-  const [rapida, setRapida] = useState<ProductoConocido | null>(null);
-  const [resultado, setResultado] = useState<string | null>(null);
-
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
   const premium = settings.data?.plan === 'premium';
 
@@ -85,22 +74,6 @@ export default function Premium() {
     queryKey: queryKeys.productosConocidos(activa.id),
     queryFn: () => fetchProductosConocidos(activa.id),
     enabled: premium,
-  });
-
-  const apuntar = useMutation({
-    mutationFn: (p: ProductoConocido) =>
-      agregarLinea({
-        householdId: activa.id,
-        name: p.nombre,
-        productId: p.productoId,
-        cantidad: { unitFamily: p.unitFamily, displayUnit: p.displayUnit, quantity: p.cantidad },
-      }),
-    async onSuccess(nueva, p) {
-      setError(null);
-      setResultado(nueva ? `${p.nombre}: apuntado en la lista.` : `${p.nombre} ya estaba apuntado en la lista.`);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.listaDe(activa.id) });
-    },
-    onError: (caught: unknown) => setError(describeDbError(caught)),
   });
 
   const elegirColor = useMutation({
@@ -197,46 +170,35 @@ export default function Premium() {
               <ActivityIndicator color={c.brand} />
             ) : conocidos.error ? (
               <Text style={styles.texto}>{describeDbError(conocidos.error)}</Text>
-            ) : (conocidos.data ?? []).length === 0 ? (
-              <Text style={styles.texto}>
-                Aquí saldrá lo que añadas a {activa.name}, para volver a guardarlo o apuntarlo en la lista
-                de un toque.
-              </Text>
             ) : (
-              <>
-                <Text style={styles.texto}>Lo que ya has añadido. Toca uno para guardarlo o apuntarlo.</Text>
-                {resultado ? <Nota texto={resultado} tono="bien" alerta /> : null}
-                {conocidos.data?.map((p) => (
-                  <Pressable
-                    key={p.productoId ?? p.nombre.toLowerCase()}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${p.nombre}. Guardarlo o apuntarlo`}
-                    onPress={() => {
-                      setResultado(null);
-                      setElegido(p);
-                    }}
-                    style={({ pressed }) => [styles.gasto, pressed && styles.pulsado]}
-                  >
-                    <IconoComida nombre={p.nombre} size={20} color={c.brandInk} weight="duotone" />
-                    <View style={styles.gastoTexto}>
-                      <Text style={styles.gastoNombre} numberOfLines={1}>
-                        {p.nombre}
-                      </Text>
-                      <Text style={styles.gastoTirado} numberOfLines={1}>
-                        {[p.marca, formatQuantity(p.cantidad, p.displayUnit)].filter(Boolean).join(' · ')}
-                      </Text>
-                    </View>
-                    <Text style={styles.gastoVeces}>×{p.veces}</Text>
-                  </Pressable>
-                ))}
-              </>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ver tus productos"
+                onPress={() => router.push('/productos')}
+                style={({ pressed }) => [styles.enlace, pressed && styles.pulsado]}
+              >
+                <Package size={22} color={c.brand} weight="duotone" />
+                <View style={styles.gastoTexto}>
+                  <Text style={styles.gastoNombre}>
+                    {(conocidos.data ?? []).length === 0
+                      ? 'Aún no tienes ninguno'
+                      : `${(conocidos.data ?? []).length} ${(conocidos.data ?? []).length === 1 ? 'producto' : 'productos'}`}
+                  </Text>
+                  <Text style={styles.gastoTirado}>
+                    {(conocidos.data ?? []).length === 0
+                      ? 'Saldrán aquí cuando añadas algo.'
+                      : `${(conocidos.data ?? []).filter((p) => p.escaneado).length} escaneados · ${(conocidos.data ?? []).filter((p) => !p.escaneado).length} a mano`}
+                  </Text>
+                </View>
+                <CaretRight size={16} color={c.inkMuted} weight="bold" />
+              </Pressable>
             )
           ) : (
             <View style={styles.bloqueo}>
               <Lock size={20} color={c.inkMuted} weight="duotone" />
               <Text style={styles.texto}>
-                Con Opsi Premium ⭐ guardas lo que ya has añadido y lo vuelves a poner en la nevera o en la
-                lista de un toque, sin escribirlo ni escanearlo otra vez.
+                Con Opsi Premium ⭐ tienes un inventario de todo lo que has añadido, escaneado o a mano, con su
+                ficha, para guardarlo en la nevera o apuntarlo en la lista de un toque.
               </Text>
             </View>
           )}
@@ -289,83 +251,13 @@ export default function Premium() {
 
         <Section title="Listas de la compra">
           <Row
-            title={premium ? 'Hasta 20 listas por nevera' : 'Hasta 3 listas por nevera'}
+            title={premium ? 'Hasta 10 listas por nevera' : 'Hasta 3 listas por nevera'}
             subtitle={premium ? undefined : 'Con Opsi Premium ⭐ puedes tener muchas más.'}
           />
         </Section>
       </ScrollView>
 
-      {/* Qué hacer con uno de tus productos. */}
-      <HojaInferior visible={elegido !== null} onClose={() => setElegido(null)} titulo={elegido?.nombre}>
-        {elegido ? (
-          <View style={styles.opciones}>
-            <Opcion
-              icono={<Package size={22} color={c.brand} weight="duotone" />}
-              etiqueta="Guardarlo en la nevera"
-              onPress={() => {
-                const p = elegido;
-                setElegido(null);
-                // Una hoja detrás de otra: se espera a que la primera acabe de bajar
-                // (en iOS, dos `Modal` a la vez no se presentan).
-                setTimeout(() => setRapida(p), 300);
-              }}
-            />
-            <Opcion
-              icono={<ListChecks size={22} color={c.brand} weight="duotone" />}
-              etiqueta="Apuntarlo en la lista"
-              onPress={() => {
-                const p = elegido;
-                setElegido(null);
-                apuntar.mutate(p);
-              }}
-            />
-          </View>
-        ) : null}
-      </HojaInferior>
-
-      {rapida ? (
-        <HojaAltaRapida
-          key={rapida.productoId ?? rapida.nombre}
-          onClose={() => setRapida(null)}
-          nombre={rapida.nombre}
-          marca={rapida.marca}
-          productoId={rapida.productoId}
-          unitFamily={rapida.unitFamily}
-          netQuantity={rapida.cantidad}
-          onEditar={(e) => {
-            const p = rapida;
-            setRapida(null);
-            router.push({
-              pathname: '/alta',
-              params: {
-                ...(p.productoId ? { producto: p.productoId } : { nombre: p.nombre }),
-                donde: e.location,
-                ...(e.dias !== null ? { dias: String(e.dias) } : {}),
-              },
-            });
-          }}
-          onGuardado={(nombre) => {
-            setRapida(null);
-            setResultado(`${nombre}: guardado en la nevera.`);
-          }}
-        />
-      ) : null}
     </SafeAreaView>
-  );
-}
-
-/** Una opción de la hoja: icono y frase, en una fila que se toca entera. */
-function Opcion({ icono, etiqueta, onPress }: { icono: React.ReactNode; etiqueta: string; onPress: () => void }) {
-  const styles = useStyles();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.opcion, pressed && styles.pulsado]}
-    >
-      {icono}
-      <Text style={styles.opcionTexto}>{etiqueta}</Text>
-    </Pressable>
   );
 }
 
@@ -426,19 +318,7 @@ const useStyles = makeStyles((c) => ({
   colorEtiquetaOn: { fontFamily: fonts.semibold, color: c.ink },
 
   texto: { fontSize: 13.5, lineHeight: 19, color: c.inkMuted },
-  opciones: { gap: space.sm },
-  opcion: {
-    minHeight: touchTarget + 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surface,
-  },
-  opcionTexto: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: c.ink },
+  enlace: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget + 8 },
   bloqueo: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
 
   gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },

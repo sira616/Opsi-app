@@ -7,11 +7,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Barcode, CheckCircle, Keyboard, Lightning, LightningSlash, X } from 'phosphor-react-native';
 
@@ -72,6 +73,13 @@ export default function Escanear() {
   const styles = useStyles();
   const c = useTheme();
   const router = useRouter();
+  // Lo que hay que bajar la barra de arriba para que quede por debajo del notch o de
+  // la isla. Se confía en el área segura, pero con un mínimo propio: dentro de un modal
+  // a pantalla completa algunos móviles dan 0 y los botones quedaban tapados. El mínimo
+  // es lo que mide una barra de estado (Android: la real; iPhone con recorte: ~47).
+  const insets = useSafeAreaInsets();
+  const minimoArriba = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 47;
+  const extraArriba = Math.max(0, minimoArriba - insets.top) + space.lg;
   const { activa } = useNeveraActual();
   const [permiso, pedirPermiso] = useCameraPermissions();
 
@@ -215,11 +223,14 @@ export default function Escanear() {
 
       <SafeAreaView style={[styles.capa, !verCamara && styles.capaSinCamara]}>
         {/* ── Barra superior ─────────────────────────────────────────── */}
-        <View style={styles.barra}>
+        {/* Con holgura de sobra por arriba: en un móvil con notch o isla, los botones
+            pegados al borde quedaban debajo del recorte y no se podían tocar. */}
+        <View style={[styles.barra, { paddingTop: extraArriba }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar el escáner"
             onPress={volver}
+            hitSlop={8}
             style={styles.redondo}
           >
             <X size={22} color="#FFFFFF" weight="bold" />
@@ -231,6 +242,7 @@ export default function Escanear() {
               accessibilityState={{ checked: linterna }}
               accessibilityLabel="Linterna"
               onPress={() => setLinterna((v) => !v)}
+              hitSlop={8}
               style={styles.redondo}
             >
               {linterna ? (

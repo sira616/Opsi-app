@@ -179,6 +179,24 @@ export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
   return true;
 }
 
+/**
+ * Apunta lo mismo en VARIAS listas de una nevera, una por una.
+ *
+ * Devuelve, por lista, `true` si se apuntó y `false` si ya estaba pendiente allí. Si una
+ * falla (el servidor rechaza, se cae la red), las anteriores ya quedaron apuntadas y la
+ * excepción sale tal cual: es lo que se puede decir con verdad. Sin listas, no hace nada.
+ */
+export async function agregarLineaEnListas(
+  nueva: Omit<NuevaLinea, 'listaId'>,
+  listaIds: string[],
+): Promise<boolean[]> {
+  const resultados: boolean[] = [];
+  for (const listaId of listaIds) {
+    resultados.push(await agregarLinea({ ...nueva, listaId }));
+  }
+  return resultados;
+}
+
 /** Tacha o destacha una línea, sin tocar el inventario. */
 export async function marcarComprada(id: string, comprada: boolean): Promise<void> {
   const { error } = await supabase
