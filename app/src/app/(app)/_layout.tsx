@@ -91,7 +91,6 @@ function Puerta() {
       />
       <Stack.Screen name="elemento/[id]" options={hoja} />
       <Stack.Screen name="editar-elemento/[id]" options={hoja} />
-      <Stack.Screen name="premium" options={hoja} />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
       <Stack.Screen name="nevera/[id]/editar" options={hoja} />

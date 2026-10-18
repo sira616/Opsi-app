@@ -162,7 +162,7 @@ export function SelectorListas({ householdId, listas, activaId, onElegir, plan }
                 label="Ver Opsi Premium ⭐"
                 onPress={() => {
                   cerrar();
-                  router.push('/premium');
+                  router.navigate('/premium');
                 }}
               />
             ) : null}

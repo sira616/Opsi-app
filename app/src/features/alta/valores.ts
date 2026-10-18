@@ -11,13 +11,24 @@
 import type { StorageLocation } from '@/api/inventory';
 import type { LineaLista } from '@/api/lista';
 import type { Categoria } from '@/shared/lib/categorias';
-import { DIAS_MAX } from '@/shared/lib/fecha-input';
 import {
   fromBase,
   unidadSugerida,
   type MeasurementUnit,
   type UnitFamily,
 } from '@/shared/lib/units';
+
+/** Cinco años. Más que eso no es una conserva: es un error de tecleo. */
+export const DIAS_MAX = 1825;
+
+/** Los plazos de la hoja rápida: la respuesta corta a «¿hasta cuándo?». Cuentan DÍAS desde hoy. */
+export const ATAJOS: [string, number][] = [
+  ['1 día', 1],
+  ['3 días', 3],
+  ['1 semana', 7],
+  ['2 semanas', 14],
+  ['1 mes', 30],
+];
 
 /**
  * Dónde se guarda lo que es de cada pasillo, casi siempre. Se propone y no se
@@ -65,6 +76,16 @@ const UBICACIONES = new Set<string>(['pantry', 'fridge', 'freezer', 'other']);
 /** Lo que llega por la ruta es entrada de fuera: solo se acepta un valor conocido. */
 export function ubicacionDeRuta(valor: unknown): StorageLocation | null {
   return typeof valor === 'string' && UBICACIONES.has(valor) ? (valor as StorageLocation) : null;
+}
+
+/**
+ * Un nombre que llega por la ruta: entrada de fuera, que solo rellena un campo de texto
+ * que la persona ve y puede cambiar. Se limpia de caracteres de control y se acota.
+ */
+export function nombreDeRuta(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const limpio = valor.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
+  return limpio === '' ? null : limpio;
 }
 
 /** Días que llegan por la ruta: un entero entre 1 y el máximo, o nada. */

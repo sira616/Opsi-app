@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import { Basket, ChatCircleDots, GearSix, ListChecks } from 'phosphor-react-native';
+import { Basket, GearSix, ListChecks, Star } from 'phosphor-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -13,13 +13,11 @@ import {
 } from '@/shared/theme/tokens';
 
 /**
- * Las cuatro secciones de Opsi.
+ * Las cuatro secciones de Opsi: inventario, lista, Premium y ajustes.
  *
- * Dos de ellas están vacías a propósito: la lista de la compra es la fase 4 y
- * el chat la fase 5. Se dejan visibles desde ya porque la forma de la app no
- * debería cambiar cuando lleguen —mover una sección de sitio a mitad de
- * proyecto desorienta a quien ya se había acostumbrado—, y porque enseñan de
- * un vistazo hacia dónde va esto.
+ * Premium ocupa el sitio que tenía el chat. El chat de Opsi (fase 5) no vuelve como
+ * una sección más sino como una burbuja u opción dentro de la nevera, que es donde
+ * se pregunta «¿qué ceno con lo que hay?».
  *
  * El alta y el detalle NO son pestañas: se apilan encima, en el Stack del
  * layout de arriba. Son cosas que se abren y se cierran, no sitios donde estar.
@@ -137,11 +135,11 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="chat"
+        name="premium"
         options={{
-          title: 'Opsi',
+          title: 'Premium',
             tabBarIcon: ({ color, size, focused }) => (
-            <ChatCircleDots size={size} color={color as string} weight={focused ? 'fill' : 'regular'} />
+            <Star size={size} color={color as string} weight={focused ? 'fill' : 'regular'} />
           ),
         }}
       />
