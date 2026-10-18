@@ -227,14 +227,14 @@ isOneToOne: false
                   ]
                 },"products": {
                   Row: {
-                    "barcode": string | null,"brand": string | null,"categories_tags": (string)[] | null,"created_at": string,"data_source": string,"household_id": string | null,"id": string,"image_url": string | null,"name": string,"net_quantity": number | null,"off_payload": Json | null,"open_shelf_life_days": number | null,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
+                    "allergens_tags": (string)[] | null,"barcode": string | null,"brand": string | null,"categories_tags": (string)[] | null,"created_at": string,"data_source": string,"health_data_at": string | null,"household_id": string | null,"id": string,"image_url": string | null,"ingredients_text": string | null,"labels_tags": (string)[] | null,"name": string,"net_quantity": number | null,"off_payload": Json | null,"open_shelf_life_days": number | null,"traces_tags": (string)[] | null,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "barcode"?: string | null,"brand"?: string | null,"categories_tags"?: (string)[] | null,"created_at"?: string,"data_source"?: string,"household_id"?: string | null,"id"?: string,"image_url"?: string | null,"name": string,"net_quantity"?: number | null,"off_payload"?: Json | null,"open_shelf_life_days"?: number | null,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "allergens_tags"?: (string)[] | null,"barcode"?: string | null,"brand"?: string | null,"categories_tags"?: (string)[] | null,"created_at"?: string,"data_source"?: string,"health_data_at"?: string | null,"household_id"?: string | null,"id"?: string,"image_url"?: string | null,"ingredients_text"?: string | null,"labels_tags"?: (string)[] | null,"name": string,"net_quantity"?: number | null,"off_payload"?: Json | null,"open_shelf_life_days"?: number | null,"traces_tags"?: (string)[] | null,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Update: {
-                    "barcode"?: string | null,"brand"?: string | null,"categories_tags"?: (string)[] | null,"created_at"?: string,"data_source"?: string,"household_id"?: string | null,"id"?: string,"image_url"?: string | null,"name"?: string,"net_quantity"?: number | null,"off_payload"?: Json | null,"open_shelf_life_days"?: number | null,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "allergens_tags"?: (string)[] | null,"barcode"?: string | null,"brand"?: string | null,"categories_tags"?: (string)[] | null,"created_at"?: string,"data_source"?: string,"health_data_at"?: string | null,"household_id"?: string | null,"id"?: string,"image_url"?: string | null,"ingredients_text"?: string | null,"labels_tags"?: (string)[] | null,"name"?: string,"net_quantity"?: number | null,"off_payload"?: Json | null,"open_shelf_life_days"?: number | null,"traces_tags"?: (string)[] | null,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -296,6 +296,20 @@ isOneToOne: false
       referencedRelation: "households"
       referencedColumns: ["id"]
     }
+                  ]
+                },"user_health_preferences": {
+                  Row: {
+                    "avoid": (string)[],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "avoid"?: (string)[],"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "avoid"?: (string)[],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"user_settings": {
                   Row: {
@@ -782,19 +796,24 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "upsert_global_product":
-{ Args: { "p_barcode": string,"p_brand": string,"p_categories_tags": (string)[],"p_image_url": string,"p_name": string,"p_net_quantity": number,"p_payload": Json,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
-              "barcode": string | null,
+{ Args: { "p_allergens_tags": (string)[],"p_barcode": string,"p_brand": string,"p_categories_tags": (string)[],"p_image_url": string,"p_ingredients_text": string,"p_labels_tags": (string)[],"p_name": string,"p_net_quantity": number,"p_payload": Json,"p_traces_tags": (string)[],"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
+              "allergens_tags": (string)[] | null,
+"barcode": string | null,
 "brand": string | null,
 "categories_tags": (string)[] | null,
 "created_at": string,
 "data_source": string,
+"health_data_at": string | null,
 "household_id": string | null,
 "id": string,
 "image_url": string | null,
+"ingredients_text": string | null,
+"labels_tags": (string)[] | null,
 "name": string,
 "net_quantity": number | null,
 "off_payload": Json | null,
 "open_shelf_life_days": number | null,
+"traces_tags": (string)[] | null,
 "unit_family": Database["public"]['Enums']["unit_family"] | null,
 "updated_at": string
             }

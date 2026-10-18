@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
+  aProducto,
   DIAS_CADUCIDAD_CACHE,
   manejar,
   MAX_CUERPO_PETICION,
@@ -26,7 +28,22 @@ const FILA: FilaCatalogo = {
   unit_family: 'volume',
   net_quantity: 330,
   image_url: 'https://images.openfoodfacts.org/images/x.jpg',
+  allergens_tags: ['en:milk'],
+  traces_tags: ['en:soybeans'],
+  labels_tags: ['en:no-lactose'],
+  ingredients_text: 'Agua, azúcar y leche.',
+  health_data: true,
   updated_at: new Date(AHORA - 86_400_000).toISOString(),
+};
+
+/** Una ficha de ANTES de los datos de salud: la base de datos la sirve con todo NULL. */
+const FILA_SIN_SALUD: FilaCatalogo = {
+  ...FILA,
+  allergens_tags: [],
+  traces_tags: [],
+  labels_tags: [],
+  ingredients_text: null,
+  health_data: false,
 };
 
 const PRODUCTO_OFF: ProductoOff = {
@@ -36,6 +53,10 @@ const PRODUCTO_OFF: ProductoOff = {
   netQuantity: 330,
   imageUrl: null,
   categoriesTags: ['en:sodas'],
+  allergensTags: ['en:milk'],
+  tracesTags: [],
+  labelsTags: ['en:no-lactose'],
+  ingredientsText: 'Agua, azúcar y leche.',
 };
 
 type Llamadas = Record<
@@ -83,7 +104,20 @@ function montar(sobre: Partial<Dependencias> = {}) {
     },
     async guardar(codigo): Promise<ProductoCatalogo> {
       llamadas.guardar++;
-      return { id: 'nuevo', barcode: codigo, name: PRODUCTO_OFF.name, brand: PRODUCTO_OFF.brand, unit_family: 'volume', net_quantity: 330, image_url: null };
+      return {
+        id: 'nuevo',
+        barcode: codigo,
+        name: PRODUCTO_OFF.name,
+        brand: PRODUCTO_OFF.brand,
+        unit_family: 'volume',
+        net_quantity: 330,
+        image_url: null,
+        allergens_tags: PRODUCTO_OFF.allergensTags,
+        traces_tags: PRODUCTO_OFF.tracesTags,
+        labels_tags: PRODUCTO_OFF.labelsTags,
+        ingredients_text: PRODUCTO_OFF.ingredientsText,
+        health_data: true,
+      };
     },
     async registrarFalta() {
       llamadas.registrarFalta++;
@@ -364,15 +398,212 @@ test('la respuesta lleva solo los campos públicos: ni updated_at ni el payload'
   });
   const cuerpo = await leer(await manejar(peticion(), dep));
   assert.deepEqual(Object.keys(cuerpo.product).sort(), [
+    'allergens_tags',
     'barcode',
     'brand',
+    'health_data',
     'id',
     'image_url',
+    'ingredients_text',
+    'labels_tags',
     'name',
     'net_quantity',
     'source',
+    'traces_tags',
     'unit_family',
   ]);
+});
+
+test('la respuesta lleva los datos de salud tal como están en la ficha, y health_data en true', async () => {
+  const { dep } = montar({
+    async buscarEnCatalogo() {
+      return FILA;
+    },
+  });
+  const { product } = await leer(await manejar(peticion(), dep));
+  assert.deepEqual(product.allergens_tags, ['en:milk']);
+  assert.deepEqual(product.traces_tags, ['en:soybeans']);
+  assert.deepEqual(product.labels_tags, ['en:no-lactose']);
+  assert.equal(product.ingredients_text, 'Agua, azúcar y leche.');
+  assert.equal(product.health_data, true);
+});
+
+test('una ficha consultada que no declara nada: listas vacías PERO health_data true (no es lo mismo que «no consta»)', async () => {
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return { ...FILA, allergens_tags: [], traces_tags: [], labels_tags: [], ingredients_text: null, health_data: true };
+    },
+  });
+  const { product } = await leer(await manejar(peticion(), dep));
+  assert.deepEqual([product.allergens_tags, product.traces_tags, product.labels_tags], [[], [], []]);
+  assert.equal(product.health_data, true);
+  assert.equal(llamadas.consultarOff, 0, 'está al día: no se vuelve a preguntar');
+});
+
+// ── Una ficha de antes de los datos de salud ─────────────────────────────
+
+test('ficha sin datos de salud: cuenta como caducada y se renueva desde OFF aunque sea de ayer', async () => {
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_SALUD;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.equal(llamadas.reservarHuecoOff, 1);
+  assert.equal(llamadas.consultarOff, 1);
+  assert.equal(llamadas.guardar, 1);
+  const { product } = await leer(r);
+  assert.equal(product.health_data, true, 'lo que se devuelve es la ficha renovada');
+  assert.deepEqual(product.allergens_tags, ['en:milk']);
+});
+
+test('ficha sin datos de salud: la cuota por persona se sigue cobrando antes de mirar nada', async () => {
+  const { dep, llamadas } = montar({
+    async consumirCuota() {
+      return { permitido: false, reintentarEn: 10 };
+    },
+    async buscarEnCatalogo() {
+      return FILA_SIN_SALUD;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 429);
+  assert.equal(llamadas.buscarEnCatalogo, 0);
+  assert.equal(llamadas.consultarOff, 0);
+});
+
+test('ficha sin datos de salud y OFF sin contestar: se sirve la vieja con health_data en false, nunca un error', async () => {
+  for (const off of [
+    { tipo: 'error', motivo: 'tiempo_agotado' },
+    { tipo: 'no_existe' },
+  ] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_SALUD;
+      },
+      async consultarOff() {
+        return off;
+      },
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200, off.tipo);
+    const { product } = await leer(r);
+    assert.equal(product.name, 'Refresco de cola');
+    assert.equal(product.health_data, false, 'sin datos de OFF no puede parecer que los hay');
+    assert.deepEqual([product.allergens_tags, product.traces_tags, product.labels_tags], [[], [], []]);
+    assert.equal(product.ingredients_text, null);
+    assert.equal(llamadas.guardar, 0);
+    assert.equal(llamadas.registrarFalta, 0, 'una ficha que existía no pasa a ser una falta');
+  }
+});
+
+test('ficha sin datos de salud y sin hueco o sin User-Agent: se sirve la vieja y no se llama a OFF', async () => {
+  for (const sobre of [
+    { async reservarHuecoOff() { return false; } },
+    { userAgentOff: null },
+  ] as Partial<Dependencias>[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_SALUD;
+      },
+      ...sobre,
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200);
+    assert.equal((await leer(r)).product.health_data, false);
+    assert.equal(llamadas.consultarOff, 0);
+  }
+});
+
+test('ficha sin datos de salud y OFF dice que no es comida: manda OFF', async () => {
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_SALUD;
+    },
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_es_comida' };
+    },
+  });
+  const cuerpo = await leer(await manejar(peticion(), dep));
+  assert.equal(cuerpo.not_food, true);
+  assert.equal(llamadas.guardar, 0);
+});
+
+test('ficha con datos de salud pero caducada: se renueva como siempre', async () => {
+  const vieja = { ...FILA, updated_at: new Date(AHORA - (DIAS_CADUCIDAD_CACHE + 1) * 86_400_000).toISOString() };
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return vieja;
+    },
+  });
+  await manejar(peticion(), dep);
+  assert.equal(llamadas.consultarOff, 1);
+  assert.equal(llamadas.guardar, 1);
+});
+
+test('guardar recibe los datos de salud ya filtrados que devolvió OFF', async () => {
+  let recibido: ProductoOff | null = null;
+  const { dep } = montar({
+    async guardar(codigo, producto) {
+      recibido = producto;
+      return { ...FILA, barcode: codigo };
+    },
+  });
+  await manejar(peticion(), dep);
+  assert.deepEqual(recibido, PRODUCTO_OFF);
+});
+
+// ── De la fila de la base de datos a lo que se devuelve ──────────────────
+
+test('aProducto: una fila anterior a los datos de salud (todo NULL) sale con listas vacías y health_data false', () => {
+  const p = aProducto({
+    id: 'x', barcode: CODIGO, name: 'Algo', brand: null, unit_family: null, net_quantity: null, image_url: null,
+    allergens_tags: null, traces_tags: null, labels_tags: null, ingredients_text: null, health_data_at: null,
+  });
+  assert.deepEqual(
+    [p.allergens_tags, p.traces_tags, p.labels_tags, p.ingredients_text, p.health_data],
+    [[], [], [], null, false],
+  );
+});
+
+test('aProducto: una fila consultada pone health_data en true, también con las listas vacías', () => {
+  const p = aProducto({
+    id: 'x', barcode: CODIGO, name: 'Algo', brand: 'M', unit_family: 'mass', net_quantity: '250',
+    image_url: null, allergens_tags: [], traces_tags: ['en:nuts'], labels_tags: ['en:no-gluten'],
+    ingredients_text: 'Agua.', health_data_at: '2026-10-21T10:00:00+00:00',
+  });
+  assert.equal(p.health_data, true);
+  assert.deepEqual(p.allergens_tags, []);
+  assert.deepEqual(p.traces_tags, ['en:nuts']);
+  assert.equal(p.net_quantity, 250, 'numeric llega como texto y sale como número');
+  assert.equal(p.ingredients_text, 'Agua.');
+});
+
+test('aProducto: lo que no sea una lista de textos no se cuela', () => {
+  const p = aProducto({
+    id: 'x', barcode: CODIGO, name: 'Algo', allergens_tags: 'en:milk', traces_tags: [1, null, 'en:nuts', {}],
+    labels_tags: { 0: 'en:no-gluten' }, ingredients_text: 42, health_data_at: 'x',
+  });
+  assert.deepEqual([p.allergens_tags, p.traces_tags, p.labels_tags, p.ingredients_text], [[], ['en:nuts'], [], null]);
+});
+
+// ── Las preferencias de salud no se tocan desde aquí ─────────────────────
+
+test('ninguna pieza del escáner nombra las preferencias de salud de las personas', () => {
+  // El cruce «lo que evito × lo que lleva el producto» es del móvil. Si una Edge
+  // Function o una función auxiliar leyera la tabla, los datos de salud de cada
+  // persona quedarían al alcance de la clave `service_role`.
+  const carpetas = [new URL('.', import.meta.url), new URL('../lookup-barcode/', import.meta.url)];
+  const fuentes = carpetas.flatMap((carpeta) =>
+    readdirSync(carpeta)
+      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map((f) => ({ f, texto: readFileSync(new URL(f, carpeta), 'utf8') })),
+  );
+  assert.ok(fuentes.length >= 4, 'se esperaban lookup, off, gtin e index');
+  for (const { f, texto } of fuentes) {
+    assert.doesNotMatch(texto, /user_health_preferences|health_preferences/i, f);
+  }
 });
 
 test('ficha caducada: se renueva desde OFF y se guarda', async () => {
