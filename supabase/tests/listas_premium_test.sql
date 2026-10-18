@@ -5,7 +5,7 @@
 -- `most_used_products`. Aquí se prueba que:
 --
 --   · cada nevera tiene su lista desde que nace, y siempre queda una;
---   · el plan básico llega a 3 listas, premium a 20, y no se salta desde el cliente;
+--   · el plan básico llega a 3 listas, premium a 10, y no se salta desde el cliente;
 --   · una línea cae en la primera lista si no se elige, y nunca en la de otra nevera;
 --   · el plan no lo escribe el cliente, y los colores son de premium;
 --   · lo que más gastas es premium, y no deja ver una nevera ajena.
@@ -277,21 +277,21 @@ select throws_ok(
 
 select lives_ok(
   $$insert into public.shopping_lists (household_id, name)
-    select current_setting('opsi.priv_ana')::uuid, 'L' || g from generate_series(1, 19) g$$,
-  'se llega a 20 listas'
+    select current_setting('opsi.priv_ana')::uuid, 'L' || g from generate_series(1, 9) g$$,
+  'se llega a 10 listas'
 );
 
 select is(
   (select count(*) from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid),
-  20::bigint,
-  'exactamente 20'
+  10::bigint,
+  'exactamente 10'
 );
 
 select throws_ok(
   $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, 'La 21')$$,
+    values (current_setting('opsi.priv_ana')::uuid, 'La 11')$$,
   'P0001', null,
-  'y la 21 no cabe ni en premium'
+  'y la 11 no cabe ni en premium'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════

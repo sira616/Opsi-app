@@ -565,7 +565,7 @@ isOneToOne: false
                            },
 "my_known_products":
 { Args: { "p_household_id": string,"p_limit"?: number }; Returns: {
-              "brand": string,"display_unit": Database["public"]['Enums']["measurement_unit"],"last_added_at": string,"product_id": string,"product_name": string,"quantity": number,"times_added": number,"unit_family": Database["public"]['Enums']["unit_family"]
+              "barcode": string,"brand": string,"category": Database["public"]['Enums']["food_category"],"data_source": string,"display_unit": Database["public"]['Enums']["measurement_unit"],"first_added_at": string,"in_stock": number,"last_added_at": string,"product_id": string,"product_name": string,"quantity": number,"times_added": number,"unit_family": Database["public"]['Enums']["unit_family"]
             }[]
                            },
 "my_pending_invitations":

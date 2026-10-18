@@ -147,7 +147,7 @@ lo cambia quien tiene la base de datos. Lo que importa aquí es que **todo lo pr
 | **T**ampering | Colgar una línea de la lista de OTRA nevera (quien está en dos neveras) | `check_shopping_item` exige que la lista sea de la misma nevera que la línea, al crear y al mover | `listas_premium_test.sql` (P0002) |
 | **E**levation | Crear o renombrar una lista en la nevera de otra persona, o cambiarla de nevera | RLS por `is_household_member`; el permiso de UPDATE es solo `name` y el de INSERT solo `household_id` y `name` | `listas_premium_test.sql` (42501) |
 | **S**poofing | Crear una lista «de parte de» otra persona | El trigger pisa `created_by` con `auth.uid()` | `listas_premium_test.sql` |
-| **D**oS | Acumular listas sin límite | Tope por nevera: 3 con el plan básico, 20 con premium, según quien la **crea**. El de 20 es una red, no un valor de venta | `listas_premium_test.sql` |
+| **D**oS | Acumular listas sin límite | Tope por nevera: 3 con el plan básico, 10 con premium, según quien la **crea**. El de 10 es una red, no un valor de venta | `listas_premium_test.sql` |
 | **D**oS | Quedarse sin ninguna lista | El trigger no deja borrar la última. El borrado en cascada de una nevera entera sí pasa (se mira que la nevera ya no exista) | `listas_premium_test.sql` |
 | **E**levation | `create_default_list` (definer) escribe donde la RLS no dejaría | Solo se dispara al nacer una nevera y solo inserta una fila con **su** id y un nombre fijo; sin permiso de ejecución para nadie | `listas_premium_test.sql` (la nevera nace con su lista) |
 
