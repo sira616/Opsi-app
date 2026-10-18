@@ -563,6 +563,11 @@ isOneToOne: false
               "icon": string,"id": string,"kind": Database["public"]['Enums']["household_kind"],"member_count": number,"member_limit": number,"name": string,"role": Database["public"]['Enums']["household_role"]
             }[]
                            },
+"my_known_products":
+{ Args: { "p_household_id": string,"p_limit"?: number }; Returns: {
+              "brand": string,"display_unit": Database["public"]['Enums']["measurement_unit"],"last_added_at": string,"product_id": string,"product_name": string,"quantity": number,"times_added": number,"unit_family": Database["public"]['Enums']["unit_family"]
+            }[]
+                           },
 "my_pending_invitations":
 { Args: Record<PropertyKey, never>; Returns: {
               "created_at": string,"expires_at": string,"household_icon": string,"household_id": string,"household_name": string,"id": string,"inviter_username": string
