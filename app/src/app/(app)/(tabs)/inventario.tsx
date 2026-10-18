@@ -1,15 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Nevera } from '@/api/household';
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
+import { fetchSaludProductos } from '@/api/salud';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { AvisoInvitaciones } from '@/features/neveras/AvisoInvitaciones';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
+import { FRESCURA_FICHA_MS, usePreferenciasSalud } from '@/features/salud/useSalud';
 import { describeDbError } from '@/shared/lib/db-errors';
+import { evaluarSalud, type Evaluacion } from '@/shared/lib/salud';
 import type { Palette } from '@/shared/theme/tokens';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import {
@@ -69,6 +72,41 @@ function Inventario({ nevera }: { nevera: Nevera }) {
   });
 
   const [filtro, setFiltro] = useState<Filtro>(FILTRO_VACIO);
+
+  // ── Lo que la persona evita, cruzado con la lista ──────────────────────
+  // UNA consulta por todos los productos distintos de la lista, no una por fila, y solo si
+  // hay algo que cruzar: sin preferencias no se pide ninguna ficha. Los ids van ordenados
+  // para que el mismo conjunto sea siempre la misma clave de caché.
+  const { preferencias, error: errorPreferencias } = usePreferenciasSalud();
+  const idsProductos = useMemo(
+    () =>
+      [...new Set((data ?? []).map((i) => i.product_id).filter((id): id is string => id !== null))].sort(),
+    [data],
+  );
+  const fichas = useQuery({
+    queryKey: queryKeys.fichasSaludDe(idsProductos),
+    queryFn: () => fetchSaludProductos(idsProductos),
+    enabled: preferencias.length > 0 && idsProductos.length > 0,
+    staleTime: FRESCURA_FICHA_MS,
+    // Al añadir algo cambia el conjunto de ids y, con él, la clave: sin esto todas las marcas
+    // desaparecerían un instante hasta que llegara la consulta nueva.
+    placeholderData: keepPreviousData,
+  });
+
+  /**
+   * Qué marcar en una fila, o null si todavía no se puede decir (cargando) o no hay nada
+   * que cruzar. Algo escrito a mano no tiene ficha, y una consulta que falló tampoco: las
+   * dos cuentan como «sin datos», nunca como «sin alérgenos».
+   */
+  function saludDe(item: PriorityItem): Evaluacion | null {
+    if (preferencias.length === 0) return null;
+    if (item.product_id === null) return evaluarSalud(preferencias, null);
+    const ficha = fichas.data?.[item.product_id];
+    // Mientras llega (o mientras se enseña la consulta anterior) no se decide nada: decir
+    // «sin datos» de un producto cuya ficha viene de camino sería afirmar lo que no se sabe.
+    if (ficha === undefined && (fichas.isPending || fichas.isPlaceholderData)) return null;
+    return evaluarSalud(preferencias, ficha ?? null);
+  }
 
   const todos = data ?? [];
   // El filtro se aplica ENCIMA del orden que trae la base de datos, no en su
@@ -131,6 +169,9 @@ function Inventario({ nevera }: { nevera: Nevera }) {
         {isPending ? <ActivityIndicator color={c.brand} style={styles.loader} /> : null}
 
         <ErrorNote message={error ? describeDbError(error) : null} />
+        {/* Una lista sin marcas porque no se pudieron leer las preferencias no puede
+            parecer una lista sin avisos. */}
+        <ErrorNote message={errorPreferencias} />
 
         {!isPending && todos.length > 0 && items.length === 0 ? (
           <View style={styles.sinResultados}>
@@ -211,7 +252,7 @@ function Inventario({ nevera }: { nevera: Nevera }) {
                 </Text>
               </View>
               {groupItems.map((item) => (
-                <ItemRow key={item.id} item={item} />
+                <ItemRow key={item.id} item={item} salud={saludDe(item)} />
               ))}
             </View>
           );

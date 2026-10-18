@@ -19,7 +19,9 @@ import { QueryClient } from '@tanstack/react-query';
  *     nevera. Meterle además el id de la nevera obligaría a saber en qué
  *     nevera estaba antes de poder buscarlo.
  *   · Lo que es de la persona y no de una nevera (ajustes, correo,
- *     invitaciones recibidas, la lista de neveras): sin id.
+ *     invitaciones recibidas, la lista de neveras, lo que evita por salud): sin id.
+ *   · El catálogo de productos (`catalogo`): se pide por el id del producto, no de
+ *     una nevera. Un producto global es de todos y uno privado lo acota la RLS.
  *
  * ── Invalidar por prefijo ─────────────────────────────────────────────────
  *
@@ -107,6 +109,37 @@ export const queryKeys = {
 
   settings: ['settings'] as const,
   correo: ['cuenta', 'correo'] as const,
+
+  // ── Salud ───────────────────────────────────────────────────────────────
+
+  /**
+   * Los alérgenos e intolerancias que evita la persona. DATO DE SALUD: solo existe
+   * aquí, en memoria, y en su tabla del servidor. Nada lo copia a otro sitio (ni a
+   * AsyncStorage, ni a una URL, ni a un registro) y `session.tsx` vacía esta caché al
+   * cambiar de persona.
+   *
+   * Ninguna otra consulta depende de su VALOR: las marcas se calculan al pintar
+   * (`evaluarSalud`), así que al guardar basta con escribir esta clave. Lo único que
+   * cambia con ella es si hace falta pedir las fichas (`enabled`), no lo que se pide.
+   */
+  preferenciasSalud: ['salud', 'preferencias'] as const,
+
+  /**
+   * Un producto del catálogo, con su ficha de salud ya limpia. Lo leen la ficha del
+   * detalle, el alta, el aviso de salud y las hojas rápidas: una sola clave para que
+   * pedir los ingredientes y renovar una ficha antigua actualice a todos a la vez.
+   */
+  producto: (id: string) => ['catalogo', 'producto', id] as const,
+  /** Las fichas de salud de TODOS los productos de una lista (prefijo, para invalidar). */
+  fichasSalud: ['catalogo', 'salud'] as const,
+  /** Las de una lista concreta de productos. Los ids van ordenados: mismo conjunto, misma clave. */
+  fichasSaludDe: (ids: readonly string[]) => ['catalogo', 'salud', ...ids] as const,
+  /**
+   * La hoja de ingredientes. Clave propia y no `producto(id)`: su consulta puede renovar
+   * la ficha en Open Food Facts (gasta cuota), y dos consultas con funciones distintas
+   * bajo la misma clave se pisan.
+   */
+  ingredientes: (id: string) => ['catalogo', 'ingredientes', id] as const,
 };
 
 export const queryClient = new QueryClient({

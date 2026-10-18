@@ -41,8 +41,10 @@
  * hecho que un elemento tiene nombre.
  */
 
+import { COLUMNAS_SALUD } from '@/api/salud';
 import type { Database } from '@/lib/database.types';
 import type { Categoria } from '@/shared/lib/categorias';
+import { leerSalud, type SaludProducto } from '@/shared/lib/salud';
 import { supabase } from '@/shared/lib/supabase';
 import type { MeasurementUnit, UnitFamily } from '@/shared/lib/units';
 
@@ -91,6 +93,12 @@ export type PriorityItem = {
    * recomendar congelar de nuevo algo que ya se descongeló.
    */
   thawed_at: string | null;
+  /**
+   * El producto de catálogo, si lo tiene. Un alta a mano de algo sin código no lo tiene:
+   * null es lo normal, no una anomalía. La lista lo necesita para marcar lo que lleva
+   * lo que la persona evita (`api/salud.ts`), con UNA consulta por todos los productos.
+   */
+  product_id: string | null;
 };
 
 /** Lo del detalle: todo lo de la lista más las fechas candidatas. */
@@ -110,9 +118,6 @@ export type ItemDetail = PriorityItem & {
   date_from_label: string | null;
   date_from_opening: string | null;
   date_from_thaw: string | null;
-  /** El producto de catálogo, si lo tiene. Un alta a mano de algo sin código no
-   *  lo tiene: null es lo normal, no una anomalía. */
-  product_id: string | null;
 };
 
 export type InventoryEvent = {
@@ -147,7 +152,14 @@ export type Conservacion = {
   nota: string | null;
 };
 
-/** Lo que el catálogo sabe del producto. Solo se pinta lo que no sea null. */
+/**
+ * Lo que el catálogo sabe del producto. Solo se pinta lo que no sea null.
+ *
+ * `salud` NO es una columna: es lo que queda de los cinco campos de alérgenos,
+ * trazas, etiquetas, ingredientes y fecha de consulta después de pasarlos por
+ * `leerSalud`. Las listas en bruto no viajan en este objeto, para que nadie lea por
+ * descuido una que no se ha comprobado.
+ */
 export type ProductoCatalogo = Pick<
   Database['public']['Tables']['products']['Row'],
   | 'name'
@@ -158,7 +170,7 @@ export type ProductoCatalogo = Pick<
   | 'unit_family'
   | 'open_shelf_life_days'
   | 'data_source'
->;
+> & { salud: SaludProducto };
 
 /** Un miembro del hogar, para poner nombre a quien hizo cada cosa. */
 export type Autor = Pick<
@@ -169,7 +181,8 @@ export type Autor = Pick<
 const PRIORITY_FIELDS =
   'id, name, state, location, unit_family, display_unit, initial_quantity, ' +
   'remaining_quantity, priority, effective_limit_date, effective_date_reason, ' +
-  'effective_date_source, date_kind, days_left, frozen_at, thawed_at, category, opened_at';
+  'effective_date_source, date_kind, days_left, frozen_at, thawed_at, category, opened_at, ' +
+  'product_id';
 
 /**
  * Lo que alimenta «Consumir primero» EN UNA NEVERA.
@@ -284,18 +297,34 @@ export async function fetchConservacion(
  *
  * Solo tiene sentido cuando el elemento trae `product_id`, que hoy es la
  * excepción: el alta a mano no crea producto. Quien llame comprueba antes.
+ *
+ * Los datos de salud (`COLUMNAS_SALUD`) se piden con el resto y se limpian aquí mismo:
+ * lo que sale de esta función ya pasó por `leerSalud`.
  */
 export async function fetchProducto(productId: string): Promise<ProductoCatalogo | null> {
   const { data, error } = await supabase
     .from('products')
     .select(
-      'name, brand, net_quantity, barcode, image_url, unit_family, open_shelf_life_days, data_source',
+      `name, brand, net_quantity, barcode, image_url, unit_family, open_shelf_life_days, ${COLUMNAS_SALUD}`,
     )
     .eq('id', productId)
     .maybeSingle();
 
   if (error) throw error;
-  return (data ?? null) as unknown as ProductoCatalogo | null;
+  if (!data) return null;
+
+  const fila = data as unknown as Omit<ProductoCatalogo, 'salud'>;
+  return {
+    name: fila.name,
+    brand: fila.brand,
+    net_quantity: fila.net_quantity,
+    barcode: fila.barcode,
+    image_url: fila.image_url,
+    unit_family: fila.unit_family,
+    open_shelf_life_days: fila.open_shelf_life_days,
+    data_source: fila.data_source,
+    salud: leerSalud(data),
+  };
 }
 
 /**

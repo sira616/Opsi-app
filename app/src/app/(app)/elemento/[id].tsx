@@ -23,6 +23,7 @@ import { FichaProducto } from '@/features/elemento/FichaProducto';
 import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
 import { HojaApuntar, type ResultadoApuntar } from '@/features/elemento/HojaApuntar';
+import { SaludElemento } from '@/features/elemento/SaludElemento';
 import { TarjetaFecha } from '@/features/elemento/TarjetaFecha';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDesde } from '@/shared/lib/dates';
@@ -313,6 +314,9 @@ export default function Detalle() {
         <TarjetaFecha item={data} />
 
         <AvisoCongelar item={data} />
+
+        {/* Lo que lleva de lo que evitas, antes de las acciones. Lo cerrado no se va a comer. */}
+        {!closedOut ? <SaludElemento item={data} /> : null}
 
         <ErrorNote message={error} />
 

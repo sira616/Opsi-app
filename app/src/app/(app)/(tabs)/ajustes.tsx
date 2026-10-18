@@ -11,6 +11,7 @@ import { SeccionCuenta } from '@/features/ajustes/SeccionCuenta';
 import { SeccionListaCompra } from '@/features/ajustes/SeccionListaCompra';
 import { SeccionPrivacidad } from '@/features/ajustes/SeccionPrivacidad';
 import { SeccionMisNeveras } from '@/features/ajustes/SeccionMisNeveras';
+import { SeccionSalud } from '@/features/ajustes/SeccionSalud';
 import { TarjetaPerfil } from '@/features/ajustes/TarjetaPerfil';
 import { useAjustesStyles } from '@/features/ajustes/ui';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -28,10 +29,13 @@ import {
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 
 /**
- * Ajustes, en ocho bloques y por orden de a qué distancia está cada cosa de ti.
+ * Ajustes, en nueve bloques y por orden de a qué distancia está cada cosa de ti.
  *
- *   Perfil · Aspecto · Avisos · Lista de la compra · Nevera compartida ·
- *   Cuenta · Privacidad y datos · Acerca de
+ *   Perfil · Aspecto · Avisos · Lista de la compra · Alérgenos e intolerancias ·
+ *   Nevera compartida · Cuenta · Privacidad y datos · Acerca de
+ *
+ * Los alérgenos van con la lista de la compra y no con las neveras: son lo que TÚ evitas,
+ * no algo de la casa, y nadie que comparta nevera contigo los ve.
  *
  * Esta pantalla ya no dibuja nada: reparte. Cada sección vive en
  * `features/ajustes/` con su estado, sus consultas y sus textos, porque aquí
@@ -96,6 +100,7 @@ export default function Ajustes() {
           <>
             <SeccionAvisos data={data} onPatch={patch} guardando={save.isPending} />
             <SeccionListaCompra data={data} onPatch={patch} guardando={save.isPending} />
+            <SeccionSalud />
             <SeccionMisNeveras />
             <SeccionCuenta username={data.username} />
           </>

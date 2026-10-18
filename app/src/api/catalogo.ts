@@ -20,6 +20,11 @@
  * escriba nuestro servidor: sale de un catálogo que edita cualquiera. Por eso
  * `leerRespuesta` solo se queda con los campos que espera y con el tipo que
  * espera, y no reenvía nada más.
+ *
+ * Eso incluye los datos de salud (alérgenos, trazas, etiquetas e ingredientes): son texto
+ * de un wiki público, así que pasan por `leerSalud` (shared/lib/salud.ts), que tira lo que
+ * no cuadra y lo cuenta como «sin datos», nunca como «sin alérgenos». El producto que sale
+ * de aquí lleva el resultado ya limpio en `salud`, no las listas en bruto.
  */
 
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
@@ -27,10 +32,16 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@s
 import { esFalloDeRed, mensajeFuncionCaida, mensajeSinConexion } from '@/shared/lib/conexion';
 import { errorSinTraducir } from '@/shared/lib/error-generico';
 import { esCodigoDeNoComida, normalizarGtin } from '@/shared/lib/gtin';
+import { leerSalud, type SaludProducto } from '@/shared/lib/salud';
 import { supabase } from '@/shared/lib/supabase';
 import type { UnitFamily } from '@/shared/lib/units';
 
-/** Lo que `lookup-barcode` devuelve de un producto. Nunca el payload de OFF. */
+/**
+ * Lo que `lookup-barcode` devuelve de un producto. Nunca el payload de OFF.
+ *
+ * `salud` es «sin datos» para un producto privado de la nevera (`buscarProductoPrivado`):
+ * no lleva datos de salud, y si alguien los hubiera escrito a mano no se leen.
+ */
 export type ProductoEscaneado = {
   id: string;
   barcode: string;
@@ -39,6 +50,7 @@ export type ProductoEscaneado = {
   unit_family: UnitFamily | null;
   net_quantity: number | null;
   image_url: string | null;
+  salud: SaludProducto;
 };
 
 /**
@@ -96,6 +108,7 @@ function leerProducto(valor: unknown): ProductoEscaneado | null {
         ? p.net_quantity
         : null,
     image_url: texto(p.image_url, 300),
+    salud: leerSalud(p),
   };
 }
 

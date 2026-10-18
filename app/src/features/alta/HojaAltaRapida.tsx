@@ -7,6 +7,9 @@ import { Scales } from 'phosphor-react-native';
 import { createItem, type StorageLocation } from '@/api/inventory';
 import type { LineaLista } from '@/api/lista';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { AvisoDeFicha } from '@/features/salud/AvisoDeFicha';
+import { BotonIngredientes, ContenidoIngredientes } from '@/features/salud/Ingredientes';
+import { useFichaSalud } from '@/features/salud/useSalud';
 import { adivinarCategoria, etiquetaCategoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -14,6 +17,7 @@ import { etiquetaFecha, hoyIso, sumarDias } from '@/shared/lib/calendario';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { IconoNevera } from '@/shared/lib/iconos-nevera';
 import { queryKeys } from '@/shared/lib/query';
+import type { SaludProducto } from '@/shared/lib/salud';
 import { familyOf, toBase, UNITS, type UnitFamily } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -39,6 +43,12 @@ type Props = {
   marca?: string | null;
   /** El producto del catálogo al que se enlaza, si lo hay. */
   productoId: string | null;
+  /**
+   * Lo que se sabe de salud del producto, si quien abre la hoja ya lo tiene (el escáner: lo
+   * trae la respuesta de `lookup-barcode`). Sin él (`undefined`) la hoja lo busca por el
+   * id; con `null` no hay ficha de la que fiarse.
+   */
+  salud?: SaludProducto | null;
   unitFamily: UnitFamily | null;
   netQuantity: number | null;
   /** La línea de la lista de la que sale: al guardar, queda comprada. */
@@ -63,6 +73,11 @@ type Props = {
  * plazos son los de «la calculo yo» del formulario (los días los pone la persona,
  * así que se guarda como `user`).
  *
+ * Antes de guardar enseña lo que el producto lleva de lo que la persona evita (si ha
+ * marcado algo en Ajustes) y deja ver sus ingredientes. Es un aviso: «Está bien, guardar»
+ * se pulsa igual con cualquier aviso. Los ingredientes se enseñan EN LA MISMA hoja, en
+ * lugar de abrir otra encima: en iOS dos hojas a la vez no se presentan.
+ *
  * Se monta con una `key` por producto: su estado empieza siempre desde lo propuesto
  * para ESE producto.
  */
@@ -72,6 +87,7 @@ export function HojaAltaRapida({
   nombre,
   marca = null,
   productoId,
+  salud,
   unitFamily,
   netQuantity,
   linea = null,
@@ -92,6 +108,11 @@ export function HojaAltaRapida({
   const [location, setLocation] = useState<StorageLocation>(ubicacionSugerida(categoria));
   const [dias, setDias] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verIngredientes, setVerIngredientes] = useState(false);
+  // Si al mirar los ingredientes se renueva una ficha antigua, manda la renovada.
+  const [renovada, setRenovada] = useState<SaludProducto | null>(null);
+  const fichaCargada = useFichaSalud(productoId, salud);
+  const ficha = renovada ?? fichaCargada;
 
   const guardar = useMutation({
     mutationFn: () =>
@@ -120,6 +141,16 @@ export function HojaAltaRapida({
     },
     onError: (caught: unknown) => setError(describeDbError(caught)),
   });
+
+  // Los ingredientes ocupan la misma hoja: en iOS dos `Modal` a la vez no se presentan.
+  if (verIngredientes && productoId) {
+    return (
+      <HojaInferior visible onClose={onClose} titulo="Ingredientes">
+        <ContenidoIngredientes productoId={productoId} onRenovada={setRenovada} />
+        <Button label="Atrás" variant="quiet" onPress={() => setVerIngredientes(false)} />
+      </HojaInferior>
+    );
+  }
 
   return (
     <HojaInferior visible onClose={onClose} titulo={titulo}>
@@ -158,6 +189,9 @@ export function HojaAltaRapida({
           </Text>
         </View>
       </View>
+
+      <AvisoDeFicha ficha={ficha} />
+      {ficha?.deOff && productoId ? <BotonIngredientes onPress={() => setVerIngredientes(true)} /> : null}
 
       <View style={styles.bloque}>
         <Text style={styles.etiqueta}>Dónde lo guardas</Text>

@@ -13,8 +13,10 @@ import {
   diasDesde,
   diasRestantes,
 } from '@/shared/lib/dates';
+import { textoDeAviso, type Evaluacion } from '@/shared/lib/salud';
 import { formatQuantity } from '@/shared/lib/units';
 import { makeStyles, radius, space, tabular, useTheme } from '@/shared/theme/tokens';
+import { MarcaSalud } from './AvisoSalud';
 
 const STATE_LABEL: Record<PriorityItem['state'], string> = {
   closed: 'Cerrado',
@@ -43,8 +45,12 @@ const LOCATION_LABEL: Record<PriorityItem['location'], string> = {
  *     el dato que este proyecto se niega a enseñar.
  *   · El motivo, cuando no es la etiqueta. Que algo abierto venza antes que
  *     lo que pone el envase no se entiende si no se dice.
+ *
+ * `salud` es el cruce con lo que la persona evita, ya calculado por la pantalla con UNA
+ * consulta para toda la lista (no una por fila). Null o sin nada que decir: la fila no
+ * pinta nada. Es una marca, no un freno: la fila se abre y se usa igual.
  */
-export function ItemRow({ item }: { item: PriorityItem }) {
+export function ItemRow({ item, salud = null }: { item: PriorityItem; salud?: Evaluacion | null }) {
   const styles = useStyles();
   const c = useTheme();
   const urgent = item.priority === 'high';
@@ -58,6 +64,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   const congelado = item.state === 'frozen';
   const tono = urgent ? c.expiry : congelado ? c.frost : c.brand;
   const sugiereCongelar = recomendarCongelar(item);
+  const avisoSalud = salud ? textoDeAviso(salud) : '';
 
   return (
     <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
@@ -67,7 +74,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           congelado
             ? `congelado ${describeCongelado(item.frozen_at)}`
             : describeDaysLeft(item.days_left).toLowerCase()
-        }${sugiereCongelar ? '. Congélalo o úsalo' : ''}`}
+        }${sugiereCongelar ? '. Congélalo o úsalo' : ''}${avisoSalud ? `. ${avisoSalud}` : ''}`}
         style={({ pressed }) => [
           styles.card,
           item.effective_limit_date === null && !congelado && styles.cardUndated,
@@ -101,6 +108,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
             <Text style={styles.congelarTexto}>Congélalo o úsalo</Text>
           </View>
         ) : null}
+        {salud && avisoSalud ? <MarcaSalud evaluacion={salud} /> : null}
       </View>
 
       <Contador item={item} urgent={urgent} />
