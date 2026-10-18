@@ -344,6 +344,17 @@ select throws_ok(
   'pedir 0 días se rechaza'
 );
 
+select lives_ok(
+  $$select * from public.most_used_products(current_setting('opsi.priv_ana')::uuid, 90, 200)$$,
+  'se pueden pedir hasta 200 productos: la lista completa'
+);
+
+select throws_ok(
+  $$select * from public.most_used_products(current_setting('opsi.priv_ana')::uuid, 90, 201)$$,
+  '22023', null,
+  'pero no 201'
+);
+
 -- Bruno, aunque sea premium, no ve la nevera de Ana.
 reset role;
 update public.user_settings set plan = 'premium' where user_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222';

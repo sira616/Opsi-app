@@ -98,6 +98,7 @@ export default function AltaManual() {
     donde?: string;
     dias?: string;
     nombre?: string;
+    nevera?: string;
   }>();
   const codigo = codigoDeRuta(params.codigo);
   const listaId = idDeRuta(params.lista);
@@ -139,6 +140,7 @@ export default function AltaManual() {
       nombreInicial={nombreDeRuta(params.nombre)}
       inicialDonde={ubicacionDeRuta(params.donde)}
       inicialDias={diasDeRuta(params.dias)}
+      neveraId={idDeRuta(params.nevera)}
     />
   );
 }
@@ -153,6 +155,7 @@ function Formulario({
   nombreInicial,
   inicialDonde,
   inicialDias,
+  neveraId,
 }: {
   codigo: string | null;
   productoId: string | null;
@@ -166,6 +169,8 @@ function Formulario({
   /** Lo que se llevaba elegido en la hoja rápida, si se viene de ahí. */
   inicialDonde: StorageLocation | null;
   inicialDias: number | null;
+  /** La nevera elegida al llegar desde «tus productos»; si no se pasa o ya no existe, la activa. */
+  neveraId: string | null;
 }) {
   const styles = useStyles();
   const t = useType();
@@ -173,8 +178,10 @@ function Formulario({
   const router = useRouter();
   const queryClient = useQueryClient();
   // Dónde va a caer lo que se guarde. Ya no hay «mi hogar»: es una elección con
-  // consecuencias, y se enseña en la propia pantalla.
-  const { activa } = useNeveraActual();
+  // consecuencias, y se enseña en la propia pantalla. Solo vale una nevera que la
+  // persona tenga: un id suelto de la ruta no manda a ninguna otra parte.
+  const { neveras, activa: actual } = useNeveraActual();
+  const activa = neveras.find((n) => n.id === neveraId) ?? actual;
 
   const inicial = cantidadInicial(ficha, linea);
   const [name, setName] = useState(ficha?.name ?? linea?.name ?? nombreInicial ?? '');

@@ -441,6 +441,11 @@ Las reglas que salen de ahí:
   la primera.
 - Si dos textos del mismo escalón empiezan igual («Parece que…», «Vaya…»), uno de los
   dos está mal.
+- **Ningún texto que repita lo que la pantalla ya enseña.** Un resumen de relleno
+  («1 escaneado · 5 a mano», «Lo que más has terminado en tu nevera en los últimos 90
+  días» encima de una lista que ya es eso) se quita: si el dato no ayuda a decidir nada,
+  sobra. Un contador solo se queda donde se usa para algo (el tope de neveras, el de
+  listas).
 
 ### Checklist antes de dar por bueno un texto
 

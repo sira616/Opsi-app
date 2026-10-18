@@ -93,6 +93,8 @@ function Puerta() {
       <Stack.Screen name="editar-elemento/[id]" options={hoja} />
       {/* Tus productos es un inventario con buscador y fichas: pantalla entera, no hoja. */}
       <Stack.Screen name="productos" />
+      {/* Lo que más gastas, entero: la pestaña de Premium enseña solo los primeros. */}
+      <Stack.Screen name="gastos" />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
       <Stack.Screen name="nevera/[id]/editar" options={hoja} />

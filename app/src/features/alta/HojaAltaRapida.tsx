@@ -43,6 +43,8 @@ type Props = {
   netQuantity: number | null;
   /** La línea de la lista de la que sale: al guardar, queda comprada. */
   linea?: LineaLista | null;
+  /** La nevera en la que se guarda, si no es la activa. */
+  neveraId?: string;
   /** Abrir el formulario completo, con lo ya elegido. */
   onEditar: (elegido: Elegido) => void;
   onGuardado: (nombre: string) => void;
@@ -73,13 +75,15 @@ export function HojaAltaRapida({
   unitFamily,
   netQuantity,
   linea = null,
+  neveraId,
   onEditar,
   onGuardado,
 }: Props) {
   const styles = useStyles();
   const c = useTheme();
   const queryClient = useQueryClient();
-  const { activa } = useNeveraActual();
+  const { neveras, activa: actual } = useNeveraActual();
+  const activa = neveras.find((n) => n.id === neveraId) ?? actual;
 
   const categoria = adivinarCategoria(nombre);
   const cantidad = cantidadInicial({ unit_family: unitFamily, net_quantity: netQuantity }, linea);

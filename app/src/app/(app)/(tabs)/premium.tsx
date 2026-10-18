@@ -6,16 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CaretRight, Check, Lock, Package, Star } from 'phosphor-react-native';
 
-import {
-  DIAS_PERIODO,
-  fetchMasUsados,
-  fetchProductosConocidos,
-} from '@/api/premium';
+import { fetchMasUsados, fetchProductosConocidos, GASTOS_EN_RESUMEN } from '@/api/premium';
 import { fetchSettings, updateSettings } from '@/api/settings';
 import { Nota, Row, Section } from '@/features/ajustes/ui';
+import { FilaGasto } from '@/features/gastos/FilaGasto';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
-import { IconoComida } from '@/shared/lib/iconos-comida';
 import { queryKeys } from '@/shared/lib/query';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import {
@@ -26,7 +22,6 @@ import {
   radius,
   space,
   tabBarClearance,
-  tabular,
   touchTarget,
   useAspecto,
   useTheme,
@@ -63,9 +58,10 @@ export default function Premium() {
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
   const premium = settings.data?.plan === 'premium';
 
+  // Se piden uno más de los que se enseñan: así se sabe si hay más y vale la pena «Ver todos».
   const gastos = useQuery({
-    queryKey: queryKeys.masUsados(activa.id),
-    queryFn: () => fetchMasUsados(activa.id),
+    queryKey: queryKeys.masUsados(activa.id, GASTOS_EN_RESUMEN + 1),
+    queryFn: () => fetchMasUsados(activa.id, GASTOS_EN_RESUMEN + 1),
     // Solo se pide con el plan: sin él el servidor contestaría que no.
     enabled: premium,
   });
@@ -115,8 +111,8 @@ export default function Premium() {
           <Text style={styles.planTitulo}>{premium ? 'Tienes Opsi Premium ⭐' : 'Plan básico'}</Text>
           <Text style={styles.planTexto}>
             {premium
-              ? 'Gracias por apoyar Opsi.'
-              : 'Opsi Premium añade colores, lo que más gastas y más listas de la compra. Todavía no se puede contratar: lo estamos preparando.'}
+              ? 'Colores, tus productos, lo que más gastas y hasta 10 listas por nevera.'
+              : 'Colores, tus productos, lo que más gastas y más listas de la compra. Todavía no se puede contratar.'}
           </Text>
         </View>
 
@@ -178,18 +174,11 @@ export default function Premium() {
                 style={({ pressed }) => [styles.enlace, pressed && styles.pulsado]}
               >
                 <Package size={22} color={c.brand} weight="duotone" />
-                <View style={styles.gastoTexto}>
-                  <Text style={styles.gastoNombre}>
-                    {(conocidos.data ?? []).length === 0
-                      ? 'Aún no tienes ninguno'
-                      : `${(conocidos.data ?? []).length} ${(conocidos.data ?? []).length === 1 ? 'producto' : 'productos'}`}
-                  </Text>
-                  <Text style={styles.gastoTirado}>
-                    {(conocidos.data ?? []).length === 0
-                      ? 'Saldrán aquí cuando añadas algo.'
-                      : `${(conocidos.data ?? []).filter((p) => p.escaneado).length} escaneados · ${(conocidos.data ?? []).filter((p) => !p.escaneado).length} a mano`}
-                  </Text>
-                </View>
+                <Text style={styles.enlaceTexto}>
+                  {(conocidos.data ?? []).length === 0
+                    ? 'Aún no tienes ninguno'
+                    : `${(conocidos.data ?? []).length} ${(conocidos.data ?? []).length === 1 ? 'producto' : 'productos'}`}
+                </Text>
                 <CaretRight size={16} color={c.inkMuted} weight="bold" />
               </Pressable>
             )
@@ -197,8 +186,7 @@ export default function Premium() {
             <View style={styles.bloqueo}>
               <Lock size={20} color={c.inkMuted} weight="duotone" />
               <Text style={styles.texto}>
-                Con Opsi Premium ⭐ tienes un inventario de todo lo que has añadido, escaneado o a mano, con su
-                ficha, para guardarlo en la nevera o apuntarlo en la lista de un toque.
+                Con Opsi Premium ⭐ tienes un almacén con los productos que has registrado y su ficha.
               </Text>
             </View>
           )}
@@ -211,39 +199,30 @@ export default function Premium() {
             ) : gastos.error ? (
               <Text style={styles.texto}>{describeDbError(gastos.error)}</Text>
             ) : (gastos.data ?? []).length === 0 ? (
-              <Text style={styles.texto}>
-                Aún no hay nada agotado en {activa.name} en los últimos {DIAS_PERIODO} días. Cuando des por
-                terminado algo, saldrá aquí.
-              </Text>
+              <Text style={styles.texto}>Aún no has terminado nada en {activa.name}.</Text>
             ) : (
               <>
-                <Text style={styles.texto}>Lo que más has terminado en {activa.name} en los últimos {DIAS_PERIODO} días.</Text>
-                {gastos.data?.map((p, i) => (
-                  <View key={p.nombre} style={styles.gasto}>
-                    <Text style={styles.puesto}>{i + 1}</Text>
-                    <IconoComida nombre={p.nombre} size={20} color={c.brandInk} weight="duotone" />
-                    <View style={styles.gastoTexto}>
-                      <Text style={styles.gastoNombre} numberOfLines={1}>
-                        {p.nombre}
-                      </Text>
-                      {p.tirado > 0 ? (
-                        <Text style={styles.gastoTirado}>
-                          {p.tirado === 1 ? 'Y 1 vez se tiró' : `Y ${p.tirado} veces se tiró`}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text style={styles.gastoVeces}>
-                      {p.agotado} {p.agotado === 1 ? 'vez' : 'veces'}
-                    </Text>
-                  </View>
+                {(gastos.data ?? []).slice(0, GASTOS_EN_RESUMEN).map((p, i) => (
+                  <FilaGasto key={p.nombre} puesto={i + 1} producto={p} />
                 ))}
+                {(gastos.data ?? []).length > GASTOS_EN_RESUMEN ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Ver todos los productos que más gastas"
+                    onPress={() => router.push('/gastos')}
+                    style={({ pressed }) => [styles.enlace, pressed && styles.pulsado]}
+                  >
+                    <Text style={styles.enlaceTexto}>Ver todos</Text>
+                    <CaretRight size={16} color={c.inkMuted} weight="bold" />
+                  </Pressable>
+                ) : null}
               </>
             )
           ) : (
             <View style={styles.bloqueo}>
               <Lock size={20} color={c.inkMuted} weight="duotone" />
               <Text style={styles.texto}>
-                Con Opsi Premium ⭐ ves qué es lo que más gastas y lo que acabas tirando, para comprar mejor.
+                Con Opsi Premium ⭐ ves qué es lo que más gastas y lo que acabas tirando.
               </Text>
             </View>
           )}
@@ -319,12 +298,6 @@ const useStyles = makeStyles((c) => ({
 
   texto: { fontSize: 13.5, lineHeight: 19, color: c.inkMuted },
   enlace: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget + 8 },
+  enlaceTexto: { flex: 1, fontFamily: fonts.semibold, fontSize: 14.5, color: c.ink },
   bloqueo: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-
-  gasto: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget },
-  puesto: { ...tabular, width: 18, fontFamily: fonts.bold, fontSize: 13, color: c.inkFaint, textAlign: 'center' },
-  gastoTexto: { flex: 1, minWidth: 0 },
-  gastoNombre: { fontFamily: fonts.semibold, fontSize: 14.5, color: c.ink },
-  gastoTirado: { fontSize: 11.5, color: c.inkFaint },
-  gastoVeces: { ...tabular, fontFamily: fonts.semibold, fontSize: 13.5, color: c.brandInk },
 }));
