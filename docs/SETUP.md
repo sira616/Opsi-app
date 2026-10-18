@@ -219,16 +219,19 @@ En el navegador no hace falta nada de esto: `127.0.0.1` funciona tal cual.
 
 ### Usuario de desarrollo
 
-El seed crea uno, ya listo para entrar:
+El seed crea dos cuentas, `syreta` y `compi`, y **`npm run up` les pone una contraseña
+aleatoria**, propia de tu ordenador: la imprime al terminar y la guarda en `.dev-cuentas.local`
+(git la ignora). Para volver a verla, o para ponérsela de nuevo tras un `db:reset`:
 
-| Usuario | Contraseña |
-|---|---|
-| `syreta` | `opsi-dev-2026` |
+```bash
+npm run dev:cuentas
+```
 
-> [!CAUTION]
-> Es una contraseña conocida y escrita en el repositorio. Vale **solo para el Supabase
-> local**. Antes de ejecutar los seeds contra un proyecto en la nube hay que borrar
-> `supabase/seed/03_usuario_dev.sql`.
+> [!IMPORTANT]
+> **No hay ninguna contraseña en el repositorio, y la CI lo vigila** (`npm run check:credenciales`).
+> Antes de ejecutar los seeds contra un proyecto en la nube hay que borrar
+> `supabase/seed/03_usuario_dev.sql` (el seed ya se niega a sembrar fuera del Supabase local,
+> pero no hay que depender de eso).
 
 También puedes crearte la tuya desde la app: usuario, contraseña de 10 caracteres y
 listo. Registrarte es lo que dispara el trigger que crea tu hogar.
