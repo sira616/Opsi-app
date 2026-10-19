@@ -3,6 +3,11 @@ import { test } from 'node:test';
 
 import {
   CLAVES_SALUD,
+  VERSION_AVISO_SALUD,
+  consentimientoVigente,
+  faltaPermisoSalud,
+  leerConsentimiento,
+  preferenciasEfectivas,
   PREFERENCIAS_SALUD,
   SIN_DATOS_DE_SALUD,
   evaluarSalud,
@@ -620,4 +625,49 @@ test('de punta a punta: pan sin gluten por etiqueta, pero con trazas de gluten',
     lineasDeAviso(r).map((l) => l.texto),
     ['Contiene soja.', 'Trazas de gluten.'],
   );
+});
+
+// ── El permiso para guardar y usar lo que evita la persona ────────────────
+
+const EN = '2026-10-19T10:00:00.000Z';
+
+test('leerConsentimiento: solo una versión entera positiva y una fecha de verdad cuentan', () => {
+  assert.deepEqual(leerConsentimiento(1, EN), { version: 1, en: EN });
+  assert.deepEqual(leerConsentimiento(3, EN), { version: 3, en: EN });
+  assert.equal(leerConsentimiento(null, null), null, 'sin fila, sin permiso');
+  assert.equal(leerConsentimiento(null, EN), null, 'una fecha sin versión no es un permiso');
+  assert.equal(leerConsentimiento(1, null), null, 'una versión sin fecha tampoco');
+  assert.equal(leerConsentimiento(0, EN), null, 'la versión empieza en 1');
+  assert.equal(leerConsentimiento(-1, EN), null);
+  assert.equal(leerConsentimiento(1.5, EN), null, 'ni una versión con decimales');
+  assert.equal(leerConsentimiento('1', EN), null, 'ni una versión que llega como texto');
+  assert.equal(leerConsentimiento(1, 'ayer'), null, 'ni una fecha que no lo es');
+  assert.equal(leerConsentimiento(1, 20261019), null, 'ni una fecha que no es texto');
+});
+
+test('consentimientoVigente: hace falta haber aceptado la versión actual del aviso o una posterior', () => {
+  const v1 = { version: 1, en: EN };
+  assert.equal(consentimientoVigente(null), false);
+  assert.equal(consentimientoVigente(v1, 1), true);
+  assert.equal(consentimientoVigente(v1, 2), false, 'el aviso cambió: hay que aceptarlo de nuevo');
+  assert.equal(consentimientoVigente({ version: 2, en: EN }, 1), true, 'una versión posterior sigue valiendo');
+  assert.equal(consentimientoVigente(v1), v1.version >= VERSION_AVISO_SALUD, 'por omisión, la versión de la app');
+});
+
+test('preferenciasEfectivas: sin permiso vigente no se cruza NADA, aunque haya lista guardada', () => {
+  const guardadas: ClaveSalud[] = ['gluten', 'milk'];
+  const v1 = { version: 1, en: EN };
+  assert.deepEqual(preferenciasEfectivas(guardadas, v1, 1), ['gluten', 'milk']);
+  assert.deepEqual(preferenciasEfectivas(guardadas, null, 1), [], 'la de antes de pedir el permiso no se usa');
+  assert.deepEqual(preferenciasEfectivas(guardadas, v1, 2), [], 'ni con un permiso de una versión vieja');
+  assert.deepEqual(preferenciasEfectivas([], v1, 1), []);
+});
+
+test('faltaPermisoSalud: solo cuando hay algo guardado que no se está usando', () => {
+  const v1 = { version: 1, en: EN };
+  assert.equal(faltaPermisoSalud(['milk'], null, 1), true, 'la lista de antes del permiso');
+  assert.equal(faltaPermisoSalud(['milk'], v1, 2), true, 'y la de una versión vieja del aviso');
+  assert.equal(faltaPermisoSalud(['milk'], v1, 1), false, 'con permiso vigente no falta nada');
+  assert.equal(faltaPermisoSalud([], null, 1), false, 'quien nunca marcó nada no tiene nada que avisar');
+  assert.equal(faltaPermisoSalud([], v1, 2), false);
 });

@@ -114,6 +114,65 @@ export function leerClaves(valor: unknown): ClaveSalud[] {
   return CLAVES_SALUD.filter((clave) => vistas.has(clave));
 }
 
+// ── El permiso para guardar lo que evita la persona ───────────────────────
+//
+// Lo que se marca es un dato de salud (RGPD, categoría especial) y no se guarda ni se
+// usa sin el permiso de su dueña. El servidor no deja guardar una lista no vacía sin él
+// (`check_health_consent`); aquí, además, la app no cruza nada si no hay permiso
+// VIGENTE. Lo dicho abajo es la parte pura, que se prueba sin pantalla ni red.
+
+/**
+ * La versión del aviso de consentimiento que la app enseña. Subirla cuando cambie el
+ * aviso (qué se guarda, para qué, quién lo ve) obliga a quien ya aceptó a aceptarlo de
+ * nuevo: mientras tanto, su lista no se usa.
+ */
+export const VERSION_AVISO_SALUD = 1;
+
+/** Qué versión del aviso aceptó la persona y cuándo (la fecha la pone el servidor). */
+export type ConsentimientoSalud = { version: number; en: string };
+
+/**
+ * El permiso tal y como llega de la fila. Lo que no tenga la forma exacta —una versión
+ * que no sea un entero positivo, o una fecha que no sea una fecha— cuenta como «sin
+ * permiso»: ante la duda, no hay permiso.
+ */
+export function leerConsentimiento(version: unknown, en: unknown): ConsentimientoSalud | null {
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return null;
+  if (typeof en !== 'string' || Number.isNaN(Date.parse(en))) return null;
+  return { version, en };
+}
+
+/** ¿Vale el permiso que hay para la versión del aviso que enseña la app? */
+export function consentimientoVigente(
+  consentimiento: ConsentimientoSalud | null,
+  vigente: number = VERSION_AVISO_SALUD,
+): boolean {
+  return consentimiento !== null && consentimiento.version >= vigente;
+}
+
+/**
+ * Lo que de verdad se cruza con los productos: la lista guardada si hay permiso
+ * vigente, y NADA si no. Una lista sin permiso (la de antes de pedirlo, o la de una
+ * versión vieja del aviso) no se usa, y quien pinta la pantalla lo dice en voz alta
+ * (`faltaPermisoSalud`): que de pronto no haya marcas no puede leerse como «todo bien».
+ */
+export function preferenciasEfectivas(
+  guardadas: readonly ClaveSalud[],
+  consentimiento: ConsentimientoSalud | null,
+  vigente: number = VERSION_AVISO_SALUD,
+): readonly ClaveSalud[] {
+  return consentimientoVigente(consentimiento, vigente) ? guardadas : [];
+}
+
+/** Hay algo guardado que no se está usando porque falta el permiso. */
+export function faltaPermisoSalud(
+  guardadas: readonly ClaveSalud[],
+  consentimiento: ConsentimientoSalud | null,
+  vigente: number = VERSION_AVISO_SALUD,
+): boolean {
+  return guardadas.length > 0 && !consentimientoVigente(consentimiento, vigente);
+}
+
 /**
  * El camino inverso: de una etiqueta de OFF al nombre con el que se pinta («en:milk» →
  * «leche»). Null si no es una de las 14: lo que Opsi no sabe nombrar no se enseña.

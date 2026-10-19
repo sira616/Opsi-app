@@ -77,7 +77,7 @@ function Inventario({ nevera }: { nevera: Nevera }) {
   // UNA consulta por todos los productos distintos de la lista, no una por fila, y solo si
   // hay algo que cruzar: sin preferencias no se pide ninguna ficha. Los ids van ordenados
   // para que el mismo conjunto sea siempre la misma clave de caché.
-  const { preferencias, error: errorPreferencias } = usePreferenciasSalud();
+  const { preferencias, error: errorPreferencias, faltaPermiso } = usePreferenciasSalud();
   const idsProductos = useMemo(
     () =>
       [...new Set((data ?? []).map((i) => i.product_id).filter((id): id is string => id !== null))].sort(),
@@ -172,6 +172,14 @@ function Inventario({ nevera }: { nevera: Nevera }) {
         {/* Una lista sin marcas porque no se pudieron leer las preferencias no puede
             parecer una lista sin avisos. */}
         <ErrorNote message={errorPreferencias} />
+        {/* Lo mismo con el permiso: si hay una lista guardada que no se usa, se dice. */}
+        <ErrorNote
+          message={
+            faltaPermiso
+              ? 'Tienes alérgenos guardados, pero no los uso sin tu permiso. Acéptalo en Ajustes, en «Alérgenos e intolerancias».'
+              : null
+          }
+        />
 
         {!isPending && todos.length > 0 && items.length === 0 ? (
           <View style={styles.sinResultados}>
