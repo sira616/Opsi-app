@@ -9,9 +9,10 @@
  * de la red ni de que `OFF_USER_AGENT` esté o no configurado, para que dé lo mismo en
  * un portátil, en la CI y en una avioneta.
  *
- * Por eso no usa los productos de los seeds: una ficha sin datos de salud (todas las
- * de los seeds) cuenta como caducada y la función intentaría renovarla desde OFF.
- * Crea su propia ficha del catálogo, ya con datos de salud, y la borra al acabar.
+ * Por eso no usa los productos de los seeds: una ficha sin datos de salud o sin su fila
+ * de nutrición (todas las de los seeds) cuenta como caducada y la función intentaría
+ * renovarla desde OFF. Crea su propia ficha del catálogo, ya con datos de salud y con
+ * nutrición, y la borra al acabar (la nutrición se va con ella).
  *
  * ── Qué cubre que los tests de `supabase/functions/_shared` no ─────────────
  *
@@ -28,12 +29,15 @@
 import { spawn, spawnSync } from 'node:child_process';
 
 const CONTENEDOR = process.env.OPSI_DB_CONTAINER ?? 'supabase_db_opsi';
+/** El runtime de Edge Functions: de su registro se lee QUÉ hizo la función con una petición. */
+const CONTENEDOR_FUNCIONES = process.env.OPSI_FN_CONTAINER ?? 'supabase_edge_runtime_opsi';
 const CORREO = 'zzfuncion@usuarios.opsi.local';
 const CLAVE = 'una-clave-de-prueba-larga';
 
 /**
  * Una ficha del catálogo que crea esta comprobación (GTIN-13 válido, fuera de los
- * seeds): con datos de salud y al día, para que se sirva de la caché sin llamar a nadie.
+ * seeds): con datos de salud y con su fila de nutrición, y al día, para que se sirva de
+ * la caché sin llamar a nadie.
  */
 const CODIGO_DEL_CATALOGO = '8499990000152';
 /** Un GTIN-13 válido que no está en ninguna parte: se anota como falta a mano. */
@@ -74,6 +78,23 @@ function psql(sql) {
     hijo.on('close', (codigo) => resolve({ codigo, salida: salida.trim(), error: error.trim() }));
     hijo.stdin.end(sql);
   });
+}
+
+const INICIO_DE_LA_COMPROBACION = new Date(Date.now() - 2000).toISOString();
+
+/**
+ * Qué resultado dio cada petición de esta persona, en orden, según el registro de la
+ * función (`"resultado":"cache"`, `"cache_vieja"`…). null si no se puede leer el registro.
+ */
+function eventosDe(userId) {
+  const r = spawnSync('docker', ['logs', '--since', INICIO_DE_LA_COMPROBACION, CONTENEDOR_FUNCIONES], {
+    encoding: 'utf8',
+  });
+  if (r.status !== 0) return null;
+  return `${r.stdout}\n${r.stderr}`
+    .split('\n')
+    .filter((l) => l.includes('"evento":"lookup-barcode"') && l.includes(`"user_id":"${userId}"`))
+    .map((l) => l.match(/"resultado":"([a-z_]+)"/)?.[1] ?? '?');
 }
 
 function estadoDeSupabase() {
@@ -152,6 +173,16 @@ try {
   `);
   if (ficha.codigo !== 0) throw new Error(`No he podido crear la ficha de prueba: ${ficha.error.slice(0, 200)}`);
 
+  // Y su nutrición, con valores reconocibles: sin esta fila la ficha contaría como caducada
+  // y la función iría a OFF. También sirve para comprobar que NO sale en la respuesta, y
+  // que `service_role` llega a leer la fecha con sus permisos de columna (el embed).
+  const nutricion = await psql(`
+    insert into public.product_nutrition (product_id, nutrition_data_at, energy_kcal, sugars, serving_size)
+    select id, now(), 424.24, 42.42, 'racion-secreta'
+      from public.products where household_id is null and barcode = '${CODIGO_DEL_CATALOGO}';
+  `);
+  if (nutricion.codigo !== 0) throw new Error(`No he podido crear la nutrición de prueba: ${nutricion.error.slice(0, 200)}`);
+
   // La cuenta de prueba, creada como lo haría la app: por el alta de GoTrue.
   const alta = await fetch(`${API_URL}/auth/v1/signup`, {
     method: 'POST',
@@ -160,6 +191,7 @@ try {
   });
   const sesion = await alta.json();
   const token = sesion.access_token;
+  const userId = sesion.user?.id;
   if (!token) {
     throw new Error(`No he podido crear la cuenta de prueba (${alta.status}): ${JSON.stringify(sesion).slice(0, 200)}`);
   }
@@ -221,6 +253,16 @@ try {
       !('household_id' in enCatalogo.json.product),
     JSON.stringify(Object.keys(enCatalogo.json?.product ?? {})),
   );
+  // La nutrición es de Opsi Premium y esta función no mira el plan: ni un solo dato sale.
+  // Que la ficha se sirva de la caché (sin ir a OFF) demuestra además que la función ve que
+  // tiene su fila de nutrición con los permisos de columna que le quedan a `service_role`.
+  comprobar(
+    'la nutrición NO sale en la respuesta (es premium y esta función no mira el plan)',
+    enCatalogo.json?.product &&
+      !('nutrition_data' in enCatalogo.json.product) &&
+      !/nutri|energy|kcal|sugar|serving|racion-secreta/i.test(JSON.stringify(enCatalogo.json)),
+    JSON.stringify(enCatalogo.json),
+  );
   const producto = enCatalogo.json?.product;
   comprobar(
     'con los datos de salud de la ficha: alérgenos, trazas, etiquetas, ingredientes y health_data',
@@ -250,6 +292,58 @@ try {
     `estado ${libro.estado} ${JSON.stringify(libro.json)}`,
   );
   comprobar('y sin gastar cuota', cuotaAntes.salida === cuotaDespues.salida, `${cuotaAntes.salida} → ${cuotaDespues.salida}`);
+
+  // ── Una ficha sin su fila de nutrición cuenta como caducada ────────────
+  //
+  // La respuesta es la misma (se sirve la ficha que hay), así que lo que la distingue de la
+  // caché al día está en el registro de la función: `cache_vieja` en vez de `cache`. Para no
+  // llamar a OFF desde aquí, ni con un OFF_USER_AGENT configurado, se agota el hueco global
+  // hacia OFF de este minuto (sin User-Agent la función ni lo mira). Es lo que prueba, con
+  // la base de datos y el gateway de verdad, que «no hay fila» llega a la función como
+  // «no consta», y que «hay fila» (todas las comprobaciones de arriba) como «consta».
+  console.log('\n  Una ficha sin su fila de nutrición');
+  if (new Date().getSeconds() >= 50) {
+    // Que el minuto no cambie entre agotar el hueco y llamar: el contador es por minuto.
+    await new Promise((r) => setTimeout(r, (62 - new Date().getSeconds()) * 1000));
+  }
+  const MINUTO_ACTUAL = `to_timestamp(floor(extract(epoch from now()) / 60) * 60)`;
+  await psql(`
+    delete from public.product_nutrition
+     where product_id = (select id from public.products where household_id is null and barcode = '${CODIGO_DEL_CATALOGO}');
+    insert into public.lookup_usage (clave, ventana, n) values ('off:m', ${MINUTO_ACTUAL}, 10)
+      on conflict (clave, ventana) do update set n = 10;
+  `);
+  const eventosAntes = eventosDe(userId);
+  const sinNutricion = await llamar({ token, cuerpo: { barcode: CODIGO_DEL_CATALOGO } });
+  comprobar(
+    'se sigue sirviendo la ficha que hay (sin hueco hacia OFF no se pierde nada)',
+    sinNutricion.estado === 200 && sinNutricion.json?.found === true && sinNutricion.json.product?.barcode === CODIGO_DEL_CATALOGO,
+    `estado ${sinNutricion.estado} ${JSON.stringify(sinNutricion.json)}`,
+  );
+  // El registro llega un instante después: se espera a que aparezca UN evento más que antes.
+  let resultado = null;
+  const registroLegible = eventosAntes !== null;
+  for (let intento = 0; registroLegible && intento < 10 && resultado === null; intento++) {
+    const despues = eventosDe(userId);
+    if (despues !== null && despues.length > eventosAntes.length) resultado = despues.at(-1);
+    else await new Promise((r) => setTimeout(r, 500));
+  }
+  if (registroLegible) {
+    comprobar(
+      'cuenta como caducada: la función intentó renovarla (cache_vieja) en vez de servirla como al día (cache)',
+      resultado === 'cache_vieja',
+      `resultado: ${resultado}`,
+    );
+  } else {
+    console.log(tenue(`  · omitida: no puedo leer el registro de ${CONTENEDOR_FUNCIONES} (docker logs)`));
+  }
+  // Se deja la ficha como estaba para lo que sigue, y sin tocar el contador del hueco.
+  await psql(`
+    insert into public.product_nutrition (product_id, nutrition_data_at, energy_kcal, sugars, serving_size)
+    select id, now(), 424.24, 42.42, 'racion-secreta'
+      from public.products where household_id is null and barcode = '${CODIGO_DEL_CATALOGO}';
+    delete from public.lookup_usage where clave = 'off:m' and ventana = ${MINUTO_ACTUAL};
+  `);
 
   // ── El límite ───────────────────────────────────────────────────────────
   console.log('\n  El límite por persona (30 por minuto)');

@@ -92,7 +92,8 @@ select ok(
       from unnest(array[
         'households', 'household_members', 'household_invitations',
         'household_invite_attempts', 'household_icons',
-        'category_shelf_life_reference', 'open_shelf_life_reference'
+        'category_shelf_life_reference', 'open_shelf_life_reference',
+        'product_nutrition'
       ]) as t(nombre)
      where has_table_privilege('authenticated', 'public.' || t.nombre, 'INSERT')
         or has_table_privilege('authenticated', 'public.' || t.nombre, 'UPDATE')
@@ -104,6 +105,16 @@ select ok(
 select ok(
   not has_table_privilege('authenticated', 'public.household_invite_attempts', 'SELECT'),
   'el registro de intentos de invitar no lo lee ni el propio cliente'
+);
+
+-- La nutrición (Opsi Premium): se lee con la RLS por plan y NO se escribe desde el cliente,
+-- ni a nivel de tabla ni de columna. El comportamiento está en `nutricion_test.sql`.
+select ok(
+  has_table_privilege('authenticated', 'public.product_nutrition', 'SELECT')
+    and not has_any_column_privilege('authenticated', 'public.product_nutrition', 'INSERT')
+    and not has_any_column_privilege('authenticated', 'public.product_nutrition', 'UPDATE')
+    and not has_table_privilege('authenticated', 'public.product_nutrition', 'DELETE'),
+  'la nutrición de los productos se lee (con la RLS por plan) pero no se escribe desde el cliente'
 );
 
 -- El registro de eventos es inmutable: se escribe y no se toca más.
@@ -190,6 +201,37 @@ select ok(
     and not has_table_privilege('service_role', 'public.products', 'DELETE')
     and not has_table_privilege('service_role', 'public.products', 'TRUNCATE'),
   'y sobre products solo puede leer: ni insertar, ni actualizar, ni borrar ni vaciar'
+);
+
+-- Los permisos de COLUMNA no salen en `relacl`, así que las dos comprobaciones de arriba no
+-- los ven. Hay uno, concedido por escrito en `20261024100000_nutricion`: leer la fecha y el
+-- id de `product_nutrition` para saber si una ficha ya tiene su nutrición. Los VALORES no.
+-- Si aparece otro, que sea una decisión con su motivo, no un descuido.
+select is(
+  (select coalesce(array_agg(c.relname || '.' || a.attname || ':' || x.privilege_type
+                             order by c.relname, a.attname, x.privilege_type), array[]::text[])
+     from pg_attribute a
+     join pg_class c on c.oid = a.attrelid
+     join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(a.attacl) x
+     join pg_roles r on r.oid = x.grantee
+    where n.nspname = 'public' and c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped
+      and r.rolname = 'service_role'),
+  array['product_nutrition.nutrition_data_at:SELECT', 'product_nutrition.product_id:SELECT']::text[],
+  'service_role no tiene ningún permiso de columna salvo leer la fecha y el id de la nutrición'
+);
+
+select is(
+  (select count(*)
+     from pg_attribute a
+     join pg_class c on c.oid = a.attrelid
+     join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(a.attacl) x
+     join pg_roles r on r.oid = x.grantee
+    where n.nspname = 'public' and c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped
+      and r.rolname = 'anon'),
+  0::bigint,
+  'y anon no tiene permisos de columna en ninguna tabla'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════

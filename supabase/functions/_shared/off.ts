@@ -12,8 +12,9 @@
  *   · `normalizarRespuestaOff` —pura— se queda con un SUBCONJUNTO de campos y cada
  *     uno pasa por su filtro (texto limpio y con tope, imagen solo de un dominio,
  *     categorías, alérgenos y trazas con un formato exacto, etiquetas de salud solo
- *     de una lista cerrada, ingredientes limpios y recortados). Lo demás se tira.
- *     Es lo que se prueba con fixtures.
+ *     de una lista cerrada, ingredientes limpios y recortados, y la nutrición: números
+ *     solo si son `number` finitos y están en rango, listas cerradas para Nutri-Score,
+ *     NOVA y semáforos). Lo demás se tira. Es lo que se prueba con fixtures.
  *   · `consultarOff` hace la llamada, con el host fijo en el código, sin seguir
  *     redirecciones, con tiempo máximo y con tope de tamaño.
  *
@@ -42,6 +43,49 @@ export type ProductoOff = {
   /** Solo las de `ETIQUETAS_DE_SALUD`. */
   labelsTags: string[];
   ingredientsText: string | null;
+  /**
+   * Nutrición (Opsi Premium). Va a OTRA tabla, por `upsert_product_nutrition`, y nunca
+   * al `off_payload` ni a la respuesta de `lookup-barcode`: ver `NutricionOff`.
+   */
+  nutrition: NutricionOff;
+};
+
+export type NutriScore = 'a' | 'b' | 'c' | 'd' | 'e';
+export type NivelNutriente = 'low' | 'moderate' | 'high';
+
+/**
+ * La nutrición de una ficha de OFF, ya filtrada. Todo es opcional (null = «OFF no lo da»,
+ * que NO es cero) y llegar aquí significa que OFF se acaba de consultar: aunque todo sea
+ * null se guarda la fila, para no volver a preguntar en cada escaneo. Que la nutrición
+ * «conste» o «no conste» lo decide la base de datos con la existencia de la fila.
+ *
+ * Los valores son por 100 g o por 100 ml (`basis`), con dos decimales: energía de 0 a 950
+ * kcal y el resto de 0 a 100 g. Las mismas reglas las revalida `upsert_product_nutrition`.
+ */
+export type NutricionOff = {
+  nutriscoreGrade: NutriScore | null;
+  novaGroup: 1 | 2 | 3 | 4 | null;
+  /** 'g' si el producto se mide en masa, 'ml' si en volumen; null si no se sabe. */
+  basis: 'g' | 'ml' | null;
+  energyKcal: number | null;
+  fat: number | null;
+  saturatedFat: number | null;
+  carbohydrates: number | null;
+  sugars: number | null;
+  fiber: number | null;
+  proteins: number | null;
+  salt: number | null;
+  fatLevel: NivelNutriente | null;
+  saturatedFatLevel: NivelNutriente | null;
+  sugarsLevel: NivelNutriente | null;
+  saltLevel: NivelNutriente | null;
+  servingSize: string | null;
+  /**
+   * Códigos tipo `en:e330`. null = no se sabe (OFF no da la lista, o la da vacía pero la ficha
+   * no trae ingredientes: OFF solo analiza aditivos a partir de ellos); [] = lista vacía CON
+   * ingredientes. Ver `aditivosDeLaFicha`.
+   */
+  additivesTags: string[] | null;
 };
 
 export type ResultadoOff =
@@ -75,6 +119,13 @@ export const ETIQUETAS_DE_SALUD: readonly string[] = [
 ];
 /** Más que esto de cantidad es un error de la ficha, no un producto. */
 const MAX_CANTIDAD = 1_000_000;
+/** Nutrición: los mismos topes que revalida `upsert_product_nutrition` y los CHECK de la tabla. */
+export const MAX_KCAL = 950;
+export const MAX_NUTRIENTE = 100;
+export const MAX_RACION = 60;
+export const MAX_ADITIVOS = 60;
+/** Margen por el redondeo de OFF: las saturadas pueden pasarse de las grasas en 0,5 g, y los azúcares de los hidratos. */
+const MARGEN_PARES_CENTESIMAS = 50;
 
 // ── Texto ─────────────────────────────────────────────────────────────────
 
@@ -256,11 +307,161 @@ export function categoriasValidas(valor: unknown): string[] {
   return etiquetasValidas(valor);
 }
 
-// ── Normalizar la respuesta ───────────────────────────────────────────────
+// ── Nutrición ─────────────────────────────────────────────────────────────
 
 function esObjeto(valor: unknown): valor is Record<string, unknown> {
   return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
 }
+
+/**
+ * Un número de OFF listo para guardar, o null. Solo cuenta un `number` finito entre 0 y
+ * `max` (un texto «12,5», un NaN, un Infinity, un negativo o un objeto son null: no se
+ * adivina ni se arregla), y se deja con dos decimales. El rango se mira sobre lo que
+ * llega y se redondea después, igual que hace la base de datos.
+ *
+ * «No lo da» es null y no 0: una ficha sin sal declarada no tiene «0 g de sal».
+ */
+export function numeroEnRango(valor: unknown, max: number): number | null {
+  if (typeof valor !== 'number' || !Number.isFinite(valor) || valor < 0 || valor > max) return null;
+  const redondeado = Math.round(valor * 100) / 100;
+  // Un -0 (de un -0 de entrada) se guarda como 0.
+  return redondeado === 0 ? 0 : redondeado;
+}
+
+/** El Nutri-Score: solo de la a a la e. OFF también dice «unknown» o «not-applicable», y eso es null. */
+export function nutriscoreValido(valor: unknown): NutriScore | null {
+  return typeof valor === 'string' && /^[a-e]$/.test(valor) ? (valor as NutriScore) : null;
+}
+
+/** El grupo NOVA: un entero de 1 a 4. Un texto («4») o un 5 son null. */
+export function novaValido(valor: unknown): 1 | 2 | 3 | 4 | null {
+  return typeof valor === 'number' && Number.isInteger(valor) && valor >= 1 && valor <= 4
+    ? (valor as 1 | 2 | 3 | 4)
+    : null;
+}
+
+/** Los semáforos de `nutrient_levels`: solo estos tres valores. */
+export function nivelValido(valor: unknown): NivelNutriente | null {
+  return valor === 'low' || valor === 'moderate' || valor === 'high' ? valor : null;
+}
+
+/**
+ * La ración: un texto corto («30 g») y limpio, como los demás textos de OFF. Si no cabe en
+ * 60 caracteres NO se recorta —«1 porción (unas 3 galletas, aproximadamente la…» no es una
+ * ración—: es null.
+ */
+export function racionValida(valor: unknown): string | null {
+  const limpia = limpiarTexto(valor, MAX_RACION + 1);
+  return limpia !== null && Array.from(limpia).length <= MAX_RACION ? limpia : null;
+}
+
+/**
+ * Los aditivos: códigos con el formato exacto `en:e330` / `en:e150d` / `en:e1442` /
+ * `en:e331iii`, sin repetir y con tope. El sufijo admite hasta 4 letras porque OFF escribe
+ * las subformas en cifras romanas (E331iii, E160aii, E450vii). Lo que no es una lista es
+ * null («OFF no da la lista»); una lista sin ningún código válido es [].
+ *
+ * Ese [] todavía NO significa «sin aditivos»: ver `aditivosDeLaFicha`.
+ */
+export function aditivosValidos(valor: unknown): string[] | null {
+  if (!Array.isArray(valor)) return null;
+  const vistos = new Set<string>();
+  for (const aditivo of valor) {
+    if (typeof aditivo === 'string' && /^en:e[0-9]{3,4}[a-z]{0,4}$/.test(aditivo)) {
+      vistos.add(aditivo);
+      if (vistos.size >= MAX_ADITIVOS) break;
+    }
+  }
+  return [...vistos];
+}
+
+/**
+ * Los aditivos de una ficha, con la regla que hace fiable la diferencia entre «no se sabe»
+ * (null) y «OFF los analizó y no declara ninguno» ([]).
+ *
+ * OFF saca los aditivos de los ingredientes: una ficha SIN ingredientes devuelve la lista
+ * vacía porque no hay nada que analizar, no porque el producto no lleve aditivos. Por eso:
+ *
+ *   · lista con códigos válidos                    → esos códigos
+ *   · lista vacía y la ficha SIN ingredientes      → null (no se sabe)
+ *   · lista vacía y la ficha CON ingredientes      → []   (OFF los analizó y no declara)
+ *   · lista con algo, pero nada con formato válido → null (no se puede afirmar «ninguno»)
+ *   · no es una lista                              → null
+ *
+ * `ingredientes` es el texto YA filtrado de la ficha (`limpiarIngredientes`), null si no hay.
+ */
+export function aditivosDeLaFicha(valor: unknown, ingredientes: string | null): string[] | null {
+  const validos = aditivosValidos(valor);
+  if (validos === null || validos.length > 0) return validos;
+  if (ingredientes === null) return null;
+  return Array.isArray(valor) && valor.length > 0 ? null : [];
+}
+
+/**
+ * De `nutriments` y compañía de OFF a lo único que se guarda. Cada campo pasa por su
+ * filtro y uno malo es null SIN tirar la ficha entera. Dos reglas:
+ *
+ *   · Un par que se contradice se descarta entero: si las saturadas superan a las grasas
+ *     (con 0,5 g de margen) no se fía uno de ninguno de los dos, y lo mismo con azúcares e
+ *     hidratos. Se compara en centésimas enteras para que 0,3 + 0,5 no dependa del redondeo
+ *     de un `float`.
+ *   · La base (por 100 g o por 100 ml) sale de la familia de unidades del producto: masa
+ *     es 'g', volumen es 'ml', y si no se sabe, null.
+ *   · Los aditivos dependen de los ingredientes (`aditivosDeLaFicha`): una lista vacía de
+ *     una ficha sin ingredientes es null, no «ninguno».
+ */
+export function normalizarNutricion(
+  producto: Record<string, unknown>,
+  familia: FamiliaUnidad | null,
+  ingredientes: string | null,
+): NutricionOff {
+  const nutrientes = esObjeto(producto.nutriments) ? producto.nutriments : {};
+  const niveles = esObjeto(producto.nutrient_levels) ? producto.nutrient_levels : {};
+
+  let fat = numeroEnRango(nutrientes.fat_100g, MAX_NUTRIENTE);
+  let saturatedFat = numeroEnRango(nutrientes['saturated-fat_100g'], MAX_NUTRIENTE);
+  let carbohydrates = numeroEnRango(nutrientes.carbohydrates_100g, MAX_NUTRIENTE);
+  let sugars = numeroEnRango(nutrientes.sugars_100g, MAX_NUTRIENTE);
+
+  if (
+    fat !== null &&
+    saturatedFat !== null &&
+    Math.round(saturatedFat * 100) > Math.round(fat * 100) + MARGEN_PARES_CENTESIMAS
+  ) {
+    fat = null;
+    saturatedFat = null;
+  }
+  if (
+    carbohydrates !== null &&
+    sugars !== null &&
+    Math.round(sugars * 100) > Math.round(carbohydrates * 100) + MARGEN_PARES_CENTESIMAS
+  ) {
+    carbohydrates = null;
+    sugars = null;
+  }
+
+  return {
+    nutriscoreGrade: nutriscoreValido(producto.nutriscore_grade),
+    novaGroup: novaValido(producto.nova_group),
+    basis: familia === 'volume' ? 'ml' : familia === 'mass' ? 'g' : null,
+    energyKcal: numeroEnRango(nutrientes['energy-kcal_100g'], MAX_KCAL),
+    fat,
+    saturatedFat,
+    carbohydrates,
+    sugars,
+    fiber: numeroEnRango(nutrientes.fiber_100g, MAX_NUTRIENTE),
+    proteins: numeroEnRango(nutrientes.proteins_100g, MAX_NUTRIENTE),
+    salt: numeroEnRango(nutrientes.salt_100g, MAX_NUTRIENTE),
+    fatLevel: nivelValido(niveles.fat),
+    saturatedFatLevel: nivelValido(niveles['saturated-fat']),
+    sugarsLevel: nivelValido(niveles.sugars),
+    saltLevel: nivelValido(niveles.salt),
+    servingSize: racionValida(producto.serving_size),
+    additivesTags: aditivosDeLaFicha(producto.additives_tags, ingredientes),
+  };
+}
+
+// ── Normalizar la respuesta ───────────────────────────────────────────────
 
 /**
  * De la respuesta de OFF a lo único que se guarda. Devuelve null si no hay un
@@ -281,6 +482,8 @@ export function normalizarRespuestaOff(json: unknown): ProductoOff | null {
   const brand = limpiarTexto(marcas[0], MAX_MARCA);
 
   const cantidad = cantidadNumerica(p.product_quantity, p.product_quantity_unit) ?? parsearCantidad(p.quantity);
+  // El texto en español manda; si no hay (o se queda en nada al limpiarlo), el original.
+  const ingredientsText = limpiarIngredientes(p.ingredients_text_es) ?? limpiarIngredientes(p.ingredients_text);
 
   return {
     name,
@@ -292,8 +495,8 @@ export function normalizarRespuestaOff(json: unknown): ProductoOff | null {
     allergensTags: etiquetasValidas(p.allergens_tags),
     tracesTags: etiquetasValidas(p.traces_tags),
     labelsTags: etiquetasValidas(p.labels_tags, ETIQUETAS_DE_SALUD),
-    // El texto en español manda; si no hay (o se queda en nada al limpiarlo), el original.
-    ingredientsText: limpiarIngredientes(p.ingredients_text_es) ?? limpiarIngredientes(p.ingredients_text),
+    ingredientsText,
+    nutrition: normalizarNutricion(p, cantidad?.unitFamily ?? null, ingredientsText),
   };
 }
 
@@ -301,11 +504,24 @@ export function normalizarRespuestaOff(json: unknown): ProductoOff | null {
  * El `off_payload` que se guarda junto a la ficha: lo ya filtrado y de dónde y cuándo
  * salió. Los datos de salud NO van dentro: tienen columna propia, y duplicarlos
  * gastaría los 8192 caracteres del tope en algo que ya está en otro sitio (los
- * ingredientes por sí solos pueden ocupar 2000).
+ * ingredientes por sí solos pueden ocupar 2000). La nutrición tampoco, y por una razón
+ * más seria: `products` la lee cualquier persona con sesión y la nutrición es de Opsi
+ * Premium, que se decide en la tabla `product_nutrition`.
+ *
+ * Los campos se NOMBRAN uno a uno en vez de quitar los que sobran: así un campo nuevo de
+ * `ProductoOff` no acaba en el payload sin que nadie lo decida.
  */
 export function payloadDeOrigen(producto: ProductoOff, obtenidoEn: string): Record<string, unknown> {
-  const { allergensTags: _a, tracesTags: _t, labelsTags: _l, ingredientsText: _i, ...resto } = producto;
-  return { ...resto, source: 'openfoodfacts', fetched_at: obtenidoEn };
+  return {
+    name: producto.name,
+    brand: producto.brand,
+    unitFamily: producto.unitFamily,
+    netQuantity: producto.netQuantity,
+    imageUrl: producto.imageUrl,
+    categoriesTags: producto.categoriesTags,
+    source: 'openfoodfacts',
+    fetched_at: obtenidoEn,
+  };
 }
 
 /**
@@ -354,6 +570,12 @@ const CAMPOS_OFF = [
   'labels_tags',
   'ingredients_text',
   'ingredients_text_es',
+  'nutriscore_grade',
+  'nova_group',
+  'nutriments',
+  'nutrient_levels',
+  'serving_size',
+  'additives_tags',
 ].join(',');
 
 export const TIEMPO_MAXIMO_MS = 4000;

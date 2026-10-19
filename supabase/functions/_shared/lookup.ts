@@ -17,14 +17,25 @@
  *   4. cuota por persona               → 429 si se pasa
  *   5. caché global                    → lo normal: sin llamar a nadie
  *      · una ficha sin datos de salud (anterior a ellos) cuenta como caducada
+ *      · y una ficha sin su fila de nutrición también
  *   6. caché de faltas                 → no se vuelve a preguntar por lo que OFF no tiene
  *   7. hueco global hacia OFF          → 503 si hay demasiadas llamadas a la vez
- *   8. Open Food Facts                 → y se guarda lo que haya
+ *   8. Open Food Facts                 → y se guarda lo que haya: primero la ficha y justo
+ *                                        después su nutrición (si ésta falla se registra
+ *                                        y se devuelve la ficha igualmente)
+ *
+ * ── La nutrición NO sale de aquí ──────────────────────────────────────────
+ *
+ * Es de Opsi Premium y el plan lo decide la base de datos (RLS de `product_nutrition` y
+ * `nutrition_of_products`). Esta función no mira el plan de quien pregunta, así que
+ * devolverla saltaría ese candado: se guarda, pero la respuesta no la lleva. Lo único que
+ * se lee de ella es SI existe (`nutrition_data`), para decidir si la ficha está al día; ese
+ * booleano tampoco sale en la respuesta.
  */
 
 import { esCodigoDeNoComida, normalizarGtin } from './gtin.ts';
 import { leerLimitado } from './off.ts';
-import type { FamiliaUnidad, OpcionesOff, ProductoOff, ResultadoOff } from './off.ts';
+import type { FamiliaUnidad, NutricionOff, OpcionesOff, ProductoOff, ResultadoOff } from './off.ts';
 
 export const MAX_CUERPO_PETICION = 1024;
 /** Una ficha más vieja se vuelve a pedir a OFF; si no contesta, se sirve la vieja. */
@@ -54,8 +65,13 @@ export type ProductoCatalogo = {
   health_data: boolean;
 };
 
-/** Una fila del catálogo tal como sale de la base de datos. */
-export type FilaCatalogo = ProductoCatalogo & { updated_at: string };
+/**
+ * Una fila del catálogo tal como sale de la base de datos, con lo único que hace falta
+ * para decidir si está al día y que NO sale en la respuesta (`publico()` lo deja fuera):
+ * la fecha y si ya tiene su fila de nutrición (`product_nutrition`). Sin ella la ficha
+ * cuenta como caducada, igual que sin datos de salud.
+ */
+export type FilaCatalogo = ProductoCatalogo & { updated_at: string; nutrition_data: boolean };
 
 export type Cuota = { permitido: boolean; reintentarEn: number };
 
@@ -68,6 +84,13 @@ export type Dependencias = {
   reservarHuecoOff(): Promise<boolean>;
   consultarOff(codigo: string, opciones: Pick<OpcionesOff, 'userAgent'>): Promise<ResultadoOff>;
   guardar(codigo: string, producto: ProductoOff): Promise<ProductoCatalogo>;
+  /**
+   * La nutrición de la ficha que acaba de guardar `guardar`, en su propia tabla y por su
+   * propia función de la base de datos. Se llama SIEMPRE tras una consulta fresca a OFF,
+   * aunque no traiga ningún dato (todo null): la fila es la marca de «se consultó». Si
+   * lanza, `manejar` lo registra (`nutricion_error`) y sigue: la nutrición no tumba el escaneo.
+   */
+  guardarNutricion(productoId: string, nutricion: NutricionOff): Promise<void>;
   registrarFalta(codigo: string): Promise<void>;
   /** Solo se registran identificadores y resultados: nunca JWT ni cuerpos. */
   log(evento: Record<string, unknown>): void;
@@ -112,7 +135,8 @@ function fallo(estado: number, code: CodigoError, extra: Record<string, string> 
 
 function publico(fila: ProductoCatalogo | FilaCatalogo): { found: true; product: ProductoCatalogo & { source: 'openfoodfacts' } } {
   // Se copia campo a campo: lo que no se nombra aquí no sale, aunque la fila
-  // tenga más (`updated_at`, o lo que se añada mañana a la tabla).
+  // tenga más (`updated_at`, `nutrition_data`, o lo que se añada mañana a la tabla).
+  // NUNCA nutrición: es de Opsi Premium y esta función no mira el plan de quien pregunta.
   return {
     found: true,
     product: {
@@ -161,6 +185,42 @@ export function aProducto(fila: Record<string, unknown>): ProductoCatalogo {
   };
 }
 
+/**
+ * ¿Trae la fila su nutrición? Viene del `select` con `product_nutrition(nutrition_data_at)`:
+ * PostgREST la devuelve como objeto (la clave foránea es la propia clave primaria, una
+ * relación uno a uno), como lista de uno o, si no hay fila, como null. Cualquier otra cosa
+ * es «no».
+ */
+export function tieneNutricion(valor: unknown): boolean {
+  const fila = Array.isArray(valor) ? valor[0] : valor;
+  if (typeof fila !== 'object' || fila === null || Array.isArray(fila)) return false;
+  const marca = (fila as Record<string, unknown>).nutrition_data_at;
+  return typeof marca === 'string' && marca !== '';
+}
+
+/**
+ * De una fila de `products` (con su `product_nutrition(nutrition_data_at)` pegado) a lo
+ * que `buscarEnCatalogo` devuelve: el producto público más lo que decide la caducidad.
+ */
+export function aFilaCatalogo(fila: Record<string, unknown>): FilaCatalogo {
+  return {
+    ...aProducto(fila),
+    updated_at: String(fila.updated_at),
+    nutrition_data: tieneNutricion(fila.product_nutrition),
+  };
+}
+
+/**
+ * Lo único que se registra de una excepción: su nombre y su mensaje cortado a 200
+ * caracteres. Nunca el objeto entero (un error de la base de datos puede traer la fila).
+ */
+function describirError(error: unknown): { error: string; detalle: string } {
+  return {
+    error: error instanceof Error ? error.name : typeof error,
+    detalle: error instanceof Error ? error.message.slice(0, 200) : '',
+  };
+}
+
 function bearer(req: Request): string | null {
   const cabecera = req.headers.get('authorization') ?? '';
   const m = /^Bearer\s+([A-Za-z0-9._~+/=-]{10,4096})$/.exec(cabecera);
@@ -172,6 +232,9 @@ function esCaducada(fila: FilaCatalogo, ahora: number): boolean {
   // renueva aunque sea de ayer. Si OFF no contesta se sirve igualmente la vieja (con
   // `health_data: false`), así que esto solo cuesta una llamada cuando hay hueco.
   if (!fila.health_data) return true;
+  // Igual con la nutrición: sin su fila no consta, y se renueva una sola vez (al guardarla
+  // se crea la fila, aunque OFF no declare nada y quede toda a NULL).
+  if (!fila.nutrition_data) return true;
   const t = Date.parse(fila.updated_at);
   return !Number.isFinite(t) || ahora - t > DIAS_CADUCIDAD_CACHE * 86_400_000;
 }
@@ -279,6 +342,24 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
 
     if (off.tipo === 'encontrado') {
       const guardado = await dep.guardar(codigo, off.producto);
+      // La nutrición, justo después de la ficha y con su id. Es un extra de Opsi Premium y
+      // el escáner es la función central: si falla (red, base de datos), NO tumba el
+      // escaneo. Se registra y se devuelve igualmente la ficha, que ya está guardada. Sin
+      // fila de nutrición cuenta como caducada, así que la próxima vez que se escanee se
+      // reintenta, igual que si nunca la hubiera tenido.
+      try {
+        await dep.guardarNutricion(guardado.id, off.producto.nutrition);
+      } catch (errorNutricion) {
+        // Solo el nombre del error y su mensaje cortado, como en `excepcion`: nunca la fila
+        // ni los datos de OFF, ni el código de barras.
+        dep.log({
+          evento: 'lookup-barcode',
+          request_id: requestId,
+          user_id: userId,
+          resultado: 'nutricion_error',
+          ...describirError(errorNutricion),
+        });
+      }
       return fin('off', json(200, publico(guardado)));
     }
     if (off.tipo === 'no_es_comida') {
@@ -298,8 +379,6 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
     return fin('off_error', fallo(503, 'servicio_no_disponible', { 'Retry-After': '30' }), { motivo: off.motivo });
   } catch (error) {
     // Nunca se devuelve el mensaje: puede traer nombres de tablas o de funciones.
-    const nombre = error instanceof Error ? error.name : typeof error;
-    const detalle = error instanceof Error ? error.message.slice(0, 200) : '';
-    return fin('excepcion', fallo(500, 'interno'), { error: nombre, detalle });
+    return fin('excepcion', fallo(500, 'interno'), describirError(error));
   }
 }

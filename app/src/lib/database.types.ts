@@ -225,6 +225,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"product_nutrition": {
+                  Row: {
+                    "additives_tags": (string)[] | null,"basis": string | null,"carbohydrates": number | null,"energy_kcal": number | null,"fat": number | null,"fat_level": string | null,"fiber": number | null,"nova_group": number | null,"nutriscore_grade": string | null,"nutrition_data_at": string,"product_id": string,"proteins": number | null,"salt": number | null,"salt_level": string | null,"saturated_fat": number | null,"saturated_fat_level": string | null,"serving_size": string | null,"sugars": number | null,"sugars_level": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "additives_tags"?: (string)[] | null,"basis"?: string | null,"carbohydrates"?: number | null,"energy_kcal"?: number | null,"fat"?: number | null,"fat_level"?: string | null,"fiber"?: number | null,"nova_group"?: number | null,"nutriscore_grade"?: string | null,"nutrition_data_at": string,"product_id": string,"proteins"?: number | null,"salt"?: number | null,"salt_level"?: string | null,"saturated_fat"?: number | null,"saturated_fat_level"?: string | null,"serving_size"?: string | null,"sugars"?: number | null,"sugars_level"?: string | null
+                  }
+                  Update: {
+                    "additives_tags"?: (string)[] | null,"basis"?: string | null,"carbohydrates"?: number | null,"energy_kcal"?: number | null,"fat"?: number | null,"fat_level"?: string | null,"fiber"?: number | null,"nova_group"?: number | null,"nutriscore_grade"?: string | null,"nutrition_data_at"?: string,"product_id"?: string,"proteins"?: number | null,"salt"?: number | null,"salt_level"?: string | null,"saturated_fat"?: number | null,"saturated_fat_level"?: string | null,"serving_size"?: string | null,"sugars"?: number | null,"sugars_level"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "product_nutrition_product_id_fkey"
+      columns: ["product_id"]
+isOneToOne: true
+      referencedRelation: "products"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"products": {
                   Row: {
                     "allergens_tags": (string)[] | null,"barcode": string | null,"brand": string | null,"categories_tags": (string)[] | null,"created_at": string,"data_source": string,"health_data_at": string | null,"household_id": string | null,"id": string,"image_url": string | null,"ingredients_text": string | null,"labels_tags": (string)[] | null,"name": string,"net_quantity": number | null,"off_payload": Json | null,"open_shelf_life_days": number | null,"traces_tags": (string)[] | null,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
@@ -590,6 +610,34 @@ isOneToOne: false
 "my_plan":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"nutrition_of_products":
+{ Args: { "p_product_ids": (string)[] }; Returns: {
+              "additives_tags": (string)[] | null,
+"basis": string | null,
+"carbohydrates": number | null,
+"energy_kcal": number | null,
+"fat": number | null,
+"fat_level": string | null,
+"fiber": number | null,
+"nova_group": number | null,
+"nutriscore_grade": string | null,
+"nutrition_data_at": string,
+"product_id": string,
+"proteins": number | null,
+"salt": number | null,
+"salt_level": string | null,
+"saturated_fat": number | null,
+"saturated_fat_level": string | null,
+"serving_size": string | null,
+"sugars": number | null,
+"sugars_level": string | null
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "product_nutrition"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "open_item":
 { Args: { "p_item_id": string }; Returns: {
               "category": Database["public"]['Enums']["food_category"],
@@ -823,6 +871,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"upsert_product_nutrition":
+{ Args: { "p_additives_tags": (string)[],"p_basis": string,"p_carbohydrates": number,"p_energy_kcal": number,"p_fat": number,"p_fat_level": string,"p_fiber": number,"p_nova_group": number,"p_nutriscore_grade": string,"p_product_id": string,"p_proteins": number,"p_salt": number,"p_salt_level": string,"p_saturated_fat": number,"p_saturated_fat_level": string,"p_serving_size": string,"p_sugars": number,"p_sugars_level": string }; Returns: undefined
+                           },
 "use_quantity":
 { Args: { "p_amount": number,"p_item_id": string }; Returns: {
               "category": Database["public"]['Enums']["food_category"],
