@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **816 comprobaciones** en PGlite · `test:app`: **149**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **17 ficheros pgTAP, 669 tests** contra pgTAP real · `db:check`: **881 comprobaciones** en PGlite · `test:app`: **174**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1156,6 +1156,31 @@ no vence pronto, y a igual urgencia, por nombre; «Vence/Caduca hoy|mañana.» c
 la app»); es **de este aparato**, como el aspecto, no de la cuenta. Es la misma función de «congelar» que la tarjeta del inventario, así que el aviso y la tarjeta nunca discrepan.
 
 **Lo que NO se ha hecho:** la receta no genera nada (hace falta la IA); los avisos no usan todavía lo que se sepa de la persona (alérgenos, gustos): eso llega con el perfil personal; y los avisos fuera de la app (push) siguen siendo la fase 3.
+
+### D-50 · Perfil personal opcional, con permiso propio · 2026-10-19
+
+La función 2 de la lista: poder tener en cuenta **cómo es la persona** —cuánto se mueve, cómo come, qué le gusta y qué no, y productos concretos que no le gustan— para hacer recomendaciones más
+personalizadas. **Todo es opcional** y se trata con cuidado. Una pantalla nueva (`/perfil`), un widget «Tu perfil» en Premium (en «Asistente», **sin candado**: es un dato de la persona, no una función de pago) y una
+tabla, `user_profile` (migración `20261025100000`).
+
+**Se trata como un dato sensible, con el patrón del consentimiento de salud (D-46).** Cuánto te mueves y cómo comes dicen cosas que no son asunto de nadie más, y una dieta o lo que no se tolera rozan la salud y
+las creencias. Por eso: **RLS por `user_id`** en las cuatro operaciones y permisos columna a columna (`anon` y `service_role` sin ningún permiso, y ninguna función ni vista lo lee); **sin permiso no se guarda
+nada** (`consent_version`; la fecha, `consented_at`, la pone un trigger y la persona no puede escribirla); el permiso es **propio y distinto del de salud** (es otro fin y se acepta por separado); **se borra**
+(retirar el permiso es borrar la fila); y al borrar la cuenta se va con ella. Una fila vacía —solo el permiso— sí se puede crear.
+
+**Listas cerradas validadas en el servidor**: 5 niveles de ejercicio, 5 dietas (**sin opciones religiosas, a propósito**: serían otra categoría especial y no se han pedido) y un vocabulario de 26 alimentos para
+gustos y disgustos, **el mismo para los dos y una cosa no puede estar en ambos**. La única parte libre son los «productos concretos que no te gustan»: hasta 10, de 2 a 40 caracteres, **sin caracteres de control, de
+formato (dirección, ancho cero), las «etiquetas» U+E0000 ni marcado, llaves o comillas inversas**, sin repetidos sin distinguir mayúsculas. Esa lista puede acabar algún día en una petición a un modelo, así que
+**se trata siempre como dato, nunca como instrucción**, y la comprobación está en el servidor, en la app antes de mandar y otra vez al leer.
+
+**Hoy NADA recomienda con el perfil.** Se guarda para cuando algo lo haga, y el aviso de la pantalla lo dice («Todavía no lo uso para recomendar nada: lo guardo para cuando lo haga»). No es un detalle: pedir datos
+sin usarlos va contra la minimización, y se hace porque la persona lo ha pedido para el futuro y se le dice. **Antes de que la asistente o los avisos lo lean hace falta un permiso propio para mandarlo al
+proveedor del modelo** (tenerlo guardado no lo es): está en PENDIENTES como 🔴 y en `docs/PRIVACIDAD.md`.
+
+**La app** (`shared/lib/perfil.ts`, funciones puras con 24 tests): los vocabularios con su etiqueta, la lectura estricta de la fila (lo que no esté en las listas se tira; si algo viniera en las dos listas, gana «no me
+gusta»), `limpiarProducto` (la misma regla del servidor), el permiso (`VERSION_AVISO_PERFIL`, subirla obliga a aceptar de nuevo), `perfilEfectivo` y el resumen del widget. En la pantalla: sin permiso, una tarjeta
+(«Todo esto es opcional») con «Aceptar y rellenar»; con él, chips de un toque (tocar otra vez lo elegido lo quita), «Otros que no te gusten», «Lo aceptaste el …» y **«Borrar mi perfil»** con confirmación. «No me gusta» se
+marca con una X y no con color: el rojo de la app es solo de la caducidad.
 
 ## 3. Convenciones
 
@@ -2433,3 +2458,18 @@ comprobado. Lo creado se borró.
 
 **Se aprendió:** (1) el ejecutor de tests de Node no resuelve el alias `@/` y el código de la app no puede importar con extensión `.ts`: la lógica que necesita otra función de la app la recibe por parámetro. (2) Un efecto que decide «una vez»
 y se cancela en la limpieza se pierde si las dependencias cambian antes de que acabe: se guarda un indicador de «ya decidido» y otro de «sigue montado».
+
+### 2026-10-19 (sesión 43) · Perfil personal
+
+**Hecho** ([D-50](#d-50--perfil-personal-opcional-con-permiso-propio--2026-10-19)): la tabla `user_profile` con su permiso propio y su borrado, la pantalla del perfil, el widget en Premium, y la documentación
+(modelo de amenazas §9, aviso de privacidad, inventario, PENDIENTES).
+
+**Verificado aquí:** pgTAP **669** en 17 ficheros (**61** nuevos de `perfil_personal_test.sql`); `db:check` **881**; `test:app` **174** (24 nuevos); `tsc` y `eslint` limpios; **por mutación (6):** quitar la exigencia del permiso,
+el filtro de marcado, que la fecha del permiso la ponga el servidor, el quitar repetidos, el tope de longitud y la política de borrado: todas detectadas. **En el navegador** con la cuenta de pruebas: la tarjeta de permiso sin nada
+que rellenar; aceptar (en la base: versión 1 con fecha del servidor); elegir ejercicio y dieta; marcar «Arroz» en «te gusta» y luego en «no te gusta» (en la base pasó de una lista a la otra); un texto con marcado
+(rechazado con el mensaje) y uno válido con espacios de más (guardado limpio); y «Borrar mi perfil» con su confirmación (la fila desaparece y vuelve la tarjeta). Lo creado se borró.
+
+**Sin verificar:** en un móvil, y el widget de Premium con el perfil rellenado (se comprobó su texto por código, no en pantalla).
+
+**Se aprendió:** (1) la `\s` de JavaScript y `trim()` también se comen el BOM (U+FEFF), que la de Postgres no: el cliente lo convertía en un espacio donde el servidor lo rechaza; un test con caracteres de formato lo
+cazó. (2) Un parche `git diff -U0` de una inserción en un fichero generado y repetitivo se puede aplicar en un sitio equivocado: para quitar partes de un fichero generado, aplicar al revés los hunks ajenos, cuyas posiciones son exactas.
