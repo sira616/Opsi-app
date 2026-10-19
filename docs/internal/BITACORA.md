@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **816 comprobaciones** en PGlite · `test:app`: **131**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **816 comprobaciones** en PGlite · `test:app`: **156**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1152,6 +1152,30 @@ un poco por arriba es barato; quedarse corto deja un botón inalcanzable.
 otra pantalla, porque el margen solo se ha reescrito en el escáner.
 
 **«Mantener pulsado el − o el +».** El usuario lo ha probado en su móvil: repite y **se deja como está**. Cerrado en PENDIENTES.
+
+### D-48 · Premium en widgets, pantalla base del chat y avisos al abrir la app · 2026-10-19
+
+Tres peticiones que van juntas: la pantalla de Premium va a crecer con funciones nuevas, el chat necesita un sitio donde vivir y las recomendaciones («congélalo o úsalo») necesitan
+llegar a la persona sin que tenga que ir a buscarlas.
+
+**Premium, en widgets por categoría.** La lista de secciones se sustituye por un panel: **Asistente** (el chat), **Tu comida** (tus productos, lo que más gastas) y **A tu manera** (color de
+la app, listas de la compra). Cada función es un `Widget` (`features/premium/Widget.tsx`): icono, título, **una línea con lo que hay dentro** («12 productos», «Leche: 5 veces») y, al tocarlo, su
+pantalla; dos por fila, o ancho entero. Con el plan básico, los de Premium se ven apagados y con candado, y tocarlos dice que son de Premium. **El chat no lleva candado**: aún no hay nada que cobrar
+ni limitar (decisión que queda abierta, en PENDIENTES). Cuando llegue una función nueva es un widget más en su categoría. Lo que dice cada texto se acortó (la regla de VOZ de no repetir lo que la
+pantalla ya enseña).
+
+**La pantalla base del chat** (`/chat`). Cabecera, conversación, tres sugerencias y cuadro de escribir; el entorno completo, sin IA. Quien contesta es una **costura**, `features/chat/responder.ts`, que hoy
+solo dice «Todavía no puedo contestar.» (sin inventar una respuesta ni fingir que piensa), y es lo único que hay que cambiar cuando haya modelo. Un aviso a la vista dice que está en construcción y que **lo que
+se escribe no sale del móvil** (es verdad: no hay red aquí; si cambia, hay que cambiar ese aviso y el aviso de privacidad). La conversación vive solo en memoria. `?mensaje=…` abre el chat con ese texto YA
+escrito, sin enviarlo: es entrada de fuera y se limpia (`borradorDeRuta`: texto plano, sin caracteres de control ni de formato, con tope). Entradas: un botón en la cabecera de la nevera y un widget en Premium. La
+burbuja flotante se queda para cuando haya mascota.
+
+**Avisos al abrir la app** (`features/avisos/`). Un pop-up «Para hoy» al abrir la nevera con **como mucho tres** recomendaciones sobre lo que vence hoy o mañana (pasado mañana si se puede congelar): **Congelarlo** (la acción
+de verdad, `freeze_item`, con su evento) o **Hacer una receta** (abre el chat con la pregunta escrita). Qué avisar y cuándo lo decide una función pura con tests (`avisos.ts`): **nunca lo vencido**, ni lo congelado, ni lo que
+no vence pronto, y a igual urgencia, por nombre; «Vence/Caduca hoy|mañana.» con el dato primero. **Una vez al día** como mucho, y el día se anota al enseñarlo (no al cerrarlo). Se apaga en Ajustes → Avisos («Avisos al abrir
+la app»); es **de este aparato**, como el aspecto, no de la cuenta. Es la misma función de «congelar» que la tarjeta del inventario, así que el aviso y la tarjeta nunca discrepan.
+
+**Lo que NO se ha hecho:** la receta no genera nada (hace falta la IA); los avisos no usan todavía lo que se sepa de la persona (alérgenos, gustos): eso llega con el perfil personal; y los avisos fuera de la app (push) siguen siendo la fase 3.
 
 ## 3. Convenciones
 
@@ -2423,3 +2447,18 @@ aplica el borde de arriba. PENDIENTES al día (lo de mantener pulsado el − y e
 **Verificado aquí:** `tsc` y `eslint` limpios; `test:app` **131** (6 nuevos, del margen). **Sin verificar:** en un móvil con recorte, que es donde falló.
 
 **Se aprendió:** un margen calculado como «lo que falta para un mínimo» depende de que dos mediciones coincidan; elegir el mayor de dos valores no depende de nada.
+
+### 2026-10-19 (sesión 41) · Premium en widgets, el chat base y los avisos
+
+**Hecho** ([D-48](#d-48--premium-en-widgets-pantalla-base-del-chat-y-avisos-al-abrir-la-app--2026-10-19)): el panel de Premium en widgets por categoría, la pantalla base del chat con su costura, y el pop-up de avisos al abrir la
+nevera con su interruptor en Ajustes.
+
+**Verificado aquí:** `tsc` y `eslint` limpios; `test:app` **149** (24 nuevos: 11 del chat y 13 de los avisos). **En el navegador** con la cuenta de pruebas: Premium con el plan básico (candados, y tocar uno dice que es de Premium) y con
+Premium (resúmenes); el chat desde Premium y desde el botón de la nevera, una sugerencia, enviar (responde «Todavía no puedo contestar.») y el borrador por parámetro de ruta sin enviarse; y el pop-up con un pescado que vence
+mañana (Congelarlo: en la base queda congelado y en el congelador, y el aviso desaparece), un yogur que caduca hoy (Hacer una receta: abre el chat con la pregunta escrita) y un pollo vencido (no sale). Una vez al día
+comprobado. Lo creado se borró.
+
+**Sin verificar:** en un móvil (la hoja del pop-up y la navegación al chat a la vez, que en iOS pide esperar a que la hoja baje: hay una espera de 300 ms puesta por eso).
+
+**Se aprendió:** (1) el ejecutor de tests de Node no resuelve el alias `@/` y el código de la app no puede importar con extensión `.ts`: la lógica que necesita otra función de la app la recibe por parámetro. (2) Un efecto que decide «una vez»
+y se cancela en la limpieza se pierde si las dependencias cambian antes de que acabe: se guarda un indicador de «ya decidido» y otro de «sigue montado».

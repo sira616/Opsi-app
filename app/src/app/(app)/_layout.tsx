@@ -95,6 +95,8 @@ function Puerta() {
       <Stack.Screen name="productos" />
       {/* Lo que más gastas, entero: la pestaña de Premium enseña solo los primeros. */}
       <Stack.Screen name="gastos" />
+      {/* El chat de Opsi: pantalla entera, con su cuadro de escribir. Se abre desde la nevera y desde Premium. */}
+      <Stack.Screen name="chat" />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
       <Stack.Screen name="nevera/[id]/editar" options={hoja} />

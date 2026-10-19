@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Nevera } from '@/api/household';
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
 import { fetchSaludProductos } from '@/api/salud';
+import { PopupAvisos } from '@/features/avisos/PopupAvisos';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { AvisoInvitaciones } from '@/features/neveras/AvisoInvitaciones';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
@@ -24,7 +25,7 @@ import {
 } from '@/shared/ui/FiltroInventario';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
-import { Barcode, BowlFood, Carrot, Confetti, Egg } from 'phosphor-react-native';
+import { Barcode, BowlFood, Carrot, ChatCircleDots, Confetti, Egg } from 'phosphor-react-native';
 import { tabBarClearance,makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
@@ -124,6 +125,15 @@ function Inventario({ nevera }: { nevera: Nevera }) {
           <View style={styles.pildoraHueco}>
             <PildoraNevera />
           </View>
+          <Link href="/chat" asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir el chat de Opsi"
+              style={styles.chat}
+            >
+              <ChatCircleDots size={22} color={c.inkMuted} weight="duotone" />
+            </Pressable>
+          </Link>
           <Link href="/escanear" asChild>
             <Pressable
               accessibilityRole="button"
@@ -267,6 +277,8 @@ function Inventario({ nevera }: { nevera: Nevera }) {
         })}
 
       </ScrollView>
+      {/* El aviso de «para hoy»: una vez al día y solo si hay algo que vence pronto. */}
+      <PopupAvisos items={todos} householdId={nevera.id} listo={!isPending && !error} />
     </SafeAreaView>
   );
 }
@@ -285,6 +297,15 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
   },
   addIcon: { color: c.ground, fontSize: 26, lineHeight: 30, fontWeight: '400' },
+  // El chat, aún más callado que escanear: es una consulta, no una forma de añadir.
+  chat: {
+    width: touchTarget,
+    height: touchTarget,
+    borderRadius: radius.pill,
+    backgroundColor: c.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // El gemelo del «+», en tono suave: escanear es la forma rápida de añadir y no
   // debe pesar más que el botón principal.
   escanear: {

@@ -38,7 +38,7 @@ El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
 |---|---|---|
 | **Supabase** (alojamiento de la base de datos y la cuenta) | Todo lo anterior, cifrado en tránsito | Región prevista: UE. `[Confirmar región y contrato de encargado]` |
 | **Open Food Facts** | Solo el código de barras que escaneas, desde el servidor | No recibe datos personales. Sus datos son abiertos (ODbL) |
-| **Proveedor de IA** (la asistente, aún no activa) | `[Pendiente: qué se enviaría y a quién]` | No se ha publicado ni activado. Debe describirse aquí antes de hacerlo |
+| **Proveedor de IA** (la asistente, solo en desarrollo) | Los mensajes de la conversación abierta (los últimos 20) y, cuando el modelo lo pide, los resultados de mirar tu inventario y tu lista de la compra: nombres, cantidades y fechas. No se envían alérgenos, ingredientes ni tu correo | Hoy: Ollama Cloud, solo con datos de prueba. **`[Pendiente: proveedor, país y contrato del modelo de producción (Q4) antes de abrirla a personas reales]`** |
 
 Los datos de salud **no** salen de tu cuenta: ninguna función del servidor los lee, y el cruce con los productos se hace en tu móvil.
 

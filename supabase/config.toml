@@ -419,6 +419,10 @@ deno_version = 2
 enabled = true
 verify_jwt = true
 
+[functions.opsi-chat]
+enabled = true
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

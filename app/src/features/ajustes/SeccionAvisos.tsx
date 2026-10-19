@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { CaretDown, CaretRight, CaretUp, Clock } from 'phosphor-react-native';
 
 import type { SettingsPatch, UserSettings } from '@/api/settings';
+import { guardarAvisosActivos, leerAvisosActivos } from '@/shared/lib/avisos-locales';
 import { fonts, makeStyles, space, tabular, touchTarget, useTheme } from '@/shared/theme/tokens';
 import { Button } from '@/shared/ui/Button';
 import { HojaInferior } from '@/shared/ui/HojaInferior';
@@ -69,6 +70,12 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
   // por pasar por ahí de camino a las 8.
   const [borrador, setBorrador] = useState({ hora: data.digest_hour, minuto: data.digest_minute });
 
+  // Los avisos al abrir la app son de ESTE aparato (se guardan en él, no en la cuenta).
+  const [avisosApp, setAvisosApp] = useState(true);
+  useEffect(() => {
+    void leerAvisosActivos().then(setAvisosApp);
+  }, []);
+
   const device = deviceTimezone();
 
   return (
@@ -106,6 +113,23 @@ export function SeccionAvisos({ data, onPatch, guardando }: Props) {
           </Pressable>
         </Bloque>
       ) : null}
+
+      <Bloque>
+        <Row
+          title="Avisos al abrir la app"
+          info="Una vez al día, si hay algo que vence pronto. Se guarda en este aparato."
+          right={
+            <Switch
+              value={avisosApp}
+              onValueChange={(v) => {
+                setAvisosApp(v);
+                void guardarAvisosActivos(v);
+              }}
+              trackColor={{ true: c.brand, false: c.borderStrong }}
+            />
+          }
+        />
+      </Bloque>
 
       <HojaInferior
         visible={relojAbierto}
