@@ -12,7 +12,15 @@ import { fetchProducto } from '@/api/inventory';
 import { fetchPreferenciasSalud } from '@/api/salud';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
-import { evaluarSalud, type ClaveSalud, type Evaluacion, type SaludProducto } from '@/shared/lib/salud';
+import {
+  consentimientoVigente,
+  evaluarSalud,
+  faltaPermisoSalud,
+  preferenciasEfectivas,
+  type ClaveSalud,
+  type Evaluacion,
+  type SaludProducto,
+} from '@/shared/lib/salud';
 
 /** Una sola lista vacía: si fuera nueva en cada render, todo lo que depende de ella se recalcularía. */
 const SIN_PREFERENCIAS: readonly ClaveSalud[] = Object.freeze([]);
@@ -21,11 +29,20 @@ const SIN_PREFERENCIAS: readonly ClaveSalud[] = Object.freeze([]);
 export const FRESCURA_FICHA_MS = 30 * 60_000;
 
 /**
- * Lo que evita la persona.
+ * Lo que evita la persona, y con qué permiso.
  *
- * `preferencias` es la lista vacía mientras carga o si falla, y eso NO es «no evita
- * nada»: por eso se devuelve también `error`, y quien pinta avisos lo enseña. Callar un
- * fallo aquí dejaría una pantalla sin marcas que se leería como «todo bien».
+ * `preferencias` es lo que se CRUZA con los productos: la lista guardada si hay permiso
+ * vigente, y vacía si no (`preferenciasEfectivas`). Es vacía también mientras carga o si
+ * falla, y eso NO es «no evita nada»: por eso se devuelve también `error`, y quien pinta
+ * avisos lo enseña. Callar un fallo aquí dejaría una pantalla sin marcas que se leería
+ * como «todo bien».
+ *
+ * Lo mismo vale para el permiso: `faltaPermiso` dice que hay una lista guardada que NO se
+ * está usando porque no se ha aceptado el aviso (o cambió desde que se aceptó). Una
+ * persona que se fiaba de las marcas no puede quedarse sin ellas en silencio.
+ *
+ * `guardadas` es lo que hay en la tabla, para la pantalla de Ajustes: ahí se ve lo
+ * marcado aunque todavía no se use.
  */
 export function usePreferenciasSalud() {
   const consulta = useQuery({
@@ -37,8 +54,18 @@ export function usePreferenciasSalud() {
   const error = consulta.error;
   const mensaje = useMemo(() => (error ? describeDbError(error) : null), [error]);
 
+  const datos = consulta.data;
+  const efectivas = useMemo(
+    () => (datos ? preferenciasEfectivas(datos.claves, datos.consentimiento) : SIN_PREFERENCIAS),
+    [datos],
+  );
+
   return {
-    preferencias: consulta.data ?? SIN_PREFERENCIAS,
+    preferencias: efectivas,
+    guardadas: datos?.claves ?? SIN_PREFERENCIAS,
+    consentimiento: datos?.consentimiento ?? null,
+    permiso: datos ? consentimientoVigente(datos.consentimiento) : false,
+    faltaPermiso: datos ? faltaPermisoSalud(datos.claves, datos.consentimiento) : false,
     cargando: consulta.isPending,
     error: mensaje,
     recargar: consulta.refetch,

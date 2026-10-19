@@ -4,15 +4,25 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { Check } from 'phosphor-react-native';
 
-import { guardarPreferenciasSalud } from '@/api/salud';
+import {
+  borrarDatosSalud,
+  darPermisoSalud,
+  guardarPreferenciasSalud,
+  type PreferenciasGuardadas,
+} from '@/api/salud';
 import { usePreferenciasSalud } from '@/features/salud/useSalud';
+import { fechaHablada, hoyIso } from '@/shared/lib/calendario';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { CLAVES_SALUD, PREFERENCIAS_SALUD, type ClaveSalud } from '@/shared/lib/salud';
 import { useSession } from '@/shared/lib/session';
 import { fonts, makeStyles, radius, space, touchTarget, useTheme } from '@/shared/theme/tokens';
+import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { Accion, Nota, Section, useAjustesStyles } from './ui';
+
+/** Lo que hay guardado de alguien que no ha dado permiso ni marcado nada: la fila no existe. */
+const SIN_NADA: PreferenciasGuardadas = { claves: [], consentimiento: null };
 
 /**
  * Qué alérgenos e intolerancias evitas, para que Opsi te lo marque en la nevera.
@@ -20,12 +30,17 @@ import { Accion, Nota, Section, useAjustesStyles } from './ui';
  * Marca, no prohíbe: no hay ningún botón que se apague por lo que elijas aquí, y así se
  * dice. El cruce con cada producto se hace en el móvil (`shared/lib/salud.ts`).
  *
- * ── Un dato de salud ──────────────────────────────────────────────────────
+ * ── Un dato de salud, con permiso ─────────────────────────────────────────
  *
- * Lo que se marca aquí es un dato de salud, y se trata como tal: se guarda en
- * `user_health_preferences` (solo lo lee su dueña), vive en la caché en memoria y no
- * va a ningún otro sitio. Por eso esta sección no escribe nada en el dispositivo y el
- * error de guardado se enseña sin sus detalles (`guardarPreferenciasSalud`).
+ * Lo que se marca aquí es un dato de salud (RGPD, categoría especial), y se trata como
+ * tal: no se guarda ni se usa sin el permiso de quien lo marca. Hasta aceptar el aviso no
+ * hay casillas, y la lista de antes del permiso, si la hay, se enseña pero no se usa. Se
+ * guarda en `user_health_preferences` (solo lo lee su dueña), vive en la caché en
+ * memoria y no va a ningún otro sitio. Por eso esta sección no escribe nada en el
+ * dispositivo y el error de guardado se enseña sin sus detalles (`api/salud.ts`).
+ *
+ * Retirar el permiso es borrar: «Borrar mis datos de salud» elimina la fila entera (la
+ * lista y la fecha del permiso), con confirmación porque no se deshace.
  *
  * ── Cada toque se guarda ──────────────────────────────────────────────────
  *
@@ -48,31 +63,62 @@ export function SeccionSalud() {
   const queryClient = useQueryClient();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
-  const { preferencias, cargando, error: errorCarga, recargar } = usePreferenciasSalud();
+  const {
+    guardadas,
+    consentimiento,
+    permiso,
+    cargando,
+    error: errorCarga,
+    recargar,
+  } = usePreferenciasSalud();
   const [error, setError] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+
+  function exigirSesion(): string {
+    if (!userId) {
+      throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a entrar.'), { code: '28000' });
+    }
+    return userId;
+  }
+
+  function alGuardar(guardado: PreferenciasGuardadas) {
+    setError(null);
+    // Lo que quedó guardado manda. Nada más depende del valor de estas preferencias.
+    queryClient.setQueryData<PreferenciasGuardadas>(queryKeys.preferenciasSalud, guardado);
+  }
+
+  function alFallar(caught: unknown) {
+    setError(describeDbError(caught));
+    // Se vuelve a lo guardado de verdad. El texto del error se queda como lo dio el servidor.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.preferenciasSalud });
+  }
 
   const guardar = useMutation({
     scope: { id: 'preferencias-salud' },
-    mutationFn: (avoid: ClaveSalud[]) => {
-      if (!userId) {
-        throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a entrar.'), { code: '28000' });
-      }
-      return guardarPreferenciasSalud(userId, avoid);
+    mutationFn: (avoid: ClaveSalud[]) => guardarPreferenciasSalud(exigirSesion(), avoid),
+    onSuccess: alGuardar,
+    onError: alFallar,
+  });
+
+  const aceptar = useMutation({
+    scope: { id: 'preferencias-salud' },
+    mutationFn: () => darPermisoSalud(exigirSesion()),
+    onSuccess: alGuardar,
+    onError: alFallar,
+  });
+
+  const borrar = useMutation({
+    scope: { id: 'preferencias-salud' },
+    mutationFn: () => borrarDatosSalud(exigirSesion()),
+    onSuccess() {
+      setConfirmando(false);
+      alGuardar(SIN_NADA);
     },
-    onSuccess(guardadas) {
-      setError(null);
-      // Lo que quedó guardado manda. Nada más depende del valor de estas preferencias.
-      queryClient.setQueryData(queryKeys.preferenciasSalud, guardadas);
-    },
-    onError(caught: unknown) {
-      setError(describeDbError(caught));
-      // Se vuelve a lo guardado de verdad. El texto del error se queda como lo dio el servidor.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.preferenciasSalud });
-    },
+    onError: alFallar,
   });
 
   const elegidas: readonly ClaveSalud[] =
-    guardar.isPending && guardar.variables ? guardar.variables : preferencias;
+    guardar.isPending && guardar.variables ? guardar.variables : guardadas;
 
   function alternar(clave: ClaveSalud) {
     const siguiente = CLAVES_SALUD.filter((k) =>
@@ -82,17 +128,14 @@ export function SeccionSalud() {
     guardar.mutate(siguiente);
   }
 
+  const listo = !cargando && !errorCarga;
+  const hayAlgoGuardado = guardadas.length > 0 || consentimiento !== null;
+  const etiquetasGuardadas = PREFERENCIAS_SALUD.filter((p) => guardadas.includes(p.clave))
+    .map((p) => p.etiqueta)
+    .join(', ');
+
   return (
     <Section title="Alérgenos e intolerancias">
-      <View style={styles.intro}>
-        <Text style={compartidos.rowSubtitle}>
-          Marco en tu nevera lo que lleve esto. Nunca te impido añadir nada.
-        </Text>
-        <Text style={compartidos.rowSubtitle}>
-          Solo lo ves tú, ni siquiera quien comparte nevera contigo.
-        </Text>
-      </View>
-
       {cargando ? <ActivityIndicator color={c.brand} /> : null}
 
       {errorCarga ? (
@@ -102,33 +145,102 @@ export function SeccionSalud() {
         </>
       ) : null}
 
-      {/* Sin la lista cargada no se enseñan las casillas: guardar a ciegas pisaría lo que ya había. */}
-      {!cargando && !errorCarga ? (
-        <View style={styles.casillas}>
-          {PREFERENCIAS_SALUD.map((p) => {
-            const marcada = elegidas.includes(p.clave);
-            return (
-              <Pressable
-                key={p.clave}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: marcada }}
-                accessibilityLabel={p.etiqueta}
-                onPress={() => alternar(p.clave)}
-                style={({ pressed }) => [
-                  styles.casilla,
-                  marcada && styles.casillaOn,
-                  pressed && compartidos.pressed,
-                ]}
-              >
-                {marcada ? <Check size={14} color={c.brandInk} weight="bold" /> : null}
-                <Text style={[styles.casillaTexto, marcada && styles.casillaTextoOn]}>{p.etiqueta}</Text>
-              </Pressable>
-            );
-          })}
+      {/* Sin permiso no hay casillas: guardar sin él lo rechaza el servidor, y ni se ofrece. */}
+      {listo && !permiso ? (
+        <View style={styles.permiso}>
+          <Text style={styles.permisoTitulo}>Es un dato de salud</Text>
+          <Text style={compartidos.rowSubtitle}>
+            Lo guardo en tu cuenta solo para avisarte en tu nevera. Solo lo ves tú, ni siquiera quien
+            comparte nevera contigo.
+          </Text>
+          <Text style={compartidos.rowSubtitle}>
+            Puedes borrarlo cuando quieras y se va del todo. Sin tu permiso no guardo nada.
+          </Text>
+          {guardadas.length > 0 ? (
+            <Text style={compartidos.rowSubtitle}>
+              Tenías marcado: {etiquetasGuardadas}. No lo uso hasta que aceptes.
+            </Text>
+          ) : null}
+          <Button
+            label="Aceptar y elegir"
+            onPress={() => {
+              setError(null);
+              aceptar.mutate();
+            }}
+            loading={aceptar.isPending}
+          />
         </View>
       ) : null}
 
+      {listo && permiso ? (
+        <>
+          <View style={styles.intro}>
+            <Text style={compartidos.rowSubtitle}>
+              Marco en tu nevera lo que lleve esto. Nunca te impido añadir nada.
+            </Text>
+            <Text style={compartidos.rowSubtitle}>
+              Solo lo ves tú, ni siquiera quien comparte nevera contigo.
+            </Text>
+          </View>
+
+          <View style={styles.casillas}>
+            {PREFERENCIAS_SALUD.map((p) => {
+              const marcada = elegidas.includes(p.clave);
+              return (
+                <Pressable
+                  key={p.clave}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: marcada }}
+                  accessibilityLabel={p.etiqueta}
+                  onPress={() => alternar(p.clave)}
+                  style={({ pressed }) => [
+                    styles.casilla,
+                    marcada && styles.casillaOn,
+                    pressed && compartidos.pressed,
+                  ]}
+                >
+                  {marcada ? <Check size={14} color={c.brandInk} weight="bold" /> : null}
+                  <Text style={[styles.casillaTexto, marcada && styles.casillaTextoOn]}>{p.etiqueta}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {consentimiento ? (
+            <Text style={compartidos.rowSubtitle}>
+              Lo aceptaste el {fechaHablada(hoyIso(new Date(consentimiento.en)))}.
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+
       <ErrorNote message={error} />
+
+      {/* Borrar vale con y sin permiso: lo de antes del permiso también es suyo. */}
+      {listo && hayAlgoGuardado ? (
+        confirmando ? (
+          <View style={styles.confirmar}>
+            <Text style={compartidos.rowSubtitle}>
+              ¿Borrar lo que has marcado y tu permiso? No se puede deshacer.
+            </Text>
+            <Button label="Sí, borrarlo" onPress={() => borrar.mutate()} loading={borrar.isPending} />
+            <Button
+              label="Cancelar"
+              variant="quiet"
+              onPress={() => setConfirmando(false)}
+              disabled={borrar.isPending}
+            />
+          </View>
+        ) : (
+          <Accion
+            label="Borrar mis datos de salud"
+            onPress={() => {
+              setError(null);
+              setConfirmando(true);
+            }}
+          />
+        )
+      ) : null}
 
       <Nota
         tono="aviso"
@@ -140,6 +252,16 @@ export function SeccionSalud() {
 
 const useStyles = makeStyles((c) => ({
   intro: { gap: space.xs },
+  permiso: {
+    gap: space.sm,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  permisoTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: c.ink },
+  confirmar: { gap: space.xs },
   casillas: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm - 2 },
   casilla: {
     minHeight: touchTarget,

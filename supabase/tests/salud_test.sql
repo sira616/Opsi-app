@@ -502,11 +502,15 @@ select ok(
     and has_column_privilege('authenticated', 'public.user_health_preferences', 'avoid', 'INSERT')
     and has_column_privilege('authenticated', 'public.user_health_preferences', 'user_id', 'INSERT')
     and has_column_privilege('authenticated', 'public.user_health_preferences', 'avoid', 'UPDATE')
+    and has_column_privilege('authenticated', 'public.user_health_preferences', 'consent_version', 'INSERT')
+    and has_column_privilege('authenticated', 'public.user_health_preferences', 'consent_version', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.user_health_preferences', 'consented_at', 'INSERT')
+    and not has_column_privilege('authenticated', 'public.user_health_preferences', 'consented_at', 'UPDATE')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'updated_at', 'INSERT')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'updated_at', 'UPDATE')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'user_id', 'UPDATE')
-    and not has_table_privilege('authenticated', 'public.user_health_preferences', 'DELETE'),
-  'authenticated: lee, escribe solo (user_id, avoid) al crear y solo avoid al cambiar, y no borra'
+    and has_table_privilege('authenticated', 'public.user_health_preferences', 'DELETE'),
+  'authenticated: lee, escribe (user_id, avoid, consent_version) al crear y (avoid, consent_version) al cambiar, nunca la fecha del permiso, y borra la suya'
 );
 
 select ok(
@@ -561,9 +565,9 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaa1111-aaaa-4aaa-8aaa-aaaa11111111","role":"authenticated"}';
 
 select lives_ok(
-  $$insert into public.user_health_preferences (user_id, avoid)
-    values ('aaaa1111-aaaa-4aaa-8aaa-aaaa11111111', array['milk', 'gluten', 'milk', 'eggs'])$$,
-  'una persona guarda lo que evita'
+  $$insert into public.user_health_preferences (user_id, avoid, consent_version)
+    values ('aaaa1111-aaaa-4aaa-8aaa-aaaa11111111', array['milk', 'gluten', 'milk', 'eggs'], 1)$$,
+  'una persona guarda lo que evita, con su permiso'
 );
 
 select is(
@@ -628,8 +632,8 @@ select throws_ok(
   'ni la lista entera a NULL: «no evita nada» se escribe {}'
 );
 select throws_ok(
-  $$insert into public.user_health_preferences (user_id, avoid)
-    values ('aaaa1111-aaaa-4aaa-8aaa-aaaa11111111', '{milk}')$$,
+  $$insert into public.user_health_preferences (user_id, avoid, consent_version)
+    values ('aaaa1111-aaaa-4aaa-8aaa-aaaa11111111', '{milk}', 1)$$,
   '23505', null,
   'una persona tiene una sola fila'
 );
@@ -644,10 +648,10 @@ select is(
 set local request.jwt.claims = '{"sub":"cccc3333-cccc-4ccc-8ccc-cccc33333333","role":"authenticated"}';
 
 select lives_ok(
-  $$insert into public.user_health_preferences (user_id, avoid)
+  $$insert into public.user_health_preferences (user_id, avoid, consent_version)
     values ('cccc3333-cccc-4ccc-8ccc-cccc33333333', array[
       'gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soybeans', 'milk', 'nuts',
-      'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs', 'lactose'])$$,
+      'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs', 'lactose'], 1)$$,
   'los 15 valores de la lista caben a la vez'
 );
 
@@ -682,8 +686,8 @@ select throws_ok(
 );
 
 select lives_ok(
-  $$insert into public.user_health_preferences (user_id, avoid)
-    values ('bbbb2222-bbbb-4bbb-8bbb-bbbb22222222', '{peanuts}')$$,
+  $$insert into public.user_health_preferences (user_id, avoid, consent_version)
+    values ('bbbb2222-bbbb-4bbb-8bbb-bbbb22222222', '{peanuts}', 1)$$,
   'pero sí la suya'
 );
 
@@ -707,11 +711,12 @@ select throws_ok(
   'ni cambiar de dueña su propia fila: user_id no se actualiza'
 );
 
-select throws_ok(
-  $$delete from public.user_health_preferences where user_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222'$$,
-  '42501', null,
-  'ni borrar la suya: vaciarla es avoid = {}'
-);
+with borradas as (
+  delete from public.user_health_preferences
+   where user_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'
+  returning 1
+)
+select is((select count(*) from borradas), 0::bigint, 'Bruno no borra la fila de Ana: la RLS no se la deja ver');
 
 select throws_ok(
   $$update public.user_health_preferences set updated_at = now() - interval '5 years'
@@ -784,8 +789,8 @@ reset role;
 alter table public.user_health_preferences disable trigger user_health_preferences_normalize;
 
 select throws_ok(
-  $$insert into public.user_health_preferences (user_id, avoid)
-    values ('dddd4444-dddd-4ddd-8ddd-dddd44444444', array_fill('milk'::text, array[16]))$$,
+  $$insert into public.user_health_preferences (user_id, avoid, consent_version)
+    values ('dddd4444-dddd-4ddd-8ddd-dddd44444444', array_fill('milk'::text, array[16]), 1)$$,
   '23514', null,
   'más de 15 valores se rechazan aunque no haya trigger que los depure'
 );
@@ -793,8 +798,8 @@ select throws_ok(
 alter table public.user_health_preferences enable trigger user_health_preferences_normalize;
 
 -- Una fila vieja, para ver que cambiarla mueve `updated_at` (el insert no dispara el trigger).
-insert into public.user_health_preferences (user_id, avoid, updated_at)
-values ('dddd4444-dddd-4ddd-8ddd-dddd44444444', '{milk}', now() - interval '1 day');
+insert into public.user_health_preferences (user_id, avoid, consent_version, updated_at)
+values ('dddd4444-dddd-4ddd-8ddd-dddd44444444', '{milk}', 1, now() - interval '1 day');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"dddd4444-dddd-4ddd-8ddd-dddd44444444","role":"authenticated"}';

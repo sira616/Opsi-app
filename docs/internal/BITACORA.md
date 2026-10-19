@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **15 ficheros pgTAP, 578 tests** contra pgTAP real · `db:check`: **782 comprobaciones** en PGlite · `test:app`: **121**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **816 comprobaciones** en PGlite · `test:app`: **125**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1104,6 +1104,34 @@ abierto después pasa a salir con el tope, que es la fecha que debió tener siem
 **Test** (`supabase/tests/tope_descongelar_test.sql`, 25): descongelado sin tocar (ya pasaba, es el punto de partida), usado, abierto, congelado
 y descongelado otra vez (las 24 h se reinician) y, de contraste, algo que nunca se congeló (sin tope). Comprobado que **falla con la vista
 antigua** (6 fallos: fecha, motivo, origen y prioridad «low») y pasa con la nueva. La app no cambia: ya miraba `thawed_at`.
+
+### D-46 · Consentimiento explícito para los datos de salud, y borrarlos · 2026-10-19
+
+Lo que cada persona marca como alérgenos o intolerancias es un **dato de salud (categoría especial del RGPD)** y hasta hoy se guardaba al marcar la
+primera casilla, sin pedir permiso y sin poder retirarlo. Era el 🔴 que D-44 dejó abierto.
+
+**El servidor lo exige** (migración `20261023100000`). `user_health_preferences` gana `consent_version` (qué versión del aviso aceptó) y `consented_at`
+(cuándo, **que pone un trigger**: la persona no puede escribir la fecha). El trigger `check_health_consent` no deja guardar una lista **no vacía** sin
+permiso (P0001, «Antes de guardar lo que evitas necesito tu permiso.», pista `consentimiento_salud`); una lista vacía sí, para poder crear la fila solo con
+el permiso. Se eligió un trigger y no un CHECK porque pone la fecha él mismo y su mensaje sale en español. **No se puede retirar el permiso dejando la lista**:
+retirarlo es **borrar la fila**, y para eso la tabla gana DELETE (solo la propia, por la RLS). Es el derecho de supresión y el de retirar el consentimiento sin
+dejar nada detrás.
+
+**Las filas de antes no se tocan ni se les inventa un permiso.** Las que ya existían sin permiso (la de syreta, con 15 marcadas) se quedan: el trigger solo mira
+las filas que se escriben, y para cambiarlas hace falta dar el permiso primero. La app **no las usa** sin permiso vigente, y el inventario lo dice («Tienes
+alérgenos guardados, pero no los uso sin tu permiso…»): quien se fiaba de las marcas no puede quedarse sin ellas en silencio, que es el mismo principio que
+«sin datos» no es «sin alérgenos».
+
+**La app** (`shared/lib/salud.ts`, funciones puras con test): `VERSION_AVISO_SALUD` (hoy 1; subirla cuando cambie el aviso obliga a aceptar de nuevo),
+`consentimientoVigente`, `preferenciasEfectivas` (lo que de verdad se cruza: la lista guardada **solo con permiso vigente**) y `faltaPermisoSalud`. En Ajustes,
+sin permiso no hay casillas: una tarjeta («Es un dato de salud», qué se guarda, para qué, quién lo ve, que se puede borrar) con **«Aceptar y elegir»**; con
+permiso, las casillas, «Lo aceptaste el 19 de octubre de 2026» y **«Borrar mis datos de salud»**, con confirmación («¿Borrar lo que has marcado y tu permiso? No se
+puede deshacer.» / «Sí, borrarlo»). La versión del aviso solo la comprueba el cliente (el servidor exige que haya versión, no cuál): un cliente modificado puede
+saltarse la renovación, pero solo se perjudica a sí mismo.
+
+**Lo que NO está hecho** (sigue en PENDIENTES, 🟠): el aviso de privacidad completo (hay un **borrador con huecos** en `docs/PRIVACIDAD.md`; el responsable, el contacto y la
+base legal los pone el dueño del proyecto y conviene que los revise alguien que sepa de derecho), **exportar** los datos, **borrar la cuenta desde la app** y la
+política de retención.
 
 ## 3. Convenciones
 
@@ -2348,3 +2376,21 @@ mientras `thawed_at` esté puesto, no solo con el estado «descongelado». Migra
 **Sin verificar:** en pantalla con un elemento descongelado y usado (la app no cambia y ya mira `thawed_at`; lo comprobado es la vista).
 
 **Se aprendió:** el simulador de pgTAP de `db:check` (PGlite) no tiene `isnt`; se usa `ok(… is distinct from …)`.
+
+### 2026-10-19 (sesión 39) · Consentimiento para los datos de salud, y PENDIENTES al día
+
+**Hecho** ([D-46](#d-46--consentimiento-explícito-para-los-datos-de-salud-y-borrarlos--2026-10-19)): el permiso para guardar lo que evita la persona (servidor y
+app), «Borrar mis datos de salud», el aviso del inventario cuando hay una lista sin permiso, el borrador del aviso de privacidad y la fila de PENDIENTES al día.
+En PENDIENTES también: la cámara del móvil, **probada por el usuario** (lo ha ido probando todo en su móvil), y el resto de lo nativo reescrito como «probado en
+general, sin lista de casos».
+
+**Verificado aquí:** pgTAP **608** en 16 ficheros (30 nuevos de `salud_consentimiento_test.sql` y los de `salud_test.sql` y `privilegios_test.sql` al día); `db:check` **816**;
+`test:app` **125** (4 nuevos); `tsc` y `eslint` limpios. **En el navegador** con la cuenta de pruebas: la tarjeta de permiso sin casillas; aceptar (en la base: versión 1 con
+fecha del servidor); marcar «Leche» y verla guardada; «Borrar mis datos de salud» con su confirmación (la fila desaparece y la pantalla vuelve a la tarjeta; la de otra cuenta
+sigue intacta); y una lista **de antes del permiso** (el inventario avisa y Ajustes dice «Tenías marcado: Leche. No lo uso hasta que aceptes.»). Lo creado se borró.
+
+**Sin verificar:** en un móvil, y el texto del aviso con alguien que no lo haya escrito (la redacción es mía y es una decisión de producto, no jurídica).
+
+**Se aprendió:** (1) el trigger de una tabla se dispara ANTES de las comprobaciones CHECK y de la RLS, así que los tests que esperaban un 23505 o un 23514 sobre una fila
+con lista no vacía tuvieron que llevar ya el permiso: el orden de los disparos decide qué error se ve. (2) Un test que cuenta filas «de la tabla» falla contra la base local
+con datos reales: se acota a los ids de la prueba.
