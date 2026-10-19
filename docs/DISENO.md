@@ -113,6 +113,109 @@ porque los colores oscuros desaparecen sobre fondo oscuro.
 El consumo preferente **no tiene color propio**: va en neutro. Es deliberado — si todo
 grita, nada grita, y lo que de verdad importa que se distinga es la caducidad.
 
+La escala del Nutri-Score tiene sus propios colores y **no es una fila más de esta tabla**:
+sale en la sección siguiente, con las reglas que la separan de la caducidad.
+
+## 3 bis · Nutri-Score y NOVA
+
+Lo que Open Food Facts (OFF) declara de la nutrición de un producto, en la sección de
+Nutrición de Premium. Opsi **enseña el dato con su origen y no opina** (`VOZ.md`): ni «sano»,
+ni «cuidado», ni una escala de buenos y malos que sea suya. Por eso el Nutri-Score, que es una
+escala de color por naturaleza, es el único sitio donde el color aparece, y NOVA y los niveles
+no llevan ninguno.
+
+### El Nutri-Score: cinco fichas en fila
+
+Es la escala que se reconoce en un envase: **A B C D E**, de izquierda a derecha. La que toca
+va **más grande, con su color y un borde grueso de 3px**; las otras cuatro quedan apagadas,
+en neutro (`surfaceAlt`, letra `inkMuted`). En una fila de lista va una sola ficha pequeña
+(34px, borde de 2px). Debajo del sello, siempre, de dónde sale: «Nutri-Score calculado por
+Open Food Facts».
+
+Tres reglas que no se tocan:
+
+1. **La letra se ve siempre y el color nunca va solo.** Quien no distingue un verde de un
+   naranja lee una C. Las fichas apagadas también llevan su letra.
+2. **Un sello, una frase.** Para el lector de pantalla todo el sello es UN elemento con una
+   etiqueta («Nutri-Score C, calculado por Open Food Facts»), y las fichas quedan ocultas:
+   oír «A, B, C, D, E» no dice cuál es. Cada ficha pequeña de la lista tiene la suya.
+3. **El color es de la escala.** Los tokens `nutriA` a `nutriE` solo los usa
+   `features/nutricion`. Ningún otro rincón de la app los toma prestados, ni la escala toma
+   prestado el rojo de la caducidad ni el ámbar del aviso.
+
+### Colores
+
+| Token | Relleno | Letra (`…Ink`) | Contraste de la letra, claro / oscuro |
+|---|---|---|---|
+| `nutriA` | `#0B7F43` verde | `#FFFFFF` | 5.08:1 / 5.08:1 |
+| `nutriB` | `#8FC83A` lima | `#16181A` claro · `#111316` oscuro | 8.89:1 / 9.30:1 |
+| `nutriC` | `#F2D90F` amarillo | `#16181A` claro · `#111316` oscuro | 12.47:1 / 13.03:1 |
+| `nutriD` | `#F5B50A` ámbar | `#16181A` claro · `#111316` oscuro | 9.75:1 / 10.19:1 |
+| `nutriE` | `#F07A0A` naranja | `#16181A` claro · `#111316` oscuro | 6.35:1 / 6.64:1 |
+| `nutriBorder` | `#16181A` claro · `#F2F3F5` oscuro | — | — |
+
+Los rellenos son los mismos en claro y en oscuro: todos superan los 3:1 contra el fondo
+oscuro tal cual. Lo que cambia es el borde, que pasa a claro, y la tinta de las letras oscuras.
+
+**El borde es obligatorio, no decorativo.** Un lima o un amarillo sobre blanco no llegan a 3:1
+por sí solos (el relleno de la B da 2.00:1; el de la C, 1.43:1), así que la forma contra el
+fondo la da el borde grueso, que llega a 17.80:1 sobre tarjeta en claro y a 15.07:1 en oscuro.
+Una ficha activa sin su borde no pasa el contraste.
+
+El validador (`npm run check:contrast`) comprueba estos pares: la letra de cada ficha sobre su
+relleno (4.5:1), el borde sobre tarjeta y sobre el fondo (3:1) y la letra de una ficha apagada
+sobre su fondo neutro (5.06:1 claro, 6.80:1 oscuro).
+
+### Cómo se evita que la E parezca caducidad
+
+El rojo es solo de la caducidad (sección 3), y la E es la ficha que más se parece a él en
+cualquier Nutri-Score: el oficial es un rojo anaranjado. Aquí es **un naranja** y se asegura
+de tres maneras:
+
+- **No reutiliza ningún token de caducidad** (`expiry`, `expirySoft`, `expiryInk`,
+  `expiryLine`), ni en claro ni en oscuro.
+- **Queda a más de 15° de matiz de todos ellos.** `nutriE` está en 29.2° de matiz, y la
+  caducidad en 6° a 12°: la distancia más corta es de 18.8° en claro y de 17.4° en oscuro. El
+  validador lo comprueba con cada token de caducidad, así que mover la E o la caducidad hacia
+  el otro sin querer rompe `check:contrast`.
+- **La escala entera se aparta del rojo.** Para dejar sitio a una E naranja, la D es ámbar
+  (matiz 44°) y la C amarillo (53°): va del verde al naranja y no llega al rojo. Lo que hace
+  de última a la E es su sitio al final de la fila y su letra, no un color más cálido.
+
+El naranja de la E y el ámbar del aviso (`warning`) conviven sin confundirse: la escala siempre
+va en una fila de cinco con su letra y su origen, y el ámbar de aviso nunca sale así.
+
+### NOVA y los niveles: en neutro
+
+El **grupo NOVA** es una clasificación, no un semáforo. Se pinta como un cuadrado neutro con el
+número (44px, `surfaceAlt`, borde `borderStrong`) y el nombre de su grupo al lado, tal cual lo
+nombra su clasificación y sin un adjetivo más: 1 «Sin procesar o mínimamente procesado», 2
+«Ingrediente culinario procesado», 3 «Procesado», 4 «Ultraprocesado». Sin color, sin iconos de
+alarma y siempre con «Grupo NOVA según Open Food Facts» debajo. En la lista, una pastilla
+neutra («NOVA 4»).
+
+Los **niveles** de OFF (grasas, saturadas, azúcares y sal) son **texto** («Nivel alto») bajo el
+nutriente, en `inkMuted`, con una línea que los atribuye («Niveles calculados por Open Food
+Facts»). No son un semáforo: un nivel «alto» en rojo sería un aviso de caducidad que no lo es.
+
+### La tabla y el resto
+
+- **Tabla «Información nutricional»** por 100 g, por 100 ml o «por 100 g o 100 ml» si OFF no
+  dice la base. Energía en kcal, grasas, de las cuales saturadas, hidratos, de los cuales
+  azúcares, fibra, proteínas y sal. Cifras con coma y **tabulares**, sin decimales que no
+  aportan (12,5 g; 12 g; 0,07 g). Una fila por nutriente, con la subfila sangrada.
+- **Un dato que no consta es «—», nunca 0.** Un 0 de verdad («0 g») significa que OFF declara
+  cero. Si no consta ninguno, no hay tabla: «Sin datos nutricionales» y nada más.
+- **Aditivos**, como los declara OFF («Open Food Facts declara 3 aditivos: E330, E322, E150D»)
+  o, con la lista vacía, «Open Food Facts no declara aditivos». Nunca «sin aditivos» como
+  afirmación propia. Si OFF no da la lista, el bloque no sale.
+- **Una línea que no falta nunca**, haya o no datos: «Open Food Facts puede estar incompleto o
+  desactualizado. Mira siempre la etiqueta.» y la licencia ODbL.
+- Los textos de OFF (la ración, los aditivos) van en un `<Text>` plano: sin marcado, sin
+  enlaces, sin abrir nada.
+- Áreas táctiles de 44px en lo pulsable (las filas, «Ver nutrición», «Reintentar»). Las fichas
+  del sello no son pulsables.
+
 ## 4. Tipografía
 
 Dos familias, las dos de Google Fonts con licencia **OFL 1.1** (libre, también comercial).
@@ -189,6 +292,8 @@ npx expo install phosphor-react-native react-native-svg
 | Usar ¼ | `ChartPie` | `duotone` |
 | Otra cantidad | `PencilSimple` | `duotone` |
 | Volver | `CaretLeft` | `bold` |
+| Nutrición (widget de Premium) | `JarLabel` | `duotone` |
+| Ver nutrición (botón de la ficha) | `JarLabel` | `bold` |
 
 > Las fracciones de «Usar» son la excepción a lo de abajo, y con motivo: el glifo
 > **½ ⅓ ¼** ya es el texto, y debajo va la cantidad real que se descontará («0,5 l»).
