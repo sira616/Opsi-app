@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **14 ficheros pgTAP, 553 tests** contra pgTAP real · `db:check`: **753 comprobaciones** en PGlite · `test:app`: **121**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **15 ficheros pgTAP, 578 tests** contra pgTAP real · `db:check`: **782 comprobaciones** en PGlite · `test:app`: **121**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1088,6 +1088,22 @@ Congélalo o úsalo.» y la frase aprobada «Una vez descongelado, 24 horas para
 
 **Hallazgo que no se arregló aquí:** el tope de 24 h tras descongelar (D-14) solo se aplica mientras el estado es «descongelado»; al usar una
 parte o abrirlo se pierde y vuelve la fecha del envase. Está en `PENDIENTES.md`, sección 2, con su arreglo.
+
+### D-45 · El tope de 24 h tras descongelar depende de `thawed_at`, no del estado · 2026-10-19
+
+Arregla el hallazgo de D-44 (ver D-14). La vista `inventory_with_priority` aplicaba el tope solo con `state = 'thawed'`; `use_quantity`
+pasa el estado a «empezado» y `open_item` a «abierto», y `thawed_at` se queda: algo descongelado hace 3 días salía «−2 días» y, tras usar una
+parte, «10 días» con la fecha del envase y prioridad **baja**. Es el fallo que D-14 existe para impedir, y de seguridad alimentaria.
+
+**Arreglo** (migración `20261022100000`): `date_from_thaw` mira `thawed_at is not null`. Es seguro porque `thaw_item` es lo único que lo
+escribe y lo sobrescribe en cada descongelación (congelar y descongelar otra vez reinicia las 24 h), y mientras está congelado, agotado o
+tirado la fecha efectiva ya es nula y el tope ni se mira. La definición de la vista se copió de la **última** migración que la define
+(`20260924130000`), no de una anterior: ya se perdió un arreglo así una vez. **Efecto sobre lo ya guardado:** lo descongelado antes y usado o
+abierto después pasa a salir con el tope, que es la fecha que debió tener siempre.
+
+**Test** (`supabase/tests/tope_descongelar_test.sql`, 25): descongelado sin tocar (ya pasaba, es el punto de partida), usado, abierto, congelado
+y descongelado otra vez (las 24 h se reinician) y, de contraste, algo que nunca se congeló (sin tope). Comprobado que **falla con la vista
+antigua** (6 fallos: fecha, motivo, origen y prioridad «low») y pasa con la nueva. La app no cambia: ya miraba `thawed_at`.
 
 ## 3. Convenciones
 
@@ -2321,3 +2337,14 @@ recuerde que se descongeló: `use_quantity` y `open_item` lo cambian y `thawed_a
 (4) La herramienta de escritura convirtió unos escapes `\u…` de una expresión regular en caracteres invisibles literales y rompió el módulo: se
 comprueba con un barrido de caracteres de formato, y las reglas de esa clase se escriben por código de carácter. (5) Un script de verificación que
 da por sentado que el servidor y la sesión «ya están» se queda parado: comprobarlo antes, y arrancar el servidor propio y pararlo al acabar.
+
+### 2026-10-19 (sesión 38) · El tope de 24 h tras descongelar
+
+**Hecho** ([D-45](#d-45--el-tope-de-24-h-tras-descongelar-depende-de-thawed_at-no-del-estado--2026-10-19)): la vista de prioridad aplica el tope
+mientras `thawed_at` esté puesto, no solo con el estado «descongelado». Migración, test (25) y PENDIENTES al día.
+
+**Verificado aquí:** pgTAP **578** en 15 ficheros; `db:check` **782**; el test nuevo **falla con la vista antigua** (6 fallos) y pasa con la nueva.
+
+**Sin verificar:** en pantalla con un elemento descongelado y usado (la app no cambia y ya mira `thawed_at`; lo comprobado es la vista).
+
+**Se aprendió:** el simulador de pgTAP de `db:check` (PGlite) no tiene `isnt`; se usa `ok(… is distinct from …)`.
