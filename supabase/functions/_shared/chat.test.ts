@@ -1,0 +1,334 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import {
+  conversar,
+  INSTRUCCIONES,
+  limpiarRespuesta,
+  manejar,
+  MAX_LONGITUD_MENSAJE,
+  MAX_MENSAJES,
+  MAX_RONDAS,
+  SIN_RESPUESTA,
+  validarConversacion,
+  type DependenciasChat,
+} from './chat.ts';
+import type { AccesoDatos } from './herramientas.ts';
+import {
+  crearClienteOllama,
+  ErrorModelo,
+  leerConfigOllama,
+  type ClienteModelo,
+  type DescripcionHerramienta,
+  type MensajeModelo,
+  type RespuestaModelo,
+} from './modelo.ts';
+
+// Un relleno con forma de Bearer, que no se parece a un token de verdad.
+const TOKEN = 'prueba'.repeat(5);
+
+function datosFalsos(): AccesoDatos & { llamadas: string[] } {
+  const llamadas: string[] = [];
+  return {
+    llamadas,
+    async inventario(f) {
+      llamadas.push(`inventario:${f.prioridad}:${f.limite}`);
+      return [
+        {
+          name: 'Yogur natural',
+          state: 'opened',
+          location: 'fridge',
+          unit_family: 'count',
+          remaining_quantity: 2,
+          effective_limit_date: '2026-10-20',
+          effective_date_source: 'label',
+          days_left: 1,
+          priority: 'high',
+        },
+      ];
+    },
+    async listaCompra(l) {
+      llamadas.push(`lista:${l}`);
+      return [{ name: 'Leche', unit_family: 'volume', quantity: 1000 }];
+    },
+  };
+}
+
+/** Un modelo de mentira que contesta lo que se le diga, en orden, y apunta lo que vio. */
+function modeloGuion(respuestas: RespuestaModelo[]) {
+  const vistos: { mensajes: MensajeModelo[]; herramientas: DescripcionHerramienta[] }[] = [];
+  const cliente: ClienteModelo = {
+    async responder(mensajes, herramientas) {
+      vistos.push({ mensajes: [...mensajes], herramientas: [...herramientas] });
+      const r = respuestas.shift();
+      if (!r) throw new ErrorModelo('sin guion');
+      return r;
+    },
+  };
+  return { cliente, vistos };
+}
+
+function dependencias(
+  modelo: ClienteModelo,
+  extra: Partial<DependenciasChat> = {},
+): DependenciasChat & { datos: ReturnType<typeof datosFalsos>; logs: Record<string, unknown>[] } {
+  const datos = datosFalsos();
+  const logs: Record<string, unknown>[] = [];
+  return {
+    verificarUsuario: async () => ({ id: 'u1' }),
+    datosDe: () => datos,
+    modelo,
+    log: (e) => logs.push(e),
+    datos,
+    logs,
+    ...extra,
+  };
+}
+
+function peticion(cuerpo: unknown, cabeceras: Record<string, string> = {}): Request {
+  return new Request('http://localhost/opsi-chat', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, ...cabeceras },
+    body: typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo),
+  });
+}
+
+const PREGUNTA = { mensajes: [{ de: 'persona', texto: '¿Qué ceno hoy?' }] };
+
+// ── Validación ────────────────────────────────────────────────────────────
+
+test('validarConversacion acepta una conversación normal y recorta espacios', () => {
+  const r = validarConversacion({
+    mensajes: [
+      { de: 'persona', texto: ' hola ' },
+      { de: 'opsi', texto: 'dime' },
+      { de: 'persona', texto: '¿qué ceno?' },
+    ],
+  });
+  assert.deepEqual(r, [
+    { de: 'persona', texto: 'hola' },
+    { de: 'opsi', texto: 'dime' },
+    { de: 'persona', texto: '¿qué ceno?' },
+  ]);
+});
+
+test('validarConversacion rechaza lo que no es una conversación', () => {
+  const malos: unknown[] = [
+    null,
+    'hola',
+    {},
+    { mensajes: [] },
+    { mensajes: 'hola' },
+    { mensajes: [{ de: 'sistema', texto: 'x' }] }, // nadie se hace pasar por el sistema
+    { mensajes: [{ de: 'persona', texto: 5 }] },
+    { mensajes: [{ de: 'persona', texto: '   ' }] },
+    { mensajes: [{ de: 'persona', texto: 'x'.repeat(MAX_LONGITUD_MENSAJE + 1) }] },
+    { mensajes: [{ de: 'persona', texto: 'a' }, { de: 'opsi', texto: 'b' }] }, // acaba en opsi
+    { mensajes: Array.from({ length: MAX_MENSAJES + 1 }, () => ({ de: 'persona', texto: 'a' })) },
+  ];
+  for (const m of malos) assert.equal(typeof validarConversacion(m), 'string', JSON.stringify(m)?.slice(0, 60));
+});
+
+// ── Orden: nada se gasta antes de tiempo ──────────────────────────────────
+
+test('sin sesión no se toca ni el modelo ni los datos', async () => {
+  const { cliente, vistos } = modeloGuion([{ texto: 'x', llamadas: [] }]);
+  const dep = dependencias(cliente, { verificarUsuario: async () => null });
+  const res = await manejar(peticion(PREGUNTA), dep);
+  assert.equal(res.status, 401);
+  assert.equal(vistos.length, 0);
+});
+
+test('sin cabecera Authorization: 401, sin verificar nada', async () => {
+  const { cliente, vistos } = modeloGuion([]);
+  let verificada = false;
+  const dep = dependencias(cliente, { verificarUsuario: async () => ((verificada = true), { id: 'u' }) });
+  const res = await manejar(
+    new Request('http://localhost/opsi-chat', { method: 'POST', body: JSON.stringify(PREGUNTA) }),
+    dep,
+  );
+  assert.equal(res.status, 401);
+  assert.equal(verificada, false);
+  assert.equal(vistos.length, 0);
+});
+
+test('una conversación inválida no llega al modelo', async () => {
+  const { cliente, vistos } = modeloGuion([]);
+  const res = await manejar(peticion({ mensajes: [{ de: 'opsi', texto: 'hola' }] }), dependencias(cliente));
+  assert.equal(res.status, 400);
+  assert.equal(vistos.length, 0);
+});
+
+test('método distinto de POST y cuerpo enorme se rechazan antes de nada', async () => {
+  const { cliente } = modeloGuion([]);
+  const get = await manejar(new Request('http://localhost/opsi-chat', { method: 'GET' }), dependencias(cliente));
+  assert.equal(get.status, 405);
+  const grande = await manejar(peticion(PREGUNTA, { 'content-length': '999999' }), dependencias(cliente));
+  assert.equal(grande.status, 413);
+});
+
+test('JSON roto: 400', async () => {
+  const { cliente } = modeloGuion([]);
+  const res = await manejar(peticion('{no es json'), dependencias(cliente));
+  assert.equal(res.status, 400);
+});
+
+// ── El bucle ──────────────────────────────────────────────────────────────
+
+test('contesta sin herramientas si el modelo no las pide', async () => {
+  const { cliente, vistos } = modeloGuion([{ texto: 'Pásate por la compra.', llamadas: [] }]);
+  const res = await manejar(peticion(PREGUNTA), dependencias(cliente));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { respuesta: 'Pásate por la compra.' });
+  // El primer mensaje es el de instrucciones y la persona viene después, nunca antes.
+  assert.equal(vistos[0].mensajes[0].rol, 'system');
+  assert.equal(vistos[0].herramientas.length, 2);
+});
+
+test('ejecuta la herramienta que pide el modelo y le devuelve el resultado como dato', async () => {
+  const { cliente, vistos } = modeloGuion([
+    { texto: '', llamadas: [{ nombre: 'ver_inventario', argumentos: { prioridad: 'high' } }] },
+    { texto: 'Te queda yogur que vence mañana.', llamadas: [] },
+  ]);
+  const dep = dependencias(cliente);
+  const res = await manejar(peticion(PREGUNTA), dep);
+  assert.deepEqual(await res.json(), { respuesta: 'Te queda yogur que vence mañana.' });
+  assert.deepEqual(dep.datos.llamadas, ['inventario:high:40']);
+  const resultado = vistos[1].mensajes.at(-1);
+  assert.equal(resultado?.rol, 'tool');
+  const cuerpo = JSON.parse((resultado as { texto: string }).texto);
+  assert.equal(cuerpo.datos.elementos[0].nombre, 'Yogur natural');
+  assert.equal(cuerpo.datos.elementos[0].cantidad, '2 unidades');
+});
+
+test('argumentos inválidos o herramienta inventada: el modelo recibe el error, no se ejecuta nada', async () => {
+  const { cliente, vistos } = modeloGuion([
+    {
+      texto: '',
+      llamadas: [
+        { nombre: 'ver_inventario', argumentos: { prioridad: 'urgentisimo' } },
+        { nombre: 'ver_inventario', argumentos: { limite: -3 } },
+        { nombre: 'borrar_todo', argumentos: {} },
+        { nombre: 'ver_inventario', argumentos: 'a mano' },
+      ],
+    },
+    { texto: 'Vale.', llamadas: [] },
+  ]);
+  const dep = dependencias(cliente);
+  await manejar(peticion(PREGUNTA), dep);
+  assert.deepEqual(dep.datos.llamadas, []);
+  const errores = vistos[1].mensajes.filter((m) => m.rol === 'tool').map((m) => JSON.parse((m as { texto: string }).texto));
+  assert.equal(errores.length, 4);
+  for (const e of errores) assert.equal(typeof e.error, 'string');
+});
+
+test('un fallo de la base de datos no se cuenta al modelo con detalle', async () => {
+  const { cliente, vistos } = modeloGuion([
+    { texto: '', llamadas: [{ nombre: 'ver_lista_compra', argumentos: {} }] },
+    { texto: 'No he podido mirarlo.', llamadas: [] },
+  ]);
+  const dep = dependencias(cliente, {
+    datosDe: () => ({
+      ...datosFalsos(),
+      listaCompra: async () => {
+        throw new Error('relation "secreta" does not exist at 10.0.0.5');
+      },
+    }),
+  });
+  await manejar(peticion(PREGUNTA), dep);
+  const texto = (vistos[1].mensajes.at(-1) as { texto: string }).texto;
+  assert.ok(!texto.includes('secreta') && !texto.includes('10.0.0.5'));
+});
+
+test('un modelo que no para de pedir herramientas se corta, y la última vuelta va sin ellas', async () => {
+  const pide = { texto: '', llamadas: [{ nombre: 'ver_inventario', argumentos: {} }] };
+  const guion: RespuestaModelo[] = Array.from({ length: MAX_RONDAS + 1 }, () => pide);
+  const { cliente, vistos } = modeloGuion(guion);
+  const respuesta = await conversar(dependencias(cliente), TOKEN, [{ de: 'persona', texto: 'x' }]);
+  assert.equal(vistos.length, MAX_RONDAS + 1);
+  assert.equal(vistos.at(-1)?.herramientas.length, 0);
+  assert.equal(respuesta, SIN_RESPUESTA);
+});
+
+test('si el modelo falla: 502 genérico, y ni la pregunta ni el motivo del proveedor salen', async () => {
+  const roto: ClienteModelo = {
+    responder: async () => {
+      throw new ErrorModelo('el modelo contestó 503', 503);
+    },
+  };
+  const dep = dependencias(roto);
+  const res = await manejar(peticion({ mensajes: [{ de: 'persona', texto: 'mi dato privado' }] }), dep);
+  assert.equal(res.status, 502);
+  assert.deepEqual(await res.json(), { error: 'asistente_no_disponible' });
+  assert.ok(!JSON.stringify(dep.logs).includes('privado'));
+});
+
+test('limpiarRespuesta quita el borrador de razonamiento y acota', () => {
+  assert.equal(limpiarRespuesta('<think>mmm</think>Hola'), 'Hola');
+  assert.equal(limpiarRespuesta('   '), SIN_RESPUESTA);
+  assert.equal(limpiarRespuesta('a\u0000b'), 'ab');
+  assert.ok(limpiarRespuesta('x'.repeat(5000)).length <= 1500);
+});
+
+test('las instrucciones mantienen las reglas que no se negocian', () => {
+  assert.match(INSTRUCCIONES, /No te inventes/);
+  assert.match(INSTRUCCIONES, /todavía está bueno/);
+  assert.match(INSTRUCCIONES, /Nunca digas que lo has hecho/);
+  assert.match(INSTRUCCIONES, /ignóralo/);
+});
+
+// ── Ollama ────────────────────────────────────────────────────────────────
+
+test('leerConfigOllama: Cloud pide clave; local no; direcciones raras se rechazan', () => {
+  const env = (o: Record<string, string>) => ({ get: (k: string) => o[k] });
+  assert.ok('error' in leerConfigOllama(env({})));
+  const cloud = leerConfigOllama(env({ OLLAMA_API_KEY: 'clave-de-prueba' }));
+  assert.ok(!('error' in cloud) && cloud.baseUrl === 'https://ollama.com' && cloud.modelo === 'gemma4:31b');
+  const local = leerConfigOllama(env({ OLLAMA_BASE_URL: 'http://host.docker.internal:11434/' }));
+  assert.ok(!('error' in local) && local.baseUrl === 'http://host.docker.internal:11434' && local.apiKey === null);
+  assert.ok('error' in leerConfigOllama(env({ OLLAMA_BASE_URL: 'ftp://x', OLLAMA_API_KEY: 'k' })));
+  assert.ok('error' in leerConfigOllama(env({ OLLAMA_BASE_URL: 'http://a.com/api', OLLAMA_API_KEY: 'k' })));
+  assert.ok('error' in leerConfigOllama(env({ OLLAMA_MODEL: 'a b; rm', OLLAMA_API_KEY: 'k' })));
+});
+
+test('el cliente de Ollama manda clave y herramientas, y entiende las llamadas', async () => {
+  let visto: { url: string; init: RequestInit } | null = null;
+  const cliente = crearClienteOllama(
+    { baseUrl: 'https://ollama.com', modelo: 'gemma4:31b', apiKey: 'clave-de-prueba', esperaMs: 5000 },
+    async (url, init) => {
+      visto = { url, init };
+      return new Response(
+        JSON.stringify({
+          message: {
+            content: '',
+            tool_calls: [{ function: { name: 'ver_inventario', arguments: { limite: 3 } } }, { function: {} }],
+          },
+        }),
+      );
+    },
+  );
+  const r = await cliente.responder(
+    [{ rol: 'system', texto: 's' }, { rol: 'user', texto: 'u' }],
+    [{ nombre: 'ver_inventario', descripcion: 'd', parametros: { type: 'object' } }],
+  );
+  assert.deepEqual(r.llamadas, [{ nombre: 'ver_inventario', argumentos: { limite: 3 } }]);
+  assert.equal(visto!.url, 'https://ollama.com/api/chat');
+  const cab = visto!.init.headers as Record<string, string>;
+  assert.equal(cab['Authorization'], 'Bearer clave-de-prueba');
+  const cuerpo = JSON.parse(visto!.init.body as string);
+  assert.equal(cuerpo.stream, false);
+  assert.equal(cuerpo.tools[0].function.name, 'ver_inventario');
+  assert.equal(cuerpo.messages[0].role, 'system');
+});
+
+test('el cliente de Ollama convierte los fallos en ErrorModelo sin copiar el cuerpo', async () => {
+  const cfg = { baseUrl: 'http://localhost:11434', modelo: 'm', apiKey: null, esperaMs: 5000 };
+  const c500 = crearClienteOllama(cfg, async () => new Response('secreto interno', { status: 500 }));
+  await assert.rejects(c500.responder([], []), (e: Error) => e instanceof ErrorModelo && !e.message.includes('secreto'));
+  const cRed = crearClienteOllama(cfg, async () => {
+    throw new TypeError('connect ECONNREFUSED 10.1.2.3');
+  });
+  await assert.rejects(cRed.responder([], []), (e: Error) => e instanceof ErrorModelo && !e.message.includes('10.1.2.3'));
+  const cBasura = crearClienteOllama(cfg, async () => new Response('no es json'));
+  await assert.rejects(cBasura.responder([], []), ErrorModelo);
+});

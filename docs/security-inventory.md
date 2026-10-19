@@ -37,6 +37,7 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/(tabs)/lista` | Sesión | Las listas de la compra de la nevera activa |
 | `(app)/productos` | Sesión | Tus productos ⭐: almacén con buscador, filtro (escaneados / a mano) y una ficha por producto, desde la que se guarda en la nevera que se elija o se apunta en una o varias listas de ella. Premium lo decide el servidor |
 | `(app)/gastos` | Sesión | Lo que más gastas ⭐, entero: la pestaña de Premium enseña cinco y esta pantalla la lista completa. Premium lo decide el servidor |
+| `(app)/chat` | Sesión | La pantalla del chat de Opsi. **Hoy no habla con nadie**: la conversación vive en memoria y no sale del móvil. `?mensaje=` solo rellena el cuadro de escribir (limpiado), nunca lo envía. Antes de conectar un modelo hay que revisar esta fila y `docs/PRIVACIDAD.md` |
 | `(app)/(tabs)/premium` | Sesión | Pestaña de Opsi Premium ⭐ (donde estaba el chat): color de la app, tus productos y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
