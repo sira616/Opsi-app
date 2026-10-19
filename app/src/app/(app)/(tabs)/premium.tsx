@@ -4,13 +4,21 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CaretRight, Check, Lock, Package, Star } from 'phosphor-react-native';
+import {
+  ChartBar,
+  ChatCircleDots,
+  Check,
+  ListChecks,
+  Package,
+  Palette,
+  Star,
+} from 'phosphor-react-native';
 
 import { fetchMasUsados, fetchProductosConocidos, GASTOS_EN_RESUMEN } from '@/api/premium';
 import { fetchSettings, updateSettings } from '@/api/settings';
-import { Nota, Row, Section } from '@/features/ajustes/ui';
-import { FilaGasto } from '@/features/gastos/FilaGasto';
+import { Nota, useAjustesStyles } from '@/features/ajustes/ui';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { Widget } from '@/features/premium/Widget';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -22,7 +30,6 @@ import {
   radius,
   space,
   tabBarClearance,
-  touchTarget,
   useAspecto,
   useTheme,
   useType,
@@ -30,15 +37,21 @@ import {
 } from '@/shared/theme/tokens';
 
 /**
- * Opsi Premium ⭐: el color de la app, tus productos, lo que más gastas y más listas.
+ * Opsi Premium ⭐: el panel de lo que añade, organizado en widgets por categoría.
+ *
+ * Premium es un conjunto de funciones sueltas, y cada una es un widget: icono, título, una
+ * línea con lo que hay dentro y, al tocarlo, su pantalla. Las categorías son «Asistente»,
+ * «Tu comida» y «A tu manera». Cuando llegue una función nueva, es un widget más en su
+ * categoría, no una sección nueva de una lista que ya nadie lee entera.
  *
  * Todo lo premium lo decide el SERVIDOR: el color solo lo guarda el trigger de
  * `user_settings` si el plan lo permite, y `most_used_products` y `my_known_products`
- * rechazan a quien no lo tiene. Esta pantalla enseña candados en vez de botones que van a fallar, y esa es
- * toda su parte; si alguien se saltara los candados, el servidor diría que no igual.
+ * rechazan a quien no lo tiene. Esta pantalla enseña candados en vez de botones que van a
+ * fallar, y esa es toda su parte; si alguien se saltara los candados, el servidor diría
+ * que no igual. El chat NO está bloqueado: todavía no hay nada que cobrar ni limitar.
  *
- * Es una pestaña de la barra, donde antes estaba el chat de Opsi (que volverá como una
- * burbuja en la nevera, no como una sección).
+ * Es una pestaña de la barra, donde antes estaba el chat de Opsi (que ahora vive como una
+ * pantalla propia y se abre desde la nevera y desde aquí).
  *
  * Contratarlo todavía no se puede: no hay pago (ver `docs/internal/PENDIENTES.md`), y
  * la pantalla lo dice en vez de enseñar un botón de compra que no compra nada. Hoy el
@@ -46,6 +59,7 @@ import {
  */
 export default function Premium() {
   const styles = useStyles();
+  const compartidos = useAjustesStyles();
   const t = useType();
   const c = useTheme();
   const queryClient = useQueryClient();
@@ -58,7 +72,8 @@ export default function Premium() {
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
   const premium = settings.data?.plan === 'premium';
 
-  // Se piden uno más de los que se enseñan: así se sabe si hay más y vale la pena «Ver todos».
+  // Se piden uno más de los que se enseñan en la pantalla de dentro: la misma consulta
+  // que ya tiene en caché, y de aquí solo se lee el primero.
   const gastos = useQuery({
     queryKey: queryKeys.masUsados(activa.id, GASTOS_EN_RESUMEN + 1),
     queryFn: () => fetchMasUsados(activa.id, GASTOS_EN_RESUMEN + 1),
@@ -92,6 +107,35 @@ export default function Premium() {
     elegirColor.mutate(color);
   }
 
+  /** Un widget de Premium: sin el plan no abre nada y lo dice; con él, va a su pantalla. */
+  function abrir(ruta: '/productos' | '/gastos') {
+    if (!premium) {
+      setAviso('Eso es de Opsi Premium ⭐.');
+      return;
+    }
+    setAviso(null);
+    router.push(ruta);
+  }
+
+  const totalProductos = conocidos.data?.length ?? 0;
+  const masGastado = gastos.data?.[0];
+
+  const resumenProductos = conocidos.error
+    ? 'No he podido cargarlos'
+    : conocidos.isPending
+      ? ''
+      : totalProductos === 0
+        ? 'Aún no tienes ninguno'
+        : `${totalProductos} ${totalProductos === 1 ? 'producto' : 'productos'}`;
+
+  const resumenGastos = gastos.error
+    ? 'No he podido cargarlo'
+    : gastos.isPending
+      ? ''
+      : masGastado
+        ? `${masGastado.nombre}: ${masGastado.agotado} ${masGastado.agotado === 1 ? 'vez' : 'veces'}`
+        : `Nada terminado en ${activa.name}`;
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -109,133 +153,99 @@ export default function Premium() {
         {/* El plan, dicho tal cual. */}
         <View style={[styles.plan, premium && styles.planPremium]}>
           <Text style={styles.planTitulo}>{premium ? 'Tienes Opsi Premium ⭐' : 'Plan básico'}</Text>
-          <Text style={styles.planTexto}>
-            {premium
-              ? 'Colores, tus productos, lo que más gastas y hasta 10 listas por nevera.'
-              : 'Colores, tus productos, lo que más gastas y más listas de la compra. Todavía no se puede contratar.'}
-          </Text>
+          {premium ? null : (
+            <Text style={styles.planTexto}>Todavía no se puede contratar.</Text>
+          )}
         </View>
 
-        <Section title="Color de la app">
-          <View style={styles.colores}>
-            {ACENTOS.map((color) => {
-              const { etiqueta, muestra } = MUESTRAS_ACENTO[color];
-              const bloqueado = color !== 'green' && !premium;
-              const on = acento === color;
-              return (
-                <Pressable
-                  key={color}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on, disabled: false }}
-                  accessibilityLabel={bloqueado ? `${etiqueta}, de Opsi Premium` : etiqueta}
-                  onPress={() => elegir(color)}
-                  style={({ pressed }) => [styles.color, pressed && styles.pulsado]}
-                >
-                  <View style={[styles.muestraAnillo, on && { borderColor: c.brand }]}>
-                    <View
-                      style={[
-                        styles.muestra,
-                        { backgroundColor: muestra },
-                        bloqueado && styles.muestraBloqueada,
-                      ]}
-                    >
-                      {on ? (
-                        <Check
-                          size={18}
-                          color={color === 'yellow' ? '#16181A' : '#FFFFFF'}
-                          weight="bold"
-                        />
-                      ) : null}
-                    </View>
-                    {bloqueado ? (
-                      <View style={styles.estrella}>
-                        <Star size={11} color={c.brandInk} weight="fill" />
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={[styles.colorEtiqueta, on && styles.colorEtiquetaOn]}>{etiqueta}</Text>
-                </Pressable>
-              );
-            })}
+        <View style={styles.categoria}>
+          <Text style={compartidos.sectionTitle}>Asistente</Text>
+          <View style={styles.rejilla}>
+            <Widget
+              ancho
+              icono={ChatCircleDots}
+              titulo="Chat de Opsi"
+              resumen="Pregúntale qué cenar o qué gastar primero"
+              onPress={() => router.push('/chat')}
+            />
           </View>
-        </Section>
+        </View>
 
-        <Section title="Tus productos">
-          {premium ? (
-            conocidos.isPending ? (
-              <ActivityIndicator color={c.brand} />
-            ) : conocidos.error ? (
-              <Text style={styles.texto}>{describeDbError(conocidos.error)}</Text>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Ver tus productos"
-                onPress={() => router.push('/productos')}
-                style={({ pressed }) => [styles.enlace, pressed && styles.pulsado]}
-              >
-                <Package size={22} color={c.brand} weight="duotone" />
-                <Text style={styles.enlaceTexto}>
-                  {(conocidos.data ?? []).length === 0
-                    ? 'Aún no tienes ninguno'
-                    : `${(conocidos.data ?? []).length} ${(conocidos.data ?? []).length === 1 ? 'producto' : 'productos'}`}
-                </Text>
-                <CaretRight size={16} color={c.inkMuted} weight="bold" />
-              </Pressable>
-            )
-          ) : (
-            <View style={styles.bloqueo}>
-              <Lock size={20} color={c.inkMuted} weight="duotone" />
-              <Text style={styles.texto}>
-                Con Opsi Premium ⭐ tienes un almacén con los productos que has registrado y su ficha.
-              </Text>
-            </View>
-          )}
-        </Section>
+        <View style={styles.categoria}>
+          <Text style={compartidos.sectionTitle}>Tu comida</Text>
+          <View style={styles.rejilla}>
+            <Widget
+              icono={Package}
+              titulo="Tus productos"
+              resumen={resumenProductos}
+              bloqueado={!premium}
+              onPress={() => abrir('/productos')}
+            />
+            <Widget
+              icono={ChartBar}
+              titulo="Lo que más gastas"
+              resumen={resumenGastos}
+              bloqueado={!premium}
+              onPress={() => abrir('/gastos')}
+            />
+          </View>
+        </View>
 
-        <Section title="Lo que más gastas">
-          {premium ? (
-            gastos.isPending ? (
-              <ActivityIndicator color={c.brand} />
-            ) : gastos.error ? (
-              <Text style={styles.texto}>{describeDbError(gastos.error)}</Text>
-            ) : (gastos.data ?? []).length === 0 ? (
-              <Text style={styles.texto}>Aún no has terminado nada en {activa.name}.</Text>
-            ) : (
-              <>
-                {(gastos.data ?? []).slice(0, GASTOS_EN_RESUMEN).map((p, i) => (
-                  <FilaGasto key={p.nombre} puesto={i + 1} producto={p} />
-                ))}
-                {(gastos.data ?? []).length > GASTOS_EN_RESUMEN ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Ver todos los productos que más gastas"
-                    onPress={() => router.push('/gastos')}
-                    style={({ pressed }) => [styles.enlace, pressed && styles.pulsado]}
-                  >
-                    <Text style={styles.enlaceTexto}>Ver todos</Text>
-                    <CaretRight size={16} color={c.inkMuted} weight="bold" />
-                  </Pressable>
-                ) : null}
-              </>
-            )
-          ) : (
-            <View style={styles.bloqueo}>
-              <Lock size={20} color={c.inkMuted} weight="duotone" />
-              <Text style={styles.texto}>
-                Con Opsi Premium ⭐ ves qué es lo que más gastas y lo que acabas tirando.
-              </Text>
-            </View>
-          )}
-        </Section>
-
-        <Section title="Listas de la compra">
-          <Row
-            title={premium ? 'Hasta 10 listas por nevera' : 'Hasta 3 listas por nevera'}
-            subtitle={premium ? undefined : 'Con Opsi Premium ⭐ puedes tener muchas más.'}
-          />
-        </Section>
+        <View style={styles.categoria}>
+          <Text style={compartidos.sectionTitle}>A tu manera</Text>
+          <View style={styles.rejilla}>
+            <Widget ancho icono={Palette} titulo="Color de la app">
+              <View style={styles.colores}>
+                {ACENTOS.map((color) => {
+                  const { etiqueta, muestra } = MUESTRAS_ACENTO[color];
+                  const bloqueado = color !== 'green' && !premium;
+                  const on = acento === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on, disabled: false }}
+                      accessibilityLabel={bloqueado ? `${etiqueta}, de Opsi Premium` : etiqueta}
+                      onPress={() => elegir(color)}
+                      style={({ pressed }) => [styles.color, pressed && styles.pulsado]}
+                    >
+                      <View style={[styles.muestraAnillo, on && { borderColor: c.brand }]}>
+                        <View
+                          style={[
+                            styles.muestra,
+                            { backgroundColor: muestra },
+                            bloqueado && styles.muestraBloqueada,
+                          ]}
+                        >
+                          {on ? (
+                            <Check
+                              size={18}
+                              color={color === 'yellow' ? '#16181A' : '#FFFFFF'}
+                              weight="bold"
+                            />
+                          ) : null}
+                        </View>
+                        {bloqueado ? (
+                          <View style={styles.estrella}>
+                            <Star size={11} color={c.brandInk} weight="fill" />
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.colorEtiqueta, on && styles.colorEtiquetaOn]}>{etiqueta}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Widget>
+            <Widget
+              icono={ListChecks}
+              titulo="Listas de la compra"
+              resumen={premium ? 'Hasta 10 por nevera' : 'Hasta 3 por nevera. Con Premium, más'}
+              onPress={() => router.push('/lista')}
+            />
+          </View>
+        </View>
       </ScrollView>
-
     </SafeAreaView>
   );
 }
@@ -260,9 +270,12 @@ const useStyles = makeStyles((c) => ({
   planTitulo: { fontFamily: fonts.semibold, fontSize: 16, color: c.ink },
   planTexto: { fontSize: 13.5, lineHeight: 19, color: c.inkMuted },
 
+  categoria: { gap: space.sm },
+  rejilla: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  pulsado: { opacity: 0.7 },
+
   colores: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg },
   color: { alignItems: 'center', gap: 6, minWidth: 56 },
-  pulsado: { opacity: 0.7 },
   muestraAnillo: {
     width: MUESTRA + 10,
     height: MUESTRA + 10,
@@ -295,9 +308,4 @@ const useStyles = makeStyles((c) => ({
   },
   colorEtiqueta: { fontFamily: fonts.medium, fontSize: 12.5, color: c.inkMuted },
   colorEtiquetaOn: { fontFamily: fonts.semibold, color: c.ink },
-
-  texto: { fontSize: 13.5, lineHeight: 19, color: c.inkMuted },
-  enlace: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touchTarget + 8 },
-  enlaceTexto: { flex: 1, fontFamily: fonts.semibold, fontSize: 14.5, color: c.ink },
-  bloqueo: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
 }));
