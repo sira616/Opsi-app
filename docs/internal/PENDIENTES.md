@@ -307,8 +307,9 @@ bitácora). Lo que queda:
     del elemento, no el del producto).
 
 **Pendiente de mantenimiento:** las dos exenciones de `docs/security-waivers.json` (`braces` y
-`node-forge`, sin versión corregida) **caducan el 2026-11-07** y la CI fallará ese día si nadie las
-revisa. Es a propósito. Y **si se renombra un trabajo de la CI hay que actualizar la protección de
+`node-forge`, sin versión corregida) **caducan el 2026-12-07** y la CI fallará ese día si nadie las
+revisa. Es a propósito. Se renovaron el 2026-10-19 (`npm view` y `npm audit` siguen sin versión
+corregida: las instaladas son las últimas publicadas); la próxima revisión, antes de esa fecha. Y **si se renombra un trabajo de la CI hay que actualizar la protección de
 `main`**, o las PR se quedan esperando un check que ya no existe.
 
 **Sigue pendiente además:** el logo y `icon.png`/`splash.png` en `app/assets` (ya hay un
