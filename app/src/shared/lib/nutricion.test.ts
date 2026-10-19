@@ -354,12 +354,12 @@ test('una ración con marcado, control o formato se tira entera', () => {
 
 test('una ración con caracteres que no se ven y esconden texto (etiquetas, uso privado…) se tira entera', () => {
   const malas = [
-    '30؜g', // marca de letra árabe
-    '30᠎g', // separador mongol de vocales
-    '30￹g', // anotación interlineal
-    '30￻g',
-    '30g', // uso privado
-    '30g',
+    '30\u061cg', // marca de letra árabe
+    '30\u180eg', // separador mongol de vocales
+    '30\ufff9g', // anotación interlineal
+    '30\ufffbg',
+    '30\ue000g', // uso privado
+    '30\uf8ffg',
     '30\u{E0041}g', // bloque de etiquetas: «ASCII smuggling»
     '30\u{E007F}g',
     '30\u{F0000}g', // uso privado suplementario
