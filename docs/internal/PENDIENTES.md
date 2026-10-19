@@ -32,6 +32,7 @@ Supabase real. Ya no es cierto: Docker funciona y `db:reset`, `db:test`, `db:lin
 | 🟠 | **El campo de fecha nuevo, «tus productos» y la pestaña Premium en un móvil** | Verificados en el navegador. Sin ver en nativo: **mantener pulsado el − o el +** (se probó el toque, no la repetición), el calendario como hoja, y la hoja de opciones de «tus productos» sobre una pestaña con la barra flotante |
 | 🟠 | **El escáner con notch, la ficha de producto y la tarjeta de fecha en un móvil** | Verificados en el navegador (excepto el notch, que no tiene equivalente allí). Sin ver en nativo: que los botones de cerrar y la linterna queden por debajo del recorte y se puedan tocar, la ficha como hoja sobre una pantalla de pila, y la tarjeta de fecha con algo abierto o con el consumo preferente pasado |
 | 🟠 | **Elegir nevera al guardar un producto y «Ver todos» de lo que más gastas, en un móvil** | Verificados en el navegador con dos neveras (la fila de neveras, «Guardarlo en…» cayendo en la elegida, apuntar en la lista de la elegida, el formulario completo con la nevera por la ruta, los cinco primeros y la pantalla con los ocho). Sin ver en nativo: la fila de neveras con muchas neveras largas y la ficha como hoja sobre una pantalla de pila |
+| 🟠 | **Alérgenos e intolerancias, ingredientes y «congélalo o úsalo» con sesión y en un móvil** | Verificado: pgTAP real (RLS, permisos, los CHECK), las pruebas de la lógica con Node, las filas reales de la vista y los componentes pintados en el navegador **sin sesión** con datos de prueba (marcas del inventario, avisos, recuadro de congelar). Sin ver: Ajustes, la hoja rápida del escáner, el alta, la hoja de ingredientes y el botón «Congelar» con sesión; el modo claro; nada nativo; y **la renovación real de una ficha antigua llamando a OFF desde la función** (la función no se ha probado contra OFF con estos campos) |
 | 🟡 | **`my_known_products` devuelve lo que la app ya no usa** | Veces, primera y última vez y cuánto hay ahora siguen en la función (y en sus tests) aunque el almacén ya no los enseña. Si no vuelven a hacer falta, quitarlos con una migración nueva (no se puede cambiar el tipo devuelto con `create or replace`) |
 | 🟡 | **Tus productos: lo que falta** | Lo que se escaneó y no se guardó no sale (escanear no deja rastro); no hay forma de quitar algo del inventario ni foto del producto (el móvil no llama a terceros); si se quiere **guardar sin añadir**, hará falta una tabla de favoritos |
 | 🟡 | **Apuntar solo, al agotar algo** | Con «apuntar lo que se acaba» encendido en Ajustes se apunta solo, sin preguntar, y va a la lista principal. Si se quiere elegir listas también ahí, hará falta un ajuste con la(s) lista(s) por omisión |
@@ -91,6 +92,19 @@ fila a mano, que desde la app no puede.
 
 **Arreglo:** una acción `reopen_item` que devuelva el elemento a su estado anterior y deje
 su propio evento. Nunca borrando el evento original: el registro es inmutable a propósito.
+
+### 🔴 El tope de 24 h tras descongelar desaparece al usar una parte o abrir lo descongelado
+
+Hallado al hacer [D-44](BITACORA.md#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19);
+**no es de esa tarea y no se ha tocado.** La vista `inventory_with_priority` solo aplica el tope de 24 h
+(`date_from_thaw`) mientras `state = 'thawed'`. Pero `use_quantity` pasa el estado a «empezado» y `open_item`
+a «abierto», y `thawed_at` se queda puesto: el tope deja de contar. Comprobado contra la base local con una
+transacción deshecha: algo descongelado hace 3 días sale «−2 días» (vencido por el tope) y, tras usar una parte,
+«10 días» con la fecha del envase. Es justo lo que D-14 existe para impedir.
+
+**Arreglo:** que `date_from_thaw` dependa de `thawed_at is not null` y no del estado (una migración nueva que
+recree la vista, con su test), y revisar qué pasa al volver a congelar y descongelar. La app ya mira `thawed_at`
+y no el estado para no recomendar congelar de nuevo y para el subtítulo del botón «Congelar».
 
 ### 🟡 `open_shelf_life_reference` sin trigger de `updated_at`
 
@@ -160,6 +174,24 @@ salen de ninguna guía oficial**.
 Es el riesgo número uno del roadmap original y sigue abierto: mientras no haya fuente, todo
 lo que derive de aquí es una estimación con buena intención.
 
+### 🟠 El cruce de alérgenos solo lee las etiquetas de OFF, no el texto de los ingredientes
+
+`evaluarSalud` cruza lo que la persona evita con `allergens_tags` y `traces_tags`. Un producto con los
+ingredientes escritos pero sin esas etiquetas calculadas no avisaría: la app dice «sin datos» solo si faltan los
+ingredientes o la ficha. Leer el texto sería poco fiable (idioma, sinónimos, «sin gluten» dentro del propio texto)
+y no se hizo; la hoja de ingredientes está a un toque y Ajustes pide mirar siempre la etiqueta. Las etiquetas de
+sin gluten y sin lactosa son declaraciones de quien edita la ficha y la app no las usa para descartar nada.
+**Decidir** si merece una segunda pasada que busque palabras clave como aviso extra (un falso aviso cuesta menos
+que uno que falta).
+
+### 🟠 «Congélalo o úsalo»: la lista de lo congelable y el plazo son criterio de trabajo
+
+La app no tenía ninguna lista de lo congelable. `shared/lib/congelar.ts` entra por categoría (carne, pescado,
+panadería) y, en lácteos, por el nombre (queso, mantequilla, leche); el aviso sale con la fecha efectiva entre
+hoy y pasado mañana. Es orientativo y sin fuente, como la tabla de conservación tras abrir: ante la duda no se
+recomienda. Falta contrastarlo con una guía oficial, y decidir si «por acabarse» debe contar también lo que queda
+en el envase (hoy solo cuenta la fecha).
+
 ### 🟡 D-14 · El tope de 24 h no distingue alimentos
 
 Un pan descongelado y una merluza descongelada reciben el mismo plazo. Es conservador para
@@ -224,6 +256,7 @@ tú.
 | ✅ | ~~Borrar `supabase/seed/03_usuario_dev.sql`~~ | **Resuelto 2026-10-18** ([D-42](BITACORA.md#d-42--ninguna-contraseña-en-el-repositorio--2026-10-18)): el seed ya no lleva ninguna contraseña (las genera `npm run dev:cuentas` al azar por ordenador) y la CI lo vigila (`check:credenciales`). Falta borrar el fichero **solo** si algún día se enlaza un proyecto de la nube: el seed ya se niega a sembrar fuera del Supabase local |
 | 🔴 | **La contraseña de desarrollo sigue en la HISTORIA de git** | Estuvo en el repositorio público del 2026-09-21 al 2026-10-18 (commit `30df84a` y los siguientes). Ya está **rotada** y no abre nada, pero está en todos los commits viejos: **antes de volver a hacerlo público hay que purgar la historia** (`git filter-repo --replace-text` sobre todas las ramas y *force-push*, rehaciendo las PR abiertas) o publicar un repositorio nuevo desde una foto limpia |
 | 🔴 | **`main` no está protegida mientras el repositorio sea privado** | La protección de ramas no existe en un repositorio privado de una cuenta gratuita (GitHub responde 403): nada exige ya las 4 comprobaciones ni impide empujar a `main`. Se recupera haciéndolo público otra vez (tras purgar la historia) o con GitHub Pro. Mientras tanto, se sigue yendo siempre por PR |
+| 🔴 | **Consentimiento explícito y aviso de privacidad para los datos de salud** | Lo que cada persona marca como alérgenos o intolerancias es un **dato de salud (categoría especial del RGPD)**. Hoy se guarda al marcarlo, la sección «Privacidad y datos» de Ajustes lo cuenta y la RLS lo deja solo a su dueña, pero **no hay consentimiento explícito, ni aviso de privacidad, ni forma de exportarlo o borrarlo con la cuenta, ni política de retención**. Antes de abrir a usuarios reales: pedir el consentimiento al marcar la primera vez, redactar el aviso, y que el borrado de cuenta se lleve `user_health_preferences` (ya cae en cascada con `auth.users`) |
 | 🟠 | SMTP real | Sin él, quien no añada un correo en Ajustes no puede recuperar su contraseña. Ver Q7 y [D-19](BITACORA.md#d-19--el-usuario-es-la-identidad-el-correo-es-opcional--2026-09-21-matiza-d-13) |
 | 🟠 | **Borrado de cuenta y de datos** | No existe ninguna vía para que un usuario borre su hogar y su historial. Con datos personales en Europa, esto no es opcional. Tampoco hay política de retención |
 | 🟠 | Proyecto de Supabase en **región EU** | Decidido, pero el proyecto aún no está creado |

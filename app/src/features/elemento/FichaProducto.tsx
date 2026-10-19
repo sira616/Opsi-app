@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, Text, View } from 'react-native';
 
 import { fetchProducto, type ItemDetail, type ProductoCatalogo } from '@/api/inventory';
+import { FRESCURA_FICHA_MS } from '@/features/salud/useSalud';
+import { AccesoIngredientes } from '@/features/salud/Ingredientes';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { familyOf, formatQuantity, type MeasurementUnit } from '@/shared/lib/units';
@@ -20,6 +22,9 @@ import { makeStyles, radius, space, tabular, useTheme, useType } from '@/shared/
  * Lo que sí se distingue es el fallo: si el producto existe y la consulta
  * revienta, se ve el error del servidor. Un elemento sin ficha y una ficha que
  * no se pudo leer no son la misma pantalla.
+ *
+ * Si la ficha es de Open Food Facts, ofrece sus ingredientes. En una ficha creada a mano
+ * no hay nada que consultar y no se pinta ningún hueco.
  */
 export function FichaProducto({ item }: { item: ItemDetail }) {
   const styles = useStyles();
@@ -29,15 +34,15 @@ export function FichaProducto({ item }: { item: ItemDetail }) {
   const [fotoRota, setFotoRota] = useState(false);
 
   const consulta = useQuery({
-    // Cuelga de `item(id)`, así que cualquier invalidación del elemento la
-    // arrastra. No hay clave propia en `queryKeys` y no hace falta: la ficha
-    // no cambia por su cuenta.
-    queryKey: [...queryKeys.item(item.id), 'producto'],
+    // Clave del producto, no del elemento: la comparten el aviso de salud, el alta y la
+    // hoja de ingredientes, y renovar una ficha antigua actualiza a todos a la vez. Las
+    // acciones sobre el elemento no cambian la ficha, así que no tienen por qué refrescarla.
+    queryKey: queryKeys.producto(productId ?? ''),
     queryFn: () => (productId ? fetchProducto(productId) : Promise.resolve(null)),
     enabled: Boolean(productId),
     // El catálogo es de lectura y prácticamente inmutable: recargarlo cada
     // minuto como el resto de consultas sería tráfico sin motivo.
-    staleTime: 30 * 60_000,
+    staleTime: FRESCURA_FICHA_MS,
   });
 
   if (!productId) return null;
@@ -103,6 +108,8 @@ export function FichaProducto({ item }: { item: ItemDetail }) {
       </View>
 
       <Text style={styles.procedencia}>{describeProcedencia(producto.data_source)}</Text>
+
+      {producto.salud.deOff && producto.barcode ? <AccesoIngredientes productoId={productId} /> : null}
     </View>
   );
 }

@@ -95,12 +95,12 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 - **Autenticación:** JWT de una persona con sesión, **verificado dentro de la función**
 - **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función, y solo por `upsert_global_product`
 - **Entrada validada:** solo cifras, 8, 12, 13 o 14 de ellas, dígito de control GS1 correcto, y no una cadena de ceros. Además, **solo comida**: un EAN-13 con prefijo de revista, libro, recibo o cupón (977–984 y 990–999) contesta «no es comida» sin gastar cuota ni preguntar a nadie, y un código que OFF dice que es de otra base (cosmética, mascotas, otros productos) también
-- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, source: "openfoodfacts" } }` o `{ "found": false, "barcode": "…" }` (con `"not_food": true` si no es comida). Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
+- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, allergens_tags, traces_tags, labels_tags, ingredients_text, health_data, source: "openfoodfacts" } }` (los datos de salud, ver §7) o `{ "found": false, "barcode": "…" }` (con `"not_food": true` si no es comida). Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
 - **Límites:** 30/min y 500/día por persona; 10/min globales hacia OFF; timeout 4 s; respuesta de OFF ≤ 256 KB
 - **Riesgos:** SSRF, envenenamiento de la caché, abuso de cuota, filtrado de errores, entrada no confiable hacia el modelo
 - **Controles en servidor:** los de la tabla de arriba
 - **Secretos:** `OFF_USER_AGENT` (nombre de la app y un contacto **real**; el valor de ejemplo se rechaza) en el entorno de la función. La clave de servicio la inyecta Supabase y no sale de ahí
-- **Tests automatizados:** `npm run test:funciones` (67, sin Deno ni red), `npm run db:test` (`escaner_test.sql`, 60), `npm run db:carreras` y `npm run fn:check` (21, en el runtime de Edge Functions de verdad)
+- **Tests automatizados:** `npm run test:funciones` (95, sin Deno ni red), `npm run db:test` (`escaner_test.sql`), `npm run db:carreras` y `npm run fn:check` (22, en el runtime de Edge Functions de verdad)
 - **Estado:** `[x] diseño`  `[x] código`  `[x] tests`  `[x] inventario`  `[ ] prod`
 
 **Lo que no está probado:** la cámara en un móvil real; la llamada a OFF desde el runtime con la
@@ -155,6 +155,39 @@ lo cambia quien tiene la base de datos. Lo que importa aquí es que **todo lo pr
 **simultáneas** pueden pasarse por una; no se ha probado con dos sesiones. Un fallo del servidor de pagos —que
 no existe todavía— es lo primero que habrá que modelar cuando se añada: quién puede decir «esta cuenta es
 premium», y con qué comprobación.
+
+---
+
+## 7 · Salud: lo que evita cada persona, y alérgenos e ingredientes de un producto
+
+Una tabla nueva (`user_health_preferences`), cinco columnas nuevas en `products` (`allergens_tags`, `traces_tags`,
+`labels_tags`, `ingredients_text`, `health_data_at`) y una firma nueva de `upsert_global_product`, en
+`20261021100000_salud_y_ingredientes`; `lookup-barcode` devuelve esos datos y la app los cruza. Lo que cada persona evita
+es un **dato de salud (categoría especial del RGPD)**.
+
+**Flujo:** la persona marca lo que evita → una fila propia en `user_health_preferences` (RLS) → la app lee esa fila y la
+ficha de salud de cada producto (de Open Food Facts, vía `lookup-barcode`) y las **cruza en el móvil** (`evaluarSalud`).
+El servidor no cruza nada: ninguna función ni la Edge Function lee las preferencias, y eso es lo que más las protege.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **I**nfo disclosure | Otra persona —de la misma nevera compartida o no— lee lo que evito | RLS: solo la fila propia en select, insert y update; sin DELETE. Permisos por columna (`insert (user_id, avoid)`, `update (avoid)`); `anon` y `service_role` sin ningún privilegio sobre la tabla | `salud_test.sql` (quien no es la dueña no ve, no inserta y no actualiza; un miembro de la misma nevera tampoco; `anon` y `service_role` sin acceso) |
+| **I**nfo disclosure | Una función SECURITY DEFINER, una vista o la Edge Function leen las preferencias y un fallo suyo (o la clave `service_role`, que salta la RLS) las saca | Ninguna lo hace: el cruce es del móvil. La Edge Function solo recibe un código de barras | `salud_test.sql` (busca el nombre de la tabla en el código de todas las funciones; ninguna vista depende de ella), `privilegios_test.sql` |
+| **I**nfo disclosure | Las preferencias salen en un mensaje de error (PostgREST copia la fila fallida en `details`), en un registro, en una URL o en el disco del aparato | `guardarPreferenciasSalud` quita `details` antes de que el error llegue a `describeDbError`; la app no escribe las preferencias en ningún `console.*`, URL, ruta ni almacenamiento; la caché de TanStack Query está en memoria y se vacía al cambiar de persona (`session.tsx`) | revisión del código; **sin test automático** del «no sale» (pendiente) |
+| **T**ampering | Guardar valores que no son de la lista, o enormes | CHECK de lista cerrada (los 14 alérgenos UE y la lactosa) con tope de 15; un trigger deja la lista sin repetidos y ordenada | `salud_test.sql` |
+| **E**levation | Reescribir la identidad de la fila (`user_id`) o escribir la de otra persona | Sin permiso de UPDATE sobre `user_id`; la RLS comprueba `user_id = auth.uid()` en el INSERT y en el UPDATE. Por eso la app hace UPDATE y luego INSERT, no `upsert` (que pediría UPDATE sobre `user_id`) | `salud_test.sql` (42501) |
+| **I**nfo disclosure | Se guarda un dato de salud sin consentimiento explícito ni aviso de privacidad, y no se puede exportar ni borrar con garantías | **Sin mitigar todavía.** La sección «Privacidad y datos» de Ajustes dice que se guarda y que solo lo ve su dueña, pero no hay consentimiento explícito ni exportación ni borrado de cuenta. Antes de abrir a usuarios reales | pendiente (`PENDIENTES.md`, 🔴) |
+| **T**ampering | Una persona de una nevera pone en un producto **privado** `health_data_at` y `allergens_tags = '{}'` y finge ante sus compañeras un «sin alérgenos» | CHECK `products_health_global_only_ck`: en un producto con `household_id` todas las columnas de salud son NULL. Además la app trata como «sin datos» todo lo que no sea `data_source = 'openfoodfacts'` | `salud_test.sql`, `salud.test.ts` |
+| **T**ampering | La caché global se envenena con alérgenos, trazas, etiquetas o ingredientes falsos o con texto malicioso (OFF lo edita cualquiera) | Tres filtros: `off.ts` (formato exacto de etiqueta, tope de 40, `labels_tags` solo de una lista cerrada de 3, ingredientes ≤ 2000 caracteres sin control, bidireccionales, ancho cero ni `<` `>`), `upsert_global_product` (lo revalida todo) y los CHECK de la tabla. La app lo vuelve a comprobar (`leerSalud`): lo que no cuadra se tira y la ficha pasa a «sin datos» | `off.test.ts` (fichas envenenadas, 100 alérgenos, listas rotas), `lookup.test.ts`, `salud_test.sql`, `salud.test.ts` (entrada hostil) |
+| **T**ampering | **Un falso «todo bien»**: un producto sin datos (ficha antigua, hecho a mano, sin ingredientes, lista rota, consulta fallida) se lee como «sin alérgenos» o «apto» | `health_data_at` separa «no consta» de «OFF no declara nada»; `evaluarSalud` marca «Sin datos de alérgenos» si la ficha no es de OFF, no consta, no trae ingredientes o algo se descartó; con datos completos y sin aviso no se pinta nada, y ningún texto dice «apto» ni «seguro». Una etiqueta de sin gluten o sin lactosa nunca anula un «contiene» ni unas trazas | `salud.test.ts` (todos los casos de «sin datos»; 15 mutaciones de estas reglas, todas detectadas por alguna prueba) |
+| **E**levation | El texto de OFF se interpreta: como marcado, enlace, ruta, consulta o instrucción para un modelo | Se pinta solo en un `<Text>` plano; sin enlaces automáticos ni `Linking`; nunca se interpola en una ruta ni una consulta. En el prompt del chat (fase 5) irá encapsulado, como el resto del texto de OFF | `salud.test.ts`; **no probado** el encapsulado (fase 5) |
+| **D**oS | Una ficha antigua sin `health_data_at` se renueva en cada escaneo y agota la cuota hacia OFF | Se renueva **una vez**: `upsert_global_product` fija la fecha. Sigue valiendo la cuota por persona (30/min, 500/día) y el hueco global hacia OFF (10/min); si OFF no contesta se sirve la ficha vieja con `health_data: false` | `lookup.test.ts`, `escaner_test.sql` |
+| **T**ampering | La app recomienda congelar algo ya descongelado, vencido o que no se congela | `recomendarCongelar`: solo en la nevera, con la fecha entre hoy y pasado mañana, sin `thawed_at` (el estado cambia al usar una parte, la fecha de descongelación no) y de una categoría congelable | `congelar.test.ts` |
+
+**Lo que no cubre:** el cruce **no lee el texto de los ingredientes**, solo las etiquetas de alérgenos y trazas de OFF; un
+producto con ingredientes rellenados pero sin las etiquetas calculadas no avisaría. Las etiquetas de sin gluten y sin lactosa
+son declaraciones de quien edita la ficha. No se detectan otras intolerancias (histamina, fructosa…). Nada de esto se ha
+probado con un móvil real ni con una llamada real de la función a OFF desde el runtime de producción.
 
 ---
 

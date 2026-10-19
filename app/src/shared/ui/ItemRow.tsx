@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Snowflake } from 'phosphor-react-native';
 
 import type { PriorityItem } from '@/api/inventory';
+import { recomendarCongelar } from '@/shared/lib/congelar';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import {
   describeDateSource,
@@ -12,8 +13,10 @@ import {
   diasDesde,
   diasRestantes,
 } from '@/shared/lib/dates';
+import { textoDeAviso, type Evaluacion } from '@/shared/lib/salud';
 import { formatQuantity } from '@/shared/lib/units';
 import { makeStyles, radius, space, tabular, useTheme } from '@/shared/theme/tokens';
+import { MarcaSalud } from './AvisoSalud';
 
 const STATE_LABEL: Record<PriorityItem['state'], string> = {
   closed: 'Cerrado',
@@ -42,8 +45,12 @@ const LOCATION_LABEL: Record<PriorityItem['location'], string> = {
  *     el dato que este proyecto se niega a enseñar.
  *   · El motivo, cuando no es la etiqueta. Que algo abierto venza antes que
  *     lo que pone el envase no se entiende si no se dice.
+ *
+ * `salud` es el cruce con lo que la persona evita, ya calculado por la pantalla con UNA
+ * consulta para toda la lista (no una por fila). Null o sin nada que decir: la fila no
+ * pinta nada. Es una marca, no un freno: la fila se abre y se usa igual.
  */
-export function ItemRow({ item }: { item: PriorityItem }) {
+export function ItemRow({ item, salud = null }: { item: PriorityItem; salud?: Evaluacion | null }) {
   const styles = useStyles();
   const c = useTheme();
   const urgent = item.priority === 'high';
@@ -56,6 +63,8 @@ export function ItemRow({ item }: { item: PriorityItem }) {
   // texto en algo que apetece mirar, sin pedirle nada al usuario.
   const congelado = item.state === 'frozen';
   const tono = urgent ? c.expiry : congelado ? c.frost : c.brand;
+  const sugiereCongelar = recomendarCongelar(item);
+  const avisoSalud = salud ? textoDeAviso(salud) : '';
 
   return (
     <Link href={{ pathname: '/elemento/[id]', params: { id: item.id } }} asChild>
@@ -65,7 +74,7 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           congelado
             ? `congelado ${describeCongelado(item.frozen_at)}`
             : describeDaysLeft(item.days_left).toLowerCase()
-        }`}
+        }${sugiereCongelar ? '. Congélalo o úsalo' : ''}${avisoSalud ? `. ${avisoSalud}` : ''}`}
         style={({ pressed }) => [
           styles.card,
           item.effective_limit_date === null && !congelado && styles.cardUndated,
@@ -93,6 +102,13 @@ export function ItemRow({ item }: { item: PriorityItem }) {
           · {LOCATION_LABEL[item.location]}
         </Text>
         {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
+        {sugiereCongelar ? (
+          <View style={styles.congelar}>
+            <Snowflake size={11} color={c.frostInk} weight="fill" />
+            <Text style={styles.congelarTexto}>Congélalo o úsalo</Text>
+          </View>
+        ) : null}
+        {salud && avisoSalud ? <MarcaSalud evaluacion={salud} /> : null}
       </View>
 
       <Contador item={item} urgent={urgent} />
@@ -215,6 +231,10 @@ const useStyles = makeStyles((c) => ({
   name: { fontSize: 15.5, fontWeight: '600', color: c.ink },
   meta: { fontSize: 12.5, color: c.inkMuted },
   footnote: { fontSize: 11, color: c.inkFaint },
+  // El consejo de congelar va en el tono del congelador y con el copo, para que no se
+  // confunda con el rojo de lo que vence: es una salida, no una alarma.
+  congelar: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  congelarTexto: { fontSize: 12, fontWeight: '600', color: c.frostInk },
 
   dateBlock: {
     minWidth: ANCHO_CONTADOR,

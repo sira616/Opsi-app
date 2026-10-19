@@ -176,6 +176,7 @@ estas, o se muestra en uno de estos estados, se escribe seco:
 | crudo, moho, olor, mal estado | — |
 | tirar, desechar | `actions.discard`, confirmación de «Tirar» |
 | 24 horas (la ventana tras descongelar) | `actions.thaw` y su `hint` |
+| contiene, trazas, alérgeno, sin datos de alérgenos | los avisos de salud (`lineasDeAviso`) y el aviso de congelar |
 
 **La frontera que no se cruza: caducidad ≠ consumo preferente.** Es el principio 2
 del proyecto y aquí se traduce así:
@@ -215,6 +216,10 @@ caro que puede cometer esta app.
    error inesperado», «por favor, inténtelo más tarde».
 8. **Urgencia inventada.** El color y el orden de la lista ya dicen qué corre prisa.
    El texto no añade dramatismo encima.
+9. **Prometer que algo es apto.** Ni «apto», ni «seguro», ni «sin alérgenos», ni «no
+   contiene» como afirmación propia: Opsi dice lo que Open Food Facts declara (y de dónde
+   sale) y, si no hay datos, «Sin datos de alérgenos». Una etiqueta de «sin gluten» o «sin
+   lactosa» se cuenta atribuida y nunca quita un aviso.
 
 ---
 

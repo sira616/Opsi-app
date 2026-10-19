@@ -4,10 +4,14 @@
  *
  *     npm run fn:check
  *
- * Necesita el Supabase local levantado (`npm run db:start`) y los seeds cargados
- * (`npm run db:reset`). Lo que NO hace es llamar a Open Food Facts: ningún caso de
- * aquí depende de la red ni de que `OFF_USER_AGENT` esté o no configurado, para que
- * dé lo mismo en un portátil, en la CI y en una avioneta.
+ * Necesita el Supabase local levantado (`npm run db:start`) con las migraciones
+ * aplicadas. Lo que NO hace es llamar a Open Food Facts: ningún caso de aquí depende
+ * de la red ni de que `OFF_USER_AGENT` esté o no configurado, para que dé lo mismo en
+ * un portátil, en la CI y en una avioneta.
+ *
+ * Por eso no usa los productos de los seeds: una ficha sin datos de salud (todas las
+ * de los seeds) cuenta como caducada y la función intentaría renovarla desde OFF.
+ * Crea su propia ficha del catálogo, ya con datos de salud, y la borra al acabar.
  *
  * ── Qué cubre que los tests de `supabase/functions/_shared` no ─────────────
  *
@@ -27,8 +31,11 @@ const CONTENEDOR = process.env.OPSI_DB_CONTAINER ?? 'supabase_db_opsi';
 const CORREO = 'zzfuncion@usuarios.opsi.local';
 const CLAVE = 'una-clave-de-prueba-larga';
 
-/** Está en los seeds de desarrollo (supabase/seed/01_products.sql). */
-const CODIGO_DEL_CATALOGO = '8400000000017';
+/**
+ * Una ficha del catálogo que crea esta comprobación (GTIN-13 válido, fuera de los
+ * seeds): con datos de salud y al día, para que se sirva de la caché sin llamar a nadie.
+ */
+const CODIGO_DEL_CATALOGO = '8499990000152';
 /** Un GTIN-13 válido que no está en ninguna parte: se anota como falta a mano. */
 const CODIGO_FALTA = '8499990000145';
 /** El ISBN-13 de ejemplo de la propia norma: un libro, prefijo 978. */
@@ -87,6 +94,7 @@ async function limpiar() {
     delete from public.lookup_usage where clave like 'u:%' and clave in (
       select 'u:' || id::text || ':' || s from auth.users, unnest(array['m','d']) as t(s) where email = '${CORREO}');
     delete from public.barcode_misses where barcode = '${CODIGO_FALTA}';
+    delete from public.products where household_id is null and barcode = '${CODIGO_DEL_CATALOGO}';
     delete from public.households
      where id in (select household_id from public.household_members m join auth.users u on u.id = m.user_id where u.email = '${CORREO}');
     delete from auth.users where email = '${CORREO}';
@@ -130,6 +138,19 @@ console.log(`\nlookup-barcode en el runtime real ${tenue(`(${URL_FUNCION})`)}\n`
 
 try {
   await limpiar();
+
+  // La ficha del catálogo, ya con datos de salud (`health_data_at` no nulo) y recién
+  // traída: es la que se sirve de la caché. Se escribe como `postgres`, que es quien
+  // puede; la Edge Function solo llega a ella por `upsert_global_product`.
+  const ficha = await psql(`
+    insert into public.products
+      (household_id, barcode, name, brand, unit_family, net_quantity, data_source,
+       allergens_tags, traces_tags, labels_tags, ingredients_text, health_data_at)
+    values
+      (null, '${CODIGO_DEL_CATALOGO}', 'Producto de comprobación', 'Marca Falsa', 'volume', 1000,
+       'openfoodfacts', array['en:milk'], array['en:nuts'], array['en:no-lactose'], 'Leche.', now());
+  `);
+  if (ficha.codigo !== 0) throw new Error(`No he podido crear la ficha de prueba: ${ficha.error.slice(0, 200)}`);
 
   // La cuenta de prueba, creada como lo haría la app: por el alta de GoTrue.
   const alta = await fetch(`${API_URL}/auth/v1/signup`, {
@@ -196,8 +217,19 @@ try {
     enCatalogo.json?.product &&
       !('off_payload' in enCatalogo.json.product) &&
       !('updated_at' in enCatalogo.json.product) &&
+      !('health_data_at' in enCatalogo.json.product) &&
       !('household_id' in enCatalogo.json.product),
     JSON.stringify(Object.keys(enCatalogo.json?.product ?? {})),
+  );
+  const producto = enCatalogo.json?.product;
+  comprobar(
+    'con los datos de salud de la ficha: alérgenos, trazas, etiquetas, ingredientes y health_data',
+    JSON.stringify(producto?.allergens_tags) === '["en:milk"]' &&
+      JSON.stringify(producto?.traces_tags) === '["en:nuts"]' &&
+      JSON.stringify(producto?.labels_tags) === '["en:no-lactose"]' &&
+      producto?.ingredients_text === 'Leche.' &&
+      producto?.health_data === true,
+    JSON.stringify(producto),
   );
 
   await psql(`insert into public.barcode_misses (barcode) values ('${CODIGO_FALTA}') on conflict (barcode) do update set missed_at = now();`);

@@ -31,6 +31,12 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
+**2026-10-19 (sesión 37)** — **Alérgenos e intolerancias, ingredientes de Open Food Facts y «congélalo o úsalo»**
+implementados y probados en local ([D-44](#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19)).
+Lo que cada persona evita es un **dato de salud**: antes de abrir a usuarios reales hace falta consentimiento explícito
+(`PENDIENTES.md`, 🔴). Se encontró, sin arreglar, que el tope de 24 h tras descongelar se pierde al usar una parte
+(`PENDIENTES.md`, sección 2). Cifras en la tabla de abajo y en la [sesión 37](#2026-10-19-sesión-37--alérgenos-ingredientes-y-congélalo-o-úsalo).
+
 **2026-10-10 (sesión 26)** — **La fase 2 (el escáner) está implementada y verificada en local**,
 salvo lo que toca la cámara de un móvil real, que **no se ha probado**: la función `lookup-barcode`
 (con Open Food Facts de verdad), la pantalla de escanear con entrada a mano y el alta que se rellena
@@ -47,10 +53,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **34 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **13 ficheros pgTAP, 448 tests** contra pgTAP real · `db:check`: **644 comprobaciones** en PGlite · `test:app`: 14, la lógica de calendario y el destino de un producto · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: 67 · `fn:check`: 21, en el runtime de Edge Functions de verdad |
+| Tests | **14 ficheros pgTAP, 553 tests** contra pgTAP real · `db:check`: **753 comprobaciones** en PGlite · `test:app`: **121**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1029,6 +1035,59 @@ una pantalla (`/gastos`) con la lista entera, del más gastado al menos. `most_u
 lo preguntaba), el «¡» de «¡Lista completa!» y varias frases de Privacidad y de Cuenta que explicaban de más. La regla queda escrita
 en `docs/VOZ.md`. **No se tocaron** los textos que esa guía da por aprobados («modo monje», «Por ahí no sale nada», el resumen diario):
 son decisión de voz, no relleno, y quitarlos es cosa de quien lo pida.
+
+### D-44 · Alérgenos e intolerancias, ingredientes de Open Food Facts y «congélalo o úsalo» · 2026-10-19
+
+Tres peticiones, una sola migración (`20261021100000_salud_y_ingredientes`) y una pasada por la función `lookup-barcode`.
+
+**Avisos, nunca prohibiciones.** Cualquier producto se puede añadir y usar igual: no hay ningún botón que se apague por lo que
+alguien evita. La app marca, y marca con la voz del escalón 4 de `docs/VOZ.md`: «Contiene gluten y leche.», «Trazas de huevo.»,
+«Sin datos de alérgenos.». Nunca «apto», «seguro» ni «sin alérgenos», porque Opsi no lo sabe.
+
+**Lo que cada persona evita es un dato de salud** (categoría especial del RGPD). Tabla propia, `user_health_preferences`, y no una
+columna de `user_settings`: ese `select *` o el permiso de tabla de mañana no la arrastran. RLS de la fila propia, sin DELETE, permisos por
+columna, **ni `anon` ni `service_role` tienen nada**, y ninguna función ni vista la lee: el cruce con los productos se hace en el móvil
+(`shared/lib/salud.ts`) y de ahí no salen. La lista es **cerrada** y validada en el servidor (`CHECK` y un trigger que la deja ordenada y sin
+repetidos): los 14 alérgenos de declaración obligatoria en la UE más la lactosa; «gluten» cubre la celiaquía. La app hace UPDATE y, si no hay
+fila, INSERT, y no un `upsert`: PostgREST lo traduce a `SET user_id = …` y Postgres exige permiso de UPDATE sobre `user_id`, que a propósito
+no se concede. Los errores de guardado se enseñan sin `details`, porque PostgREST copia ahí la fila que falló, que ES la lista de lo que se evita.
+Se dejó anotado como 🔴 en `PENDIENTES.md`: antes de abrir a usuarios reales hace falta consentimiento explícito y aviso de privacidad.
+
+**Qué se ofrece y qué no.** Los 14 alérgenos y la lactosa. **No** se ofrecen histamina, fructosa, sorbitol, cafeína ni otras
+intolerancias: Open Food Facts (OFF) no las trae de forma fiable, y ofrecerlas sería prometer que se detectan. Ajustes lo dice a la vista.
+La lactosa se cruza con `en:milk` (OFF no tiene un alérgeno «lactosa») y `en:no-lactose` solo la baja de «Contiene» a una línea más suave,
+«Lleva leche. Open Food Facts dice sin lactosa.»; las etiquetas de sin gluten y para celíacos **no** se usan para descartar nada ni anulan un
+«contiene» o unas trazas.
+
+**«Sin datos» no es «sin alérgenos».** OFF devuelve las listas vacías tanto cuando un producto no lleva nada como cuando nadie ha rellenado
+sus ingredientes. Por eso `products.health_data_at` guarda cuándo se trajeron estos datos (NULL = no consta: ficha anterior o hecha a mano) y
+la única señal para descartar es que la ficha sea de OFF, conste y traiga ingredientes. Si falta algo, o algo de lo recibido no cuadró y se tiró,
+sale «Sin datos de alérgenos»; con datos completos y sin ningún aviso **no se pinta nada** (la ausencia de marca no se anuncia como «todo bien»).
+Con preferencias elegidas, cada elemento escrito a mano lleva «Sin datos de alérgenos» en el tono más bajo: es lo pedido, y puede ser ruido.
+
+**De OFF a la pantalla, por el servidor y filtrado.** `lookup-barcode` pide además `allergens_tags`, `traces_tags`, `labels_tags` e
+`ingredients_text(_es)` y los guarda en la caché global con el mismo trato que el resto del texto de OFF (entrada no confiable): formato exacto de
+etiqueta y tope de 40, `labels_tags` solo de una lista cerrada de tres (`en:no-gluten`, `en:no-lactose`, `en:suitable-for-celiacs`; las dos
+primeras son las canónicas de la taxonomía, la tercera es una rama aparte que se añadió), ingredientes de 2000 caracteres como mucho y sin
+control, bidireccionales, ancho cero ni `<` `>`. Tres filtros: la función, `upsert_global_product` (revalida) y los `CHECK` de la tabla; la app
+lo vuelve a comprobar (`leerSalud`). Un `CHECK` impide que alguien de una nevera falsee estos datos en un producto **privado** con un insert
+directo (`products_health_global_only_ck`). Las fichas anteriores (`health_data_at` NULL) se tratan como caducadas y se renuevan al escanearlas o
+al abrir «Ver ingredientes» (gasta la cuota de la persona). Orden de despliegue: migración antes que función.
+
+**Ingredientes.** «Ver ingredientes» abre una hoja con los ingredientes en texto plano, los alérgenos y trazas con su nombre en español y las
+etiquetas «según Open Food Facts», con la atribución ODbL. Sale en el detalle, el almacén de productos y el escáner, solo para productos de OFF.
+Si OFF no los tiene, lo dice («Open Food Facts no tiene los ingredientes de este producto.») y no deduce nada.
+
+**«Congélalo o úsalo».** «Por acabarse» se mide por la **fecha** (la efectiva de la vista de prioridad), no por lo que queda en el envase: congelar
+sirve para no perder algo que vence. Sale con la fecha entre hoy y pasado mañana, solo para lo que está en la nevera, y **nunca** con la fecha ya
+pasada, con lo congelado ni con lo que se descongeló alguna vez. Esto último se mira por `thawed_at` y no por `state = 'thawed'`: usar una parte
+o abrir algo descongelado cambia el estado, y la fecha se queda. La app no tenía ninguna lista de lo congelable, así que es nueva y de trabajo:
+carne, pescado y panadería, y en lácteos solo queso, mantequilla y leche; nunca huevos, yogures, natas, latas ni mayonesa. Sin fuente
+autorizada, orientativa, como la tabla de conservación tras abrir. Tarjeta del inventario: «Congélalo o úsalo»; detalle: «Le queda poco plazo.
+Congélalo o úsalo.» y la frase aprobada «Una vez descongelado, 24 horas para consumirlo.».
+
+**Hallazgo que no se arregló aquí:** el tope de 24 h tras descongelar (D-14) solo se aplica mientras el estado es «descongelado»; al usar una
+parte o abrirlo se pierde y vuelve la fecha del envase. Está en `PENDIENTES.md`, sección 2, con su arreglo.
 
 ## 3. Convenciones
 
@@ -2231,3 +2290,34 @@ pero no se hizo con un código real) y la fila de neveras con muchas neveras de 
 **Se aprendió:** (1) escribir con la herramienta de edición un comentario con acentos graves escapados (barra invertida delante)
 deja las barras en el fichero: se coló una en un comentario de `api/premium.ts` y se vio al releerlo. (2) Antes de «limpiar»
 textos conviene mirar `docs/VOZ.md`: parte de lo que parecía relleno era voz aprobada, y se revirtió.
+
+### 2026-10-19 (sesión 37) · Alérgenos, ingredientes y «congélalo o úsalo»
+
+**Hecho** ([D-44](#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19)): las preferencias de
+salud (tabla propia con RLS, lista cerrada de 15) y su sección en Ajustes; los datos de OFF (alérgenos, trazas, etiquetas, ingredientes y
+`health_data_at`) guardados en la caché global con triple filtro; las marcas en el inventario, el detalle, la hoja rápida del escáner y el alta; la hoja
+de ingredientes; y la recomendación de congelar o usar. Modelo de amenazas §7 y `docs/security-inventory.md` al día; en `PENDIENTES.md`, el 🔴 del
+consentimiento explícito para datos de salud.
+
+**Verificado aquí:** pgTAP **553** en 14 ficheros (los 104 de `salud_test.sql`: RLS entre personas y dentro de una misma nevera, permisos,
+`CHECK`, trigger, `upsert_global_product`); `db:check` **753**; `db:lint` sin errores; `test:app` **121** (97 de salud y 10 de congelar);
+`test:funciones` **95**; `fn:check` **22** en el runtime de verdad; `tsc` y `eslint` de toda la app limpios; `check:credenciales` limpio. Por
+mutación: 23 de BD y 12 de la función (quitar cada `CHECK`, apagar la RLS, conceder permisos, quitar el trigger…) y 15 de las reglas de
+«sin datos» de la app, todas detectadas. Contra la base real, con la carga exacta de `guardar`: ficha válida, ficha vacía, etiqueta ajena
+(22023) y firma antigua (404). Con las filas reales de la vista de prioridad: lo que sí y lo que no sale en «congélalo o úsalo» (carne a 1 día, ayer,
+despensa, huevos, fuera de la nevera, congelado y el descongelado ya empezado). En el navegador, **sin sesión** y con un arnés temporal que se borró:
+las marcas del inventario (contiene, trazas, etiqueta de lactosa, sin datos, nada), el aviso largo y el recuadro de congelar, en oscuro y con ancho de móvil.
+El estado final de la base: sin datos de prueba, compi en básico y verde.
+
+**Sin verificar:** las pantallas con sesión (Ajustes, hoja rápida, alta, hoja de ingredientes, el botón «Congelar») y el modo claro: la verificación
+con la cuenta de pruebas no se pudo hacer (el servidor de Expo no estaba arriba y la sesión no estaba abierta; no se escriben credenciales). Nada nativo.
+La renovación real de una ficha antigua llamando a OFF desde la función. Que `en:suitable-for-celiacs` y `en:no-lactose` aparezcan en productos
+reales (solo se comprobaron en la taxonomía). Y cuánto ruido hace «Sin datos de alérgenos» en cada elemento escrito a mano.
+
+**Se aprendió:** (1) `upsert` de PostgREST no funciona con permisos de columna `insert (user_id, …)` / `update (…)` sin `user_id`: genera `SET user_id =
+…` y Postgres exige UPDATE sobre cada columna del `SET`, incluso sin conflicto. Se usa UPDATE y, si no hay fila, INSERT. (2) PostgREST copia la fila
+fallida en `details`: con un dato de salud, ese error no puede llegar tal cual a la consola. (3) Al estado de un elemento no se le puede pedir que
+recuerde que se descongeló: `use_quantity` y `open_item` lo cambian y `thawed_at` es lo único que queda (y la vista no lo mira: ver `PENDIENTES.md`).
+(4) La herramienta de escritura convirtió unos escapes `\u…` de una expresión regular en caracteres invisibles literales y rompió el módulo: se
+comprueba con un barrido de caracteres de formato, y las reglas de esa clase se escriben por código de carácter. (5) Un script de verificación que
+da por sentado que el servidor y la sesión «ya están» se queda parado: comprobarlo antes, y arrancar el servidor propio y pararlo al acabar.

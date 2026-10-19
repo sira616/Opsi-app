@@ -11,8 +11,9 @@
  *
  *   · `normalizarRespuestaOff` —pura— se queda con un SUBCONJUNTO de campos y cada
  *     uno pasa por su filtro (texto limpio y con tope, imagen solo de un dominio,
- *     categorías con un formato exacto). Lo demás se tira. Es lo que se prueba
- *     con fixtures.
+ *     categorías, alérgenos y trazas con un formato exacto, etiquetas de salud solo
+ *     de una lista cerrada, ingredientes limpios y recortados). Lo demás se tira.
+ *     Es lo que se prueba con fixtures.
  *   · `consultarOff` hace la llamada, con el host fijo en el código, sin seguir
  *     redirecciones, con tiempo máximo y con tope de tamaño.
  *
@@ -30,6 +31,17 @@ export type ProductoOff = {
   netQuantity: number | null;
   imageUrl: string | null;
   categoriesTags: string[];
+  /**
+   * Datos de salud. Las tres listas son SIEMPRE arrays (vacíos si OFF no declara
+   * nada) porque llegar aquí significa que OFF se acaba de consultar; que se guarden
+   * como «consultado» o como «no consta» lo decide la base de datos con
+   * `health_data_at`. Los ingredientes sí pueden faltar.
+   */
+  allergensTags: string[];
+  tracesTags: string[];
+  /** Solo las de `ETIQUETAS_DE_SALUD`. */
+  labelsTags: string[];
+  ingredientsText: string | null;
 };
 
 export type ResultadoOff =
@@ -44,7 +56,23 @@ export type ResultadoOff =
 export const MAX_NOMBRE = 120;
 export const MAX_MARCA = 80;
 const MAX_IMAGEN = 300;
-const MAX_CATEGORIAS = 40;
+/** Tope de etiquetas por lista (categorías, alérgenos, trazas): el mismo que revalida la base de datos. */
+const MAX_ETIQUETAS = 40;
+export const MAX_INGREDIENTES = 2000;
+/**
+ * Las únicas `labels_tags` de OFF que se guardan: «sin gluten», «sin lactosa» y la
+ * marca de aptitud para celiacos (otra rama de la taxonomía: sus certificaciones
+ * cuelgan de ella y no de `en:no-gluten`). Comprobadas contra la taxonomía pública de
+ * OFF. OFF añade a `labels_tags` los padres de cada etiqueta, así que una variante
+ * («certified-gluten-free», «sin-tacc») ya trae `en:no-gluten`. La lista está también
+ * en la base de datos (`upsert_global_product` y `products_health_limits_ck`); una
+ * prueba comprueba que coinciden.
+ */
+export const ETIQUETAS_DE_SALUD: readonly string[] = [
+  'en:no-gluten',
+  'en:no-lactose',
+  'en:suitable-for-celiacs',
+];
 /** Más que esto de cantidad es un error de la ficha, no un producto. */
 const MAX_CANTIDAD = 1_000_000;
 
@@ -74,6 +102,28 @@ export function limpiarTexto(valor: unknown, max: number): string | null {
   if (limpio === '') return null;
   const cortado = Array.from(limpio).slice(0, max).join('').trim();
   return cortado === '' ? null : cortado;
+}
+
+/**
+ * Los ingredientes: lo mismo que `limpiarTexto` con dos diferencias.
+ *
+ *   · Sin guiones bajos. OFF marca los alérgenos con `_leche_`; en una pantalla no
+ *     son más que ruido. Se quitan ANTES de limpiar, para que el recorte no los
+ *     cuente.
+ *   · Si no cabe, no se corta en seco: acaba en «…», dentro del límite. Así quien lo
+ *     lee sabe que falta texto, y no parece que la lista de ingredientes terminara
+ *     ahí (que es lo que importa cuando se busca un alérgeno).
+ */
+export function limpiarIngredientes(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  // Se acota antes de procesar, como en `limpiarTexto`.
+  const acotado = valor.length > MAX_INGREDIENTES * 8 ? valor.slice(0, MAX_INGREDIENTES * 8) : valor;
+  // Se pide uno más del tope: si sobra, es que hubo que recortar.
+  const limpio = limpiarTexto(acotado.replace(/_/g, ''), MAX_INGREDIENTES + 1);
+  if (limpio === null) return null;
+  const caracteres = Array.from(limpio);
+  if (caracteres.length <= MAX_INGREDIENTES) return limpio;
+  return `${caracteres.slice(0, MAX_INGREDIENTES - 1).join('').trimEnd()}…`;
 }
 
 // ── Cantidad ──────────────────────────────────────────────────────────────
@@ -173,24 +223,37 @@ export function imagenValida(valor: unknown): string | null {
   return url.href.length <= MAX_IMAGEN ? url.href : null;
 }
 
-// ── Categorías ────────────────────────────────────────────────────────────
+// ── Etiquetas: categorías, alérgenos, trazas y etiquetas de salud ──────────
 
 /**
- * Las categorías sirven para buscar cuánto aguanta abierto, y ahí solo cuentan
- * las etiquetas con la forma de OFF: idioma, dos puntos y un identificador en
- * minúsculas. OFF trae basura mezclada («en:Petit-déjeuners», «pt:bebidas
+ * Todas las listas de etiquetas de OFF se filtran igual: solo cuentan las que tienen
+ * la forma de OFF —idioma, dos puntos y un identificador en minúsculas—, sin repetir
+ * y con tope. OFF trae basura mezclada («en:Petit-déjeuners», «pt:bebidas
  * cafeína»); lo que no encaja exacto se tira.
+ *
+ * Con `permitidas`, además, solo se quedan las de esa lista cerrada. El filtro va
+ * ANTES del tope: si fuera después, 40 etiquetas de relleno delante harían perder una
+ * `en:no-gluten` que viene en el puesto 41.
  */
-export function categoriasValidas(valor: unknown): string[] {
+export function etiquetasValidas(valor: unknown, permitidas?: readonly string[]): string[] {
   if (!Array.isArray(valor)) return [];
   const vistas = new Set<string>();
   for (const etiqueta of valor) {
-    if (typeof etiqueta === 'string' && /^[a-z]{2}:[a-z0-9-]{1,80}$/.test(etiqueta)) {
+    if (
+      typeof etiqueta === 'string' &&
+      /^[a-z]{2}:[a-z0-9-]{1,80}$/.test(etiqueta) &&
+      (permitidas === undefined || permitidas.includes(etiqueta))
+    ) {
       vistas.add(etiqueta);
-      if (vistas.size >= MAX_CATEGORIAS) break;
+      if (vistas.size >= MAX_ETIQUETAS) break;
     }
   }
   return [...vistas];
+}
+
+/** Las categorías sirven para buscar cuánto aguanta abierto el producto una vez abierto. */
+export function categoriasValidas(valor: unknown): string[] {
+  return etiquetasValidas(valor);
 }
 
 // ── Normalizar la respuesta ───────────────────────────────────────────────
@@ -226,7 +289,23 @@ export function normalizarRespuestaOff(json: unknown): ProductoOff | null {
     netQuantity: cantidad?.netQuantity ?? null,
     imageUrl: imagenValida(p.image_front_url) ?? imagenValida(p.image_front_small_url),
     categoriesTags: categoriasValidas(p.categories_tags),
+    allergensTags: etiquetasValidas(p.allergens_tags),
+    tracesTags: etiquetasValidas(p.traces_tags),
+    labelsTags: etiquetasValidas(p.labels_tags, ETIQUETAS_DE_SALUD),
+    // El texto en español manda; si no hay (o se queda en nada al limpiarlo), el original.
+    ingredientsText: limpiarIngredientes(p.ingredients_text_es) ?? limpiarIngredientes(p.ingredients_text),
   };
+}
+
+/**
+ * El `off_payload` que se guarda junto a la ficha: lo ya filtrado y de dónde y cuándo
+ * salió. Los datos de salud NO van dentro: tienen columna propia, y duplicarlos
+ * gastaría los 8192 caracteres del tope en algo que ya está en otro sitio (los
+ * ingredientes por sí solos pueden ocupar 2000).
+ */
+export function payloadDeOrigen(producto: ProductoOff, obtenidoEn: string): Record<string, unknown> {
+  const { allergensTags: _a, tracesTags: _t, labelsTags: _l, ingredientsText: _i, ...resto } = producto;
+  return { ...resto, source: 'openfoodfacts', fetched_at: obtenidoEn };
 }
 
 /**
@@ -270,6 +349,11 @@ const CAMPOS_OFF = [
   'categories_tags',
   'image_front_url',
   'image_front_small_url',
+  'allergens_tags',
+  'traces_tags',
+  'labels_tags',
+  'ingredients_text',
+  'ingredients_text_es',
 ].join(',');
 
 export const TIEMPO_MAXIMO_MS = 4000;

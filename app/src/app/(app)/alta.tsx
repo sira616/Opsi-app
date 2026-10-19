@@ -32,6 +32,9 @@ import {
   ubicacionSugerida,
 } from '@/features/alta/valores';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { AvisoDeFicha } from '@/features/salud/AvisoDeFicha';
+import { AccesoIngredientes } from '@/features/salud/Ingredientes';
+import { FRESCURA_FICHA_MS } from '@/features/salud/useSalud';
 import { adivinarCategoria, CATEGORIAS, type Categoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -114,11 +117,12 @@ export default function AltaManual() {
   const productoId = idDeRuta(params.producto) ?? linea?.product_id ?? null;
 
   const fichaQ = useQuery({
-    queryKey: [...queryKeys.inventario, 'producto', productoId],
+    // La clave del producto, la misma que usan el detalle y la hoja de ingredientes.
+    queryKey: queryKeys.producto(productoId ?? ''),
     queryFn: () => fetchProducto(productoId as string),
     enabled: productoId !== null,
     // Una ficha del catálogo casi no cambia: no se vuelve a pedir en cada apertura.
-    staleTime: 30 * 60_000,
+    staleTime: FRESCURA_FICHA_MS,
   });
 
   if ((listaId !== null && lineaQ.isPending) || (productoId !== null && fichaQ.isPending)) {
@@ -343,6 +347,17 @@ function Formulario({
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {/* ── Lo que lleva de lo que evitas ───────────────────────────── */}
+          {/*
+            Antes de guardar, no después. Solo avisa: nada de abajo se apaga por esto. Sin
+            ficha (algo a mano, un código que nadie conoce, o una ficha que no se pudo
+            leer) cuenta como «sin datos», nunca como «sin alérgenos».
+          */}
+          <AvisoDeFicha ficha={ficha?.salud ?? null} />
+          {productoId && ficha?.salud.deOff && ficha.barcode ? (
+            <AccesoIngredientes productoId={productoId} />
+          ) : null}
+
           {/* ── El nombre, con su icono en vivo ─────────────────────────── */}
           {/*
             El icono cambia mientras escribes. No es un adorno: es la prueba de

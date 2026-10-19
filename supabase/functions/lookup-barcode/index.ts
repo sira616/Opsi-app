@@ -25,13 +25,8 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 
-import {
-  manejar,
-  type Dependencias,
-  type FilaCatalogo,
-  type ProductoCatalogo,
-} from '../_shared/lookup.ts';
-import { consultarOff, type ProductoOff } from '../_shared/off.ts';
+import { aProducto, manejar, type Dependencias, type FilaCatalogo } from '../_shared/lookup.ts';
+import { consultarOff, payloadDeOrigen, type ProductoOff } from '../_shared/off.ts';
 
 const url = Deno.env.get('SUPABASE_URL');
 const claveServicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -70,18 +65,6 @@ function leerUserAgent(): string | null {
 
 const userAgentOff = leerUserAgent();
 
-function aProducto(fila: Record<string, unknown>): ProductoCatalogo {
-  return {
-    id: String(fila.id),
-    barcode: String(fila.barcode),
-    name: String(fila.name),
-    brand: (fila.brand as string | null) ?? null,
-    unit_family: (fila.unit_family as ProductoCatalogo['unit_family']) ?? null,
-    net_quantity: fila.net_quantity === null ? null : Number(fila.net_quantity),
-    image_url: (fila.image_url as string | null) ?? null,
-  };
-}
-
 const dependencias: Dependencias = {
   async verificarUsuario(token) {
     // GoTrue valida la firma, la caducidad y que la cuenta siga existiendo. La
@@ -106,7 +89,12 @@ const dependencias: Dependencias = {
   async buscarEnCatalogo(codigo): Promise<FilaCatalogo | null> {
     const { data, error } = await admin
       .from('products')
-      .select('id, barcode, name, brand, unit_family, net_quantity, image_url, updated_at')
+      // Los datos de salud se piden por su nombre y no con `*`: `off_payload` no tiene
+      // por qué viajar hasta aquí. `health_data_at` solo sirve para saber si constan.
+      .select(
+        'id, barcode, name, brand, unit_family, net_quantity, image_url, updated_at, ' +
+          'allergens_tags, traces_tags, labels_tags, ingredients_text, health_data_at',
+      )
       .eq('barcode', codigo)
       .is('household_id', null)
       .maybeSingle();
@@ -137,8 +125,13 @@ const dependencias: Dependencias = {
       p_net_quantity: producto.netQuantity,
       p_image_url: producto.imageUrl,
       p_categories_tags: producto.categoriesTags,
-      // Lo ya filtrado, no la respuesta cruda de OFF.
-      p_payload: { ...producto, source: 'openfoodfacts', fetched_at: new Date().toISOString() },
+      // Lo ya filtrado, no la respuesta cruda de OFF, y sin lo que tiene columna propia.
+      p_payload: payloadDeOrigen(producto, new Date().toISOString()),
+      // Datos de salud: la base de datos marca `health_data_at` y vuelve a validarlo todo.
+      p_allergens_tags: producto.allergensTags,
+      p_traces_tags: producto.tracesTags,
+      p_labels_tags: producto.labelsTags,
+      p_ingredients_text: producto.ingredientsText,
     });
     if (error) throw error;
     return aProducto(data as Record<string, unknown>);

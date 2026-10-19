@@ -18,10 +18,12 @@ import {
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
 import { agregarLinea, agregarLineaEnListas } from '@/api/lista';
 import { fetchSettings } from '@/api/settings';
+import { AvisoCongelar } from '@/features/elemento/AvisoCongelar';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
 import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
 import { HojaApuntar, type ResultadoApuntar } from '@/features/elemento/HojaApuntar';
+import { SaludElemento } from '@/features/elemento/SaludElemento';
 import { TarjetaFecha } from '@/features/elemento/TarjetaFecha';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDesde } from '@/shared/lib/dates';
@@ -311,6 +313,11 @@ export default function Detalle() {
 
         <TarjetaFecha item={data} />
 
+        <AvisoCongelar item={data} />
+
+        {/* Lo que lleva de lo que evitas, antes de las acciones. Lo cerrado no se va a comer. */}
+        {!closedOut ? <SaludElemento item={data} /> : null}
+
         <ErrorNote message={error} />
 
         {!closedOut ? (
@@ -364,9 +371,13 @@ export default function Detalle() {
                   label="Congelar"
                   icono={<Snowflake size={20} color={c.frost} weight="duotone" />}
                   // Recongelar lo descongelado sin cocinarlo es un riesgo, no una
-                  // curiosidad: se dice a la vista, dentro del botón.
+                  // curiosidad: se dice a la vista, dentro del botón. Se mira
+                  // `thawed_at` y no solo el estado: al usar una parte o abrirlo
+                  // deja de ser «descongelado», pero se descongeló igual.
                   subtitulo={
-                    data.state === 'thawed' ? 'Ya se descongeló: cocínalo antes de volver a congelar' : undefined
+                    data.state === 'thawed' || data.thawed_at !== null
+                      ? 'Ya se descongeló: cocínalo antes de volver a congelar'
+                      : undefined
                   }
                   onPress={() => run(() => actions.freeze(detail.id))}
                   busy={act.isPending}

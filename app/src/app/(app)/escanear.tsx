@@ -365,6 +365,7 @@ export default function Escanear() {
           nombre={estado.producto.name}
           marca={estado.producto.brand}
           productoId={estado.producto.id}
+          salud={estado.producto.salud}
           unitFamily={estado.producto.unit_family}
           netQuantity={estado.producto.net_quantity}
           onEditar={(elegido: Elegido) => {

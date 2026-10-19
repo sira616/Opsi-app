@@ -29,7 +29,7 @@ export function SeccionPrivacidad() {
     <Section title="Privacidad y datos">
       <Row
         title="Qué guardo"
-        subtitle="Lo que metes en la nevera, tu lista, el historial de cada cosa y tus ajustes."
+        subtitle="Lo que metes en la nevera, tu lista, el historial de cada cosa, tus ajustes y lo que marcas en alérgenos e intolerancias. Esto último es un dato de salud: se guarda en tu cuenta y solo lo ves tú."
       />
 
       <Bloque>

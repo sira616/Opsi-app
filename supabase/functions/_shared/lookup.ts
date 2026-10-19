@@ -16,6 +16,7 @@
  *      · y su prefijo no es de un libro o un cupón → «no es comida», sin gastar nada
  *   4. cuota por persona               → 429 si se pasa
  *   5. caché global                    → lo normal: sin llamar a nadie
+ *      · una ficha sin datos de salud (anterior a ellos) cuenta como caducada
  *   6. caché de faltas                 → no se vuelve a preguntar por lo que OFF no tiene
  *   7. hueco global hacia OFF          → 503 si hay demasiadas llamadas a la vez
  *   8. Open Food Facts                 → y se guarda lo que haya
@@ -29,7 +30,14 @@ export const MAX_CUERPO_PETICION = 1024;
 /** Una ficha más vieja se vuelve a pedir a OFF; si no contesta, se sirve la vieja. */
 export const DIAS_CADUCIDAD_CACHE = 30;
 
-/** Lo que se devuelve a la app. Nunca el `off_payload`: solo estos campos. */
+/**
+ * Lo que se devuelve a la app. Nunca el `off_payload`: solo estos campos.
+ *
+ * Los datos de salud llevan SIEMPRE las tres listas (vacías si no hay) y los
+ * ingredientes (o null). Lo que distingue «no consta» de «Open Food Facts no declara
+ * nada» es `health_data`: si es false, las listas vacías no significan que el producto
+ * esté libre de nada. La app no puede mostrar un producto como apto sin él.
+ */
 export type ProductoCatalogo = {
   id: string;
   barcode: string;
@@ -38,6 +46,12 @@ export type ProductoCatalogo = {
   unit_family: FamiliaUnidad | null;
   net_quantity: number | null;
   image_url: string | null;
+  allergens_tags: string[];
+  traces_tags: string[];
+  labels_tags: string[];
+  ingredients_text: string | null;
+  /** ¿Se trajeron estos datos de OFF alguna vez? (`health_data_at` no nulo). */
+  health_data: boolean;
 };
 
 /** Una fila del catálogo tal como sale de la base de datos. */
@@ -109,8 +123,41 @@ function publico(fila: ProductoCatalogo | FilaCatalogo): { found: true; product:
       unit_family: fila.unit_family,
       net_quantity: fila.net_quantity,
       image_url: fila.image_url,
+      allergens_tags: fila.allergens_tags,
+      traces_tags: fila.traces_tags,
+      labels_tags: fila.labels_tags,
+      ingredients_text: fila.ingredients_text,
+      health_data: fila.health_data,
       source: 'openfoodfacts',
     },
+  };
+}
+
+/** Las listas de etiquetas que salen de la base de datos: lo que no sea una lista de textos, vacío. */
+function listaDeTextos(valor: unknown): string[] {
+  return Array.isArray(valor) ? valor.filter((e): e is string => typeof e === 'string') : [];
+}
+
+/**
+ * De una fila de `products` (o del resultado de `upsert_global_product`) a lo que se
+ * devuelve. Vive aquí y no en `index.ts` porque tiene lógica: una ficha de antes de
+ * los datos de salud trae NULL en todas las columnas nuevas, y eso tiene que salir
+ * como listas vacías con `health_data: false`, no como un error ni como null.
+ */
+export function aProducto(fila: Record<string, unknown>): ProductoCatalogo {
+  return {
+    id: String(fila.id),
+    barcode: String(fila.barcode),
+    name: String(fila.name),
+    brand: (fila.brand as string | null) ?? null,
+    unit_family: (fila.unit_family as ProductoCatalogo['unit_family']) ?? null,
+    net_quantity: fila.net_quantity === null || fila.net_quantity === undefined ? null : Number(fila.net_quantity),
+    image_url: (fila.image_url as string | null) ?? null,
+    allergens_tags: listaDeTextos(fila.allergens_tags),
+    traces_tags: listaDeTextos(fila.traces_tags),
+    labels_tags: listaDeTextos(fila.labels_tags),
+    ingredients_text: typeof fila.ingredients_text === 'string' ? fila.ingredients_text : null,
+    health_data: fila.health_data_at !== null && fila.health_data_at !== undefined,
   };
 }
 
@@ -121,6 +168,10 @@ function bearer(req: Request): string | null {
 }
 
 function esCaducada(fila: FilaCatalogo, ahora: number): boolean {
+  // Una ficha de antes de los datos de salud no tiene alérgenos ni ingredientes: se
+  // renueva aunque sea de ayer. Si OFF no contesta se sirve igualmente la vieja (con
+  // `health_data: false`), así que esto solo cuesta una llamada cuando hay hueco.
+  if (!fila.health_data) return true;
   const t = Date.parse(fila.updated_at);
   return !Number.isFinite(t) || ahora - t > DIAS_CADUCIDAD_CACHE * 86_400_000;
 }

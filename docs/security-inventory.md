@@ -62,7 +62,8 @@ que **puede intentar**; la RLS decide además **sobre qué filas**.
 | `inventory_items` | Tabla | Las cuatro | RLS por nevera. Un trigger impide mover un elemento a otra nevera |
 | `inventory_events` | Tabla | Insertar y leer | **Inmutable**: sin UPDATE ni DELETE por permisos Y por RLS |
 | `inventory_with_priority` | Vista | Leer | `security_invoker = true`: aplica la RLS del que pregunta |
-| `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; `service_role` solo lo lee y lo escribe vía `upsert_global_product()` |
+| `products` | Tabla | Las cuatro sobre los **privados** | `household_id` NULL = catálogo global: nadie con sesión lo escribe; `service_role` solo lo lee y lo escribe vía `upsert_global_product()`. Los datos de salud de la ficha (`allergens_tags`, `traces_tags`, `labels_tags`, `ingredients_text`, `health_data_at`) existen **solo en el global**: el CHECK `products_health_global_only_ck` impide que un producto privado traiga uno, para que un miembro de la nevera no pueda falsear un «sin alérgenos» ante sus compañeros; `health_data_at` NULL = «no consta», que no es lo mismo que «OFF no declara nada» |
+| `user_health_preferences` | Tabla | Leer lo suyo; escribir solo `avoid` (`insert (user_id, avoid)`, `update (avoid)`); **sin DELETE** | **Dato de salud (RGPD, categoría especial).** La RLS (`user_id = auth.uid()`) es la única barrera: no la ve ni la gente de una nevera compartida. **Ningún permiso** para `anon` ni `service_role`, y ninguna función (ni la Edge Function) la lee: el cruce con los productos se hace en el móvil. Lista cerrada de 15 valores y tope (CHECK); un trigger (`normalize_health_preferences`) la deja sin repetidos y ordenada. Se borra con la cuenta (`on delete cascade`) |
 | `lookup_usage` | Tabla | **Nada** (ni leer) | Contadores del límite de consultas del escáner. Sin política ni permiso para ningún rol: solo la tocan `consume_lookup_quota()` y `consume_off_slot()`. Se purga a los 2 días |
 | `barcode_misses` | Tabla | **Nada** (ni leer) | Caché de códigos que Open Food Facts no conoce. Sin política ni permiso; no guarda quién preguntó. Se purga a los 7 días |
 | `shopping_list_items` | Tabla | Las cuatro | RLS por nevera. Un trigger (`check_shopping_item`) impone lo que la RLS no: `auto_restock` solo si la persona lo encendió, `created_by` siempre quien escribe, producto global o de la misma nevera, **la lista es de la misma nevera que la línea** (sin lista, va a la primera) y un tope de 300 líneas por nevera |
@@ -114,6 +115,7 @@ Sin permiso de ejecución para `anon` ni `authenticated`.
 | `forbid_household_change` | Trigger: un elemento, una línea de la lista o un producto no se mueven de nevera |
 | `handle_new_user` | Trigger de alta: solo admite correos sintéticos, saca el nombre del correo, crea la nevera privada |
 | `touch_updated_at` | Trigger de `updated_at` |
+| `normalize_health_preferences` | Trigger de `user_health_preferences`: deja `avoid` sin repetidos y ordenado. No lee ninguna tabla |
 | `check_shopping_item` | Trigger de la lista de la compra: ver la tabla `shopping_list_items` |
 | `check_shopping_list` | Trigger de las listas: ver la tabla `shopping_lists` |
 | `check_accent` | Trigger de `user_settings`: un color que no sea el verde exige premium |
@@ -129,7 +131,7 @@ EXECUTE para `anon` ni `authenticated` (comprobado en `escaner_test.sql`).
 | `consume_lookup_quota` | Cuenta una consulta de una persona y dice si cabe | 30 por minuto y 500 por día; el contador sube con un solo `insert … on conflict`, atómico |
 | `consume_off_slot` | Reserva una llamada a Open Food Facts | 10 por minuto entre todas las personas |
 | `is_recent_barcode_miss`, `record_barcode_miss` | Leer y anotar la caché de faltas | Código de 8 a 14 cifras; caduca a las 6 horas |
-| `upsert_global_product` | **La única vía** de escritura al catálogo global | Revalida nombre, marca, imagen (solo `images.openfoodfacts.org`), categorías y cantidad; rechaza caracteres de control, bidireccionales, de ancho cero y marcado |
+| `upsert_global_product` | **La única vía** de escritura al catálogo global | Revalida nombre, marca, imagen (solo `images.openfoodfacts.org`), categorías y cantidad; rechaza caracteres de control, bidireccionales, de ancho cero y marcado. Con los datos de salud: alérgenos, trazas y etiquetas con el formato de OFF y 40 como máximo, etiquetas de salud solo de una **lista cerrada** de tres, ingredientes de hasta 2000 caracteres y con los mismos caracteres prohibidos; los tres arrays son obligatorios y siempre fija `health_data_at = now()` |
 
 ## Edge Functions
 
