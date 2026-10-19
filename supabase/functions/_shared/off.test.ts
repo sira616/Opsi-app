@@ -458,7 +458,22 @@ test('numeroEnRango: solo un number finito dentro del rango, con dos decimales',
   assert.equal(numeroEnRango(1.004, MAX_NUTRIENTE), 1);
   assert.equal(numeroEnRango(950, MAX_KCAL), 950);
   assert.ok(Object.is(numeroEnRango(-0, MAX_NUTRIENTE), 0), '-0 se guarda como 0');
-  assert.equal(numeroEnRango(0.004, MAX_NUTRIENTE), 0, 'redondea a 0: eso es lo que dice OFF, no «sin dato»');
+});
+
+test('numeroEnRango: un positivo que al redondear queda en 0 es null, no «OFF declara cero»', () => {
+  // Una sal de 0,004 g no cabe en dos decimales: guardar 0 sería afirmar un cero que OFF no dijo.
+  assert.equal(numeroEnRango(0.004, MAX_NUTRIENTE), null);
+  assert.equal(numeroEnRango(0.0049, MAX_NUTRIENTE), null);
+  assert.equal(numeroEnRango(1e-9, MAX_NUTRIENTE), null);
+  assert.equal(numeroEnRango(0.003, MAX_KCAL), null, 'también en la energía');
+  // El primer valor que sí cabe, y el cero de verdad.
+  assert.equal(numeroEnRango(0.005, MAX_NUTRIENTE), 0.01);
+  assert.equal(numeroEnRango(0.01, MAX_NUTRIENTE), 0.01);
+  assert.equal(numeroEnRango(0, MAX_NUTRIENTE), 0, 'un 0 de OFF es un cero');
+  assert.ok(Object.is(numeroEnRango(-0, MAX_NUTRIENTE), 0));
+  // Y llega hasta la ficha entera: un campo se queda en null, los demás no.
+  const n = normalizarNutricion({ nutriments: { salt_100g: 0.004, sugars_100g: 0, proteins_100g: 3.3 } }, 'mass', 'Agua.');
+  assert.deepEqual([n.salt, n.sugars, n.proteins], [null, 0, 3.3]);
 });
 
 test('numeroEnRango: fuera de rango, no finito o no numérico es null (nunca 0)', () => {
@@ -550,10 +565,21 @@ test('aditivosValidos: solo códigos con el formato de OFF, sin repetir y con to
     ['en:e330'],
     { toString: () => 'en:e330' },
   ];
-  assert.deepEqual(aditivosValidos(sucios), [], 'ninguno pasa, pero la lista existe');
-  assert.deepEqual(aditivosValidos([...sucios, 'en:e471']), ['en:e471']);
-  const cien = Array.from({ length: 100 }, (_, i) => `en:e${100 + i}`);
-  assert.equal(aditivosValidos(cien)?.length, MAX_ADITIVOS);
+  // Todo o nada: un solo elemento inválido hace null la lista entera (una lista parcial daría
+  // un recuento menor que el real), esté donde esté.
+  for (const malo of sucios) {
+    assert.equal(aditivosValidos([malo]), null, String(malo));
+    assert.equal(aditivosValidos(['en:e330', malo]), null, `al final: ${String(malo)}`);
+    assert.equal(aditivosValidos([malo, 'en:e330']), null, `al principio: ${String(malo)}`);
+  }
+  assert.equal(aditivosValidos([...sucios, 'en:e471']), null);
+  // Con el tope pasa lo mismo: más de MAX_ADITIVOS distintos es null, no los 60 primeros.
+  const justos = Array.from({ length: MAX_ADITIVOS }, (_, i) => `en:e${100 + i}`);
+  assert.equal(aditivosValidos(justos)?.length, MAX_ADITIVOS, 'justo el tope cabe');
+  assert.equal(aditivosValidos([...justos, 'en:e999']), null, 'uno más y es null');
+  assert.equal(aditivosValidos(Array.from({ length: 100_000 }, (_, i) => `en:e${i}`)), null);
+  // Los repetidos no cuentan dos veces: 61 elementos con uno repetido son 60 distintos.
+  assert.equal(aditivosValidos([...justos, 'en:e100'])?.length, MAX_ADITIVOS);
   assert.deepEqual(aditivosValidos([]), [], 'OFF da la lista y está vacía');
   for (const noLista of ['en:e330', 7, null, undefined, { 0: 'en:e330', length: 1 }, true]) {
     assert.equal(aditivosValidos(noLista), null, 'si no es una lista, OFF no la da');
@@ -724,7 +750,7 @@ test('normalizarNutricion: textos de OFF hostiles salen limpios o null', () => {
   };
   const n = nutricionDe(f, null);
   assert.equal(n.servingSize, null, 'demasiado largo: null, no recortado');
-  assert.deepEqual(n.additivesTags, ['en:e330']);
+  assert.equal(n.additivesTags, null, 'un elemento inválido: la lista entera es null, no una lista parcial');
   const corto = nutricionDe({ serving_size: '<b>30 g</b>\n‮' }, null);
   assert.doesNotMatch(corto.servingSize ?? '', /[<>\n‮]/);
 });
@@ -793,7 +819,7 @@ test('normalizarRespuestaOff: una nutrición envenenada no tumba la ficha', () =
   assert.ok(p, 'la ficha sale entera');
   assert.equal(p.name, 'Leche entera UHT');
   assert.deepEqual({ ...p.nutrition, additivesTags: null }, { ...NUTRICION_VACIA, basis: 'ml' });
-  assert.ok((p.nutrition.additivesTags?.length ?? 0) <= MAX_ADITIVOS);
+  assert.equal(p.nutrition.additivesTags, null, '100 000 aditivos: no se guardan los 60 primeros, es null');
 });
 
 test('ETIQUETAS_DE_SALUD son las mismas que valida la base de datos', () => {

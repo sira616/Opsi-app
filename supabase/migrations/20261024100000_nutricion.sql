@@ -84,6 +84,18 @@
 -- grasas totales ni los azúcares a los hidratos (con 0,5 g de margen por el redondeo de
 -- OFF): una ficha que se contradice no es fiable en ninguno de los dos valores, y la
 -- Edge Function descarta AMBOS. Aquí se rechaza.
+--
+-- Lo que esta base de datos NO impone, porque lo decide la Edge Function (que es quien
+-- sabe de qué ficha viene cada dato): que un valor positivo que al redondearse a dos
+-- decimales queda en 0,00 (una sal de 0,004 g) se guarde como NULL y no como 0, que «0»
+-- significa «OFF declara cero»; y que `additives_tags` sea NULL y no {} cuando la ficha no
+-- trae ingredientes. Aquí se guarda lo que llega.
+--
+-- ── Orden de despliegue ────────────────────────────────────────────────────────────
+--
+-- Esta migración tiene que estar aplicada ANTES de desplegar la versión de `lookup-barcode`
+-- que la usa: `buscarEnCatalogo` hace el embed `product_nutrition(nutrition_data_at)` en el
+-- camino crítico del escáner y, sin la tabla, TODOS los escaneos darían 500.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1 · La tabla ──────────────────────────────────────────────────────────
@@ -160,10 +172,11 @@ create table public.product_nutrition (
   ),
 
   -- Texto de un wiki público: corto y sin los caracteres que nombre e ingredientes
-  -- prohíben (la misma clase que `upsert_global_product`, escrita con escapes).
+  -- prohíben, y algunos más (la clase de `upsert_global_product` ampliada: ver el
+  -- `c_prohibido` de `upsert_product_nutrition`). Escrita con escapes.
   constraint product_nutrition_serving_ck check (
     length(serving_size) between 1 and 60
-    and serving_size !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF<>]'
+    and serving_size !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uE000-\uF8FF\uFEFF\uFFF9-\uFFFB\U000E0000-\U000E007F<>]'
   ),
 
   -- El FORMATO de cada código y los repetidos los valida solo `upsert_product_nutrition`
@@ -374,11 +387,16 @@ security definer
 set search_path = ''
 as $$
 declare
-  -- La misma clase que `upsert_global_product`, con escapes para que se vea qué hay
-  -- dentro: control, DEL y C1; guion blando; ancho cero y marcas direccionales;
-  -- separadores de línea y párrafo y formato bidireccional; U+2060 a U+206F; BOM; marcado.
+  -- La clase de `upsert_global_product`, ampliada para acercarse al `\p{C}` de la Edge
+  -- Function (`off.ts`), con escapes para que se vea qué hay dentro. Control, DEL y C1;
+  -- guion blando; marca de letra árabe (U+061C) y separador mongol (U+180E); ancho cero y
+  -- marcas direccionales; separadores de línea y párrafo y formato bidireccional; U+2060 a
+  -- U+206F; uso privado (U+E000 a U+F8FF); BOM; anotaciones interlineales (U+FFF9 a
+  -- U+FFFB); caracteres «etiqueta» (U+E0000 a U+E007F, con los que se esconde texto
+  -- invisible); marcado. La de `upsert_global_product` (nombre, marca, ingredientes) sigue
+  -- siendo la antigua: ver el apartado de deuda de `docs/threat-model.md` §8.
   c_prohibido constant text :=
-    '[\u0001-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF<>]';
+    '[\u0001-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uE000-\uF8FF\uFEFF\uFFF9-\uFFFB\U000E0000-\U000E007F<>]';
   c_aditivo   constant text := '^en:e[0-9]{3,4}[a-z]{0,4}$';
   c_niveles   constant text[] := array['low', 'moderate', 'high'];
   v_racion    text := nullif(trim(p_serving_size), '');

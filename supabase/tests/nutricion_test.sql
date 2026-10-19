@@ -345,6 +345,18 @@ select lives_ok($$insert into public.product_nutrition (product_id, nutrition_da
   '60 caracteres exactos caben');
 delete from public.product_nutrition where product_id = current_setting('opsi.g2')::uuid;
 
+-- Lo que la Edge Function quita con \p{C} y la clase antigua de SQL dejaba pasar: los caracteres
+-- «etiqueta» (U+E0000 a U+E007F, con los que se esconde texto invisible), la marca de letra
+-- árabe (U+061C), el separador mongol (U+180E), las anotaciones interlineales (U+FFF9 a U+FFFB) y
+-- el uso privado (U+E000 a U+F8FF). Los extremos de cada rango, dentro.
+select throws_ok(
+  format($f$insert into public.product_nutrition (product_id, nutrition_data_at, serving_size)
+            values (current_setting('opsi.g2')::uuid, now(), '30' || chr(%s) || 'g')$f$, cp),
+  '23514', null,
+  'el CHECK de la ración rechaza U+' || to_hex(cp)
+)
+from unnest(array[917569, 917504, 917631, 1564, 6158, 65529, 65530, 65531, 57344, 63743]) as cp;
+
 select throws_ok($$insert into public.product_nutrition (product_id, nutrition_data_at, additives_tags)
   values (current_setting('opsi.g2')::uuid, now(), array(select 'en:e' || (100 + i) from generate_series(1, 61) i))$$,
   '23514', null, 'más de 60 aditivos se rechazan');
@@ -639,6 +651,23 @@ select throws_ok($$select public.zz_nut(jsonb_build_object('racion', '30' || chr
 select throws_ok($$select public.zz_nut(jsonb_build_object('racion', '30' || chr(65279) || 'g'))$$, '22023', null, 'con la marca de orden de bytes (U+FEFF)');
 select throws_ok($$select public.zz_nut(jsonb_build_object('racion', '30' || chr(173) || 'g'))$$, '22023', null, 'con guion blando (U+00AD)');
 select throws_ok($$select public.zz_nut(jsonb_build_object('racion', '30' || chr(7) || 'g'))$$, '22023', null, 'con carácter de control');
+
+-- La clase ampliada (la Edge Function quita todo \p{C}): «etiqueta» U+E0000 a U+E007F, U+061C,
+-- U+180E, U+FFF9 a U+FFFB y el uso privado U+E000 a U+F8FF, con los extremos de cada rango.
+select throws_ok(
+  format($f$select public.zz_nut(jsonb_build_object('racion', '30' || chr(%s) || 'g'))$f$, cp),
+  '22023', null,
+  'la función rechaza U+' || to_hex(cp) || ' en la ración'
+)
+from unnest(array[917569, 917504, 917631, 1564, 6158, 65529, 65530, 65531, 57344, 63743]) as cp;
+
+-- Y no se pasa de largo: lo que queda JUSTO fuera de cada rango, y las letras con acento y los
+-- emojis, siguen cabiendo.
+select lives_ok(
+  format($f$select public.zz_nut(jsonb_build_object('racion', '30' || chr(%s) || 'g'))$f$, cp),
+  'y U+' || to_hex(cp) || ' sí cabe'
+)
+from unnest(array[63744, 917632, 65532, 65528, 1565, 6157, 241, 128512]) as cp;
 
 select throws_ok($$select public.zz_nut('{"aditivos": ["en:E330"]}')$$, '22023', null, 'un aditivo con mayúscula');
 select throws_ok($$select public.zz_nut('{"aditivos": ["en:e33"]}')$$, '22023', null, 'con solo dos cifras');

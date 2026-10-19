@@ -23,6 +23,9 @@
  *   8. Open Food Facts                 → y se guarda lo que haya: primero la ficha y justo
  *                                        después su nutrición (si ésta falla se registra
  *                                        y se devuelve la ficha igualmente)
+ *      · si OFF contesta «no existe» o «no es comida» y la ficha no tiene fila de nutrición,
+ *        se deja la marca vacía (OFF se consultó) para no renovarla en cada escaneo. Con un
+ *        error de OFF no: eso se reintenta
  *
  * ── La nutrición NO sale de aquí ──────────────────────────────────────────
  *
@@ -74,6 +77,27 @@ export type ProductoCatalogo = {
 export type FilaCatalogo = ProductoCatalogo & { updated_at: string; nutrition_data: boolean };
 
 export type Cuota = { permitido: boolean; reintentarEn: number };
+
+/** «OFF se consultó y no declara nada»: la marca que se deja en una ficha que OFF ya no devuelve. */
+const NUTRICION_SIN_DATOS: NutricionOff = {
+  nutriscoreGrade: null,
+  novaGroup: null,
+  basis: null,
+  energyKcal: null,
+  fat: null,
+  saturatedFat: null,
+  carbohydrates: null,
+  sugars: null,
+  fiber: null,
+  proteins: null,
+  salt: null,
+  fatLevel: null,
+  saturatedFatLevel: null,
+  sugarsLevel: null,
+  saltLevel: null,
+  servingSize: null,
+  additivesTags: null,
+};
 
 export type Dependencias = {
   /** La persona detrás del JWT, o null. Debe comprobar que NO es la clave anónima. */
@@ -259,6 +283,39 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
     return respuesta;
   };
 
+  /**
+   * Guarda la nutrición de una ficha. Es un extra de Opsi Premium y el escáner es la
+   * función central: si falla (red, base de datos), NO tumba el escaneo. Se registra y
+   * se sigue, y la ficha se devuelve igualmente. Solo el nombre del error y su mensaje
+   * cortado, como en `excepcion`: nunca la fila, ni los datos de OFF, ni el código de barras.
+   */
+  const guardarNutricionSinRomper = async (productoId: string, nutricion: NutricionOff): Promise<void> => {
+    try {
+      await dep.guardarNutricion(productoId, nutricion);
+    } catch (errorNutricion) {
+      dep.log({
+        evento: 'lookup-barcode',
+        request_id: requestId,
+        user_id: userId,
+        resultado: 'nutricion_error',
+        ...describirError(errorNutricion),
+      });
+    }
+  };
+
+  /**
+   * OFF se ha consultado y ya no devuelve el producto (`no_existe`) o dice que no es comida,
+   * y la ficha del catálogo no tiene su fila de nutrición: se deja la marca de «consultado y
+   * sin datos» (todo null). Sin ella la ficha seguiría contando como caducada y cada escaneo
+   * gastaría un hueco de OFF para nada. Solo con una ficha SIN fila: si ya la tiene, no se
+   * toca. NO se llama con un error de OFF (5xx, red, tiempo): eso no es una respuesta y sí
+   * debe reintentarse; ni cuando no se llegó a consultar (sin hueco o sin User-Agent).
+   */
+  const marcarNutricionConsultada = async (ficha: FilaCatalogo): Promise<void> => {
+    if (ficha.nutrition_data) return;
+    await guardarNutricionSinRomper(ficha.id, NUTRICION_SIN_DATOS);
+  };
+
   try {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CABECERAS });
     if (req.method !== 'POST') return fin('metodo', fallo(405, 'metodo_no_permitido', { Allow: 'POST, OPTIONS' }));
@@ -342,35 +399,28 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
 
     if (off.tipo === 'encontrado') {
       const guardado = await dep.guardar(codigo, off.producto);
-      // La nutrición, justo después de la ficha y con su id. Es un extra de Opsi Premium y
-      // el escáner es la función central: si falla (red, base de datos), NO tumba el
-      // escaneo. Se registra y se devuelve igualmente la ficha, que ya está guardada. Sin
-      // fila de nutrición cuenta como caducada, así que la próxima vez que se escanee se
-      // reintenta, igual que si nunca la hubiera tenido.
-      try {
-        await dep.guardarNutricion(guardado.id, off.producto.nutrition);
-      } catch (errorNutricion) {
-        // Solo el nombre del error y su mensaje cortado, como en `excepcion`: nunca la fila
-        // ni los datos de OFF, ni el código de barras.
-        dep.log({
-          evento: 'lookup-barcode',
-          request_id: requestId,
-          user_id: userId,
-          resultado: 'nutricion_error',
-          ...describirError(errorNutricion),
-        });
-      }
+      // La nutrición, justo después de la ficha y con su id. Si falla NO tumba el escaneo
+      // (ver `guardarNutricionSinRomper`): sin fila de nutrición la ficha cuenta como
+      // caducada, así que la próxima vez que se escanee se reintenta.
+      await guardarNutricionSinRomper(guardado.id, off.producto.nutrition);
       return fin('off', json(200, publico(guardado)));
     }
     if (off.tipo === 'no_es_comida') {
       // Ni se guarda ni se anota como falta: una falta se contestaría la próxima vez
       // como «no lo conozco» y dejaría añadirlo. El veredicto de OFF manda también
       // sobre una ficha vieja del catálogo (alguien la pudo reclasificar).
+      // Si esa ficha no tenía su fila de nutrición, OFF SÍ se acaba de consultar: se deja
+      // la marca vacía para no gastar un hueco de OFF en cada escaneo. La respuesta no cambia.
+      if (enCatalogo) await marcarNutricionConsultada(enCatalogo);
       return fin('no_comida', json(200, { found: false, barcode: codigo, not_food: true }));
     }
     if (off.tipo === 'no_existe') {
-      // Si el producto estaba y OFF ya no lo tiene, se sirve el que hay.
-      if (enCatalogo) return fin('cache_vieja', json(200, publico(enCatalogo)), { motivo: 'off_sin_ficha' });
+      // Si el producto estaba y OFF ya no lo tiene, se sirve el que hay (y, si no tenía su
+      // fila de nutrición, se deja la marca de «consultado y sin datos»: ver arriba).
+      if (enCatalogo) {
+        await marcarNutricionConsultada(enCatalogo);
+        return fin('cache_vieja', json(200, publico(enCatalogo)), { motivo: 'off_sin_ficha' });
+      }
       await dep.registrarFalta(codigo);
       return fin('falta', json(200, { found: false, barcode: codigo }));
     }

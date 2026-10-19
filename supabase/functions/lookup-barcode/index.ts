@@ -95,7 +95,10 @@ const dependencias: Dependencias = {
       // Los datos de salud se piden por su nombre y no con `*`: `off_payload` no tiene
       // por qué viajar hasta aquí. `health_data_at` solo sirve para saber si constan.
       // De la nutrición solo se pide la FECHA (es lo único que `service_role` puede leer
-      // de esa tabla): basta para saber si la ficha ya la tiene.
+      // de esa tabla): basta para saber si la ficha ya la tiene. OJO al desplegar: este embed
+      // está en el camino crítico del escáner, así que la migración `20261024100000_nutricion`
+      // tiene que estar aplicada ANTES que esta versión de la función; sin ella, todos los
+      // escaneos darían 500.
       .select(
         'id, barcode, name, brand, unit_family, net_quantity, image_url, updated_at, ' +
           'allergens_tags, traces_tags, labels_tags, ingredients_text, health_data_at, ' +

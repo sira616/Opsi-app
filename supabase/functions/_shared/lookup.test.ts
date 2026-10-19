@@ -673,10 +673,13 @@ test('ficha sin nutrición: la cuota por persona se sigue cobrando antes de mira
   assert.equal(llamadas.consultarOff, 0);
 });
 
-test('ficha sin nutrición y OFF sin contestar: se sirve la vieja, nunca un error, y no se guarda nada', async () => {
+test('ficha sin nutrición y un ERROR de OFF (red, tiempo, 5xx): se sirve la vieja y NO se marca nada: se reintentará', async () => {
   for (const off of [
     { tipo: 'error', motivo: 'tiempo_agotado' },
-    { tipo: 'no_existe' },
+    { tipo: 'error', motivo: 'red' },
+    { tipo: 'error', motivo: 'http_503' },
+    { tipo: 'error', motivo: 'http_429' },
+    { tipo: 'error', motivo: 'respuesta_ilegible' },
   ] as ResultadoOff[]) {
     const { dep, llamadas } = montar({
       async buscarEnCatalogo() {
@@ -687,11 +690,103 @@ test('ficha sin nutrición y OFF sin contestar: se sirve la vieja, nunca un erro
       },
     });
     const r = await manejar(peticion(), dep);
-    assert.equal(r.status, 200, off.tipo);
+    assert.equal(r.status, 200, JSON.stringify(off));
     assert.equal((await leer(r)).product.name, 'Refresco de cola');
     assert.equal(llamadas.guardar, 0);
-    assert.equal(llamadas.guardarNutricion, 0);
+    // Un fallo de OFF no es una respuesta: marcar la ficha como «consultada» la dejaría sin
+    // renovar cuando OFF vuelva.
+    assert.equal(llamadas.guardarNutricion, 0, JSON.stringify(off));
     assert.equal(llamadas.registrarFalta, 0, 'una ficha que existía no pasa a ser una falta');
+  }
+});
+
+test('ficha sin nutrición y OFF ya no tiene el producto (no_existe): se sirve la vieja y se deja la marca VACÍA, una sola vez', async () => {
+  let marca: { id: string; nutricion: NutricionOff } | null = null;
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_existe' };
+    },
+    async guardarNutricion(id, nutricion) {
+      llamadas.guardarNutricion++;
+      marca = { id, nutricion };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  const cuerpo = await leer(r);
+  assert.equal(cuerpo.found, true);
+  assert.equal(cuerpo.product.name, 'Refresco de cola', 'la respuesta no cambia: se sirve la ficha que hay');
+  assert.equal(llamadas.guardar, 0, 'no se reescribe la ficha');
+  assert.equal(llamadas.registrarFalta, 0, 'una ficha que existía no pasa a ser una falta');
+  // «OFF se consultó y no declara nada»: todo null, colgado de la ficha del catálogo.
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.deepEqual(marca, { id: FILA_SIN_NUTRICION.id, nutricion: NUTRICION_SIN_DATOS });
+});
+
+test('tras esa marca la ficha ya no cuenta como caducada: el escaneo siguiente no gasta ni un hueco de OFF', async () => {
+  // La base de datos la devuelve ahora CON su fila de nutrición (todo NULL): al día.
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA;
+    },
+  });
+  assert.equal((await manejar(peticion(), dep)).status, 200);
+  assert.equal(llamadas.reservarHuecoOff, 0);
+  assert.equal(llamadas.consultarOff, 0);
+  assert.equal(llamadas.guardarNutricion, 0);
+});
+
+test('ficha CON nutrición pero caducada y OFF ya no la tiene: no se toca su nutrición', async () => {
+  const vieja: FilaCatalogo = { ...FILA, updated_at: new Date(AHORA - 40 * 86_400_000).toISOString() };
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return vieja;
+      },
+      async consultarOff() {
+        return off;
+      },
+    });
+    assert.equal((await manejar(peticion(), dep)).status, 200, off.tipo);
+    assert.equal(llamadas.guardarNutricion, 0, `${off.tipo}: ya tiene su fila; no se pisa con una vacía`);
+  }
+});
+
+test('sin ficha en el catálogo y OFF no_existe / no_es_comida: no hay a quién colgar una marca', async () => {
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async consultarOff() {
+        return off;
+      },
+    });
+    assert.equal((await manejar(peticion(), dep)).status, 200, off.tipo);
+    assert.equal(llamadas.guardarNutricion, 0, off.tipo);
+  }
+});
+
+test('si dejar la marca vacía falla, no se tumba nada: 200 igual y el fallo va al log como nutricion_error', async () => {
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, logs } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_NUTRICION;
+      },
+      async consultarOff() {
+        return off;
+      },
+      async guardarNutricion() {
+        throw new Error('base de datos caída');
+      },
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200, off.tipo);
+    const evento = logs.find((l) => l.resultado === 'nutricion_error');
+    assert.ok(evento, off.tipo);
+    assert.equal(evento.error, 'Error');
+    assert.match(String(evento.detalle), /base de datos caída/);
+    assert.doesNotMatch(JSON.stringify(logs), new RegExp(CODIGO));
   }
 });
 
@@ -713,7 +808,8 @@ test('ficha sin nutrición y sin hueco o sin User-Agent: se sirve la vieja y no 
   }
 });
 
-test('ficha sin nutrición y OFF dice que no es comida: manda OFF y no se guarda nutrición', async () => {
+test('ficha sin nutrición y OFF dice que no es comida: manda OFF (la respuesta no cambia) y se deja la marca vacía', async () => {
+  let marca: { id: string; nutricion: NutricionOff } | null = null;
   const { dep, llamadas } = montar({
     async buscarEnCatalogo() {
       return FILA_SIN_NUTRICION;
@@ -721,11 +817,20 @@ test('ficha sin nutrición y OFF dice que no es comida: manda OFF y no se guarda
     async consultarOff(): Promise<ResultadoOff> {
       return { tipo: 'no_es_comida' };
     },
+    async guardarNutricion(id, nutricion) {
+      llamadas.guardarNutricion++;
+      marca = { id, nutricion };
+    },
   });
-  const cuerpo = await leer(await manejar(peticion(), dep));
-  assert.equal(cuerpo.not_food, true);
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  // Exactamente lo de siempre: «no es comida», sin la ficha.
+  assert.deepEqual(await leer(r), { found: false, barcode: CODIGO, not_food: true });
   assert.equal(llamadas.guardar, 0);
-  assert.equal(llamadas.guardarNutricion, 0);
+  assert.equal(llamadas.registrarFalta, 0, 'una falta se contestaría luego como «no lo conozco»');
+  // OFF SÍ se acaba de consultar: la marca evita gastar un hueco en cada escaneo.
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.deepEqual(marca, { id: FILA_SIN_NUTRICION.id, nutricion: NUTRICION_SIN_DATOS });
 });
 
 test('la nutrición se guarda DESPUÉS de la ficha, con el id que ésta devolvió y la nutrición filtrada de OFF', async () => {

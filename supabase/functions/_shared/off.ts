@@ -319,13 +319,17 @@ function esObjeto(valor: unknown): valor is Record<string, unknown> {
  * adivina ni se arregla), y se deja con dos decimales. El rango se mira sobre lo que
  * llega y se redondea después, igual que hace la base de datos.
  *
- * «No lo da» es null y no 0: una ficha sin sal declarada no tiene «0 g de sal».
+ * «No lo da» es null y no 0: una ficha sin sal declarada no tiene «0 g de sal». Y un 0
+ * significa «OFF declara cero»: un valor POSITIVO que al redondear a dos decimales se queda
+ * en 0 (una sal de 0,004 g) no cabe en la precisión que se guarda, y se dice null en vez de
+ * afirmar un cero que OFF no dijo. La base de datos no impone esto (guarda lo que llega).
  */
 export function numeroEnRango(valor: unknown, max: number): number | null {
   if (typeof valor !== 'number' || !Number.isFinite(valor) || valor < 0 || valor > max) return null;
   const redondeado = Math.round(valor * 100) / 100;
-  // Un -0 (de un -0 de entrada) se guarda como 0.
-  return redondeado === 0 ? 0 : redondeado;
+  // Un cero que viene de un cero (o de un -0) es un cero; uno que viene de redondear, no.
+  if (redondeado === 0) return valor === 0 ? 0 : null;
+  return redondeado;
 }
 
 /** El Nutri-Score: solo de la a a la e. OFF también dice «unknown» o «not-applicable», y eso es null. */
@@ -358,8 +362,12 @@ export function racionValida(valor: unknown): string | null {
 /**
  * Los aditivos: códigos con el formato exacto `en:e330` / `en:e150d` / `en:e1442` /
  * `en:e331iii`, sin repetir y con tope. El sufijo admite hasta 4 letras porque OFF escribe
- * las subformas en cifras romanas (E331iii, E160aii, E450vii). Lo que no es una lista es
- * null («OFF no da la lista»); una lista sin ningún código válido es [].
+ * las subformas en cifras romanas (E331iii, E160aii, E450vii).
+ *
+ * Todo o nada: si algún elemento no es un texto con ese formato, o hay más de
+ * `MAX_ADITIVOS` distintos, devuelve null. Una lista PARCIAL o truncada daría un recuento
+ * menor que el real, y la app lo enseñaría como si fuera el de OFF. Tampoco es una lista
+ * lo que no es un array (null: «OFF no da la lista»). Un array vacío es [].
  *
  * Ese [] todavía NO significa «sin aditivos»: ver `aditivosDeLaFicha`.
  */
@@ -367,10 +375,9 @@ export function aditivosValidos(valor: unknown): string[] | null {
   if (!Array.isArray(valor)) return null;
   const vistos = new Set<string>();
   for (const aditivo of valor) {
-    if (typeof aditivo === 'string' && /^en:e[0-9]{3,4}[a-z]{0,4}$/.test(aditivo)) {
-      vistos.add(aditivo);
-      if (vistos.size >= MAX_ADITIVOS) break;
-    }
+    if (typeof aditivo !== 'string' || !/^en:e[0-9]{3,4}[a-z]{0,4}$/.test(aditivo)) return null;
+    vistos.add(aditivo);
+    if (vistos.size > MAX_ADITIVOS) return null;
   }
   return [...vistos];
 }
@@ -385,7 +392,8 @@ export function aditivosValidos(valor: unknown): string[] | null {
  *   · lista con códigos válidos                    → esos códigos
  *   · lista vacía y la ficha SIN ingredientes      → null (no se sabe)
  *   · lista vacía y la ficha CON ingredientes      → []   (OFF los analizó y no declara)
- *   · lista con algo, pero nada con formato válido → null (no se puede afirmar «ninguno»)
+ *   · algún elemento inválido, o demasiados        → null (`aditivosValidos`: ni parcial ni
+ *                                                    truncada, y nunca «ninguno»)
  *   · no es una lista                              → null
  *
  * `ingredientes` es el texto YA filtrado de la ficha (`limpiarIngredientes`), null si no hay.
@@ -393,8 +401,8 @@ export function aditivosValidos(valor: unknown): string[] | null {
 export function aditivosDeLaFicha(valor: unknown, ingredientes: string | null): string[] | null {
   const validos = aditivosValidos(valor);
   if (validos === null || validos.length > 0) return validos;
-  if (ingredientes === null) return null;
-  return Array.isArray(valor) && valor.length > 0 ? null : [];
+  // Aquí la lista es [] de verdad (cualquier elemento inválido ya habría dado null).
+  return ingredientes === null ? null : [];
 }
 
 /**
