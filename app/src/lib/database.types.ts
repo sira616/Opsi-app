@@ -311,6 +311,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"user_profile": {
+                  Row: {
+                    "activity_level": string | null,"consent_version": number | null,"consented_at": string | null,"diet": string | null,"dislikes": (string)[],"dislikes_custom": (string)[],"likes": (string)[],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activity_level"?: string | null,"consent_version"?: number | null,"consented_at"?: string | null,"diet"?: string | null,"dislikes"?: (string)[],"dislikes_custom"?: (string)[],"likes"?: (string)[],"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "activity_level"?: string | null,"consent_version"?: number | null,"consented_at"?: string | null,"diet"?: string | null,"dislikes"?: (string)[],"dislikes_custom"?: (string)[],"likes"?: (string)[],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"user_settings": {
                   Row: {
                     "accent": string,"auto_add_to_shopping_list": boolean,"created_at": string,"digest_enabled": boolean,"digest_hour": number,"digest_minute": number,"household_limit": number,"locale": string,"plan": string,"push_token": string | null,"push_token_updated_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"username": string
