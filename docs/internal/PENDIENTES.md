@@ -93,18 +93,12 @@ fila a mano, que desde la app no puede.
 **Arreglo:** una acción `reopen_item` que devuelva el elemento a su estado anterior y deje
 su propio evento. Nunca borrando el evento original: el registro es inmutable a propósito.
 
-### 🔴 El tope de 24 h tras descongelar desaparece al usar una parte o abrir lo descongelado
+### ✅ ~~El tope de 24 h tras descongelar desaparece al usar una parte o abrir lo descongelado~~ · resuelto 2026-10-19
 
-Hallado al hacer [D-44](BITACORA.md#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19);
-**no es de esa tarea y no se ha tocado.** La vista `inventory_with_priority` solo aplica el tope de 24 h
-(`date_from_thaw`) mientras `state = 'thawed'`. Pero `use_quantity` pasa el estado a «empezado» y `open_item`
-a «abierto», y `thawed_at` se queda puesto: el tope deja de contar. Comprobado contra la base local con una
-transacción deshecha: algo descongelado hace 3 días sale «−2 días» (vencido por el tope) y, tras usar una parte,
-«10 días» con la fecha del envase. Es justo lo que D-14 existe para impedir.
-
-**Arreglo:** que `date_from_thaw` dependa de `thawed_at is not null` y no del estado (una migración nueva que
-recree la vista, con su test), y revisar qué pasa al volver a congelar y descongelar. La app ya mira `thawed_at`
-y no el estado para no recomendar congelar de nuevo y para el subtítulo del botón «Congelar».
+Hallado al hacer [D-44](BITACORA.md#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19)
+y arreglado en [D-45](BITACORA.md#d-45--el-tope-de-24-h-tras-descongelar-depende-de-thawed_at-no-del-estado--2026-10-19)
+(migración `20261022100000`): la vista aplica el tope mientras `thawed_at` esté puesto, no solo con el estado «descongelado».
+Congelar y descongelar otra vez reinicia las 24 h. Lo vigila `supabase/tests/tope_descongelar_test.sql`, que falla con la vista antigua.
 
 ### 🟡 `open_shelf_life_reference` sin trigger de `updated_at`
 
