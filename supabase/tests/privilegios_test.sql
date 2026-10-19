@@ -136,20 +136,25 @@ select ok(
   'ni cambiarse el nombre de usuario: es la identidad'
 );
 
--- Las preferencias de salud (RGPD, categoría especial): leer lo suyo y escribir solo
--- `avoid`. Ni borrar, ni tocar `updated_at` (lo pone el trigger), ni cambiar de dueña
--- la fila. El comportamiento con RLS está en `salud_test.sql`; aquí, la matriz.
+-- Las preferencias de salud (RGPD, categoría especial): leer lo suyo, escribir solo
+-- `avoid` y la versión del permiso, y borrar la propia fila (retirar el permiso). Ni
+-- tocar `updated_at` ni `consented_at` (los pone el trigger), ni cambiar de dueña la
+-- fila. El comportamiento con RLS está en `salud_test.sql`; aquí, la matriz.
 select ok(
   has_table_privilege('authenticated', 'public.user_health_preferences', 'SELECT')
     and has_column_privilege('authenticated', 'public.user_health_preferences', 'avoid', 'INSERT')
     and has_column_privilege('authenticated', 'public.user_health_preferences', 'avoid', 'UPDATE')
+    and has_column_privilege('authenticated', 'public.user_health_preferences', 'consent_version', 'INSERT')
+    and has_column_privilege('authenticated', 'public.user_health_preferences', 'consent_version', 'UPDATE')
     and not has_table_privilege('authenticated', 'public.user_health_preferences', 'INSERT')
     and not has_table_privilege('authenticated', 'public.user_health_preferences', 'UPDATE')
-    and not has_table_privilege('authenticated', 'public.user_health_preferences', 'DELETE')
+    and has_table_privilege('authenticated', 'public.user_health_preferences', 'DELETE')
+    and not has_column_privilege('authenticated', 'public.user_health_preferences', 'consented_at', 'INSERT')
+    and not has_column_privilege('authenticated', 'public.user_health_preferences', 'consented_at', 'UPDATE')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'updated_at', 'INSERT')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'updated_at', 'UPDATE')
     and not has_column_privilege('authenticated', 'public.user_health_preferences', 'user_id', 'UPDATE'),
-  'las preferencias de salud se leen y se escriben solo columna a columna (avoid), sin borrar'
+  'las preferencias de salud se leen y se escriben solo columna a columna (avoid y la versión del permiso) y se borran las propias'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════

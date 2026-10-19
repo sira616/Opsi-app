@@ -299,14 +299,14 @@ isOneToOne: false
                   ]
                 },"user_health_preferences": {
                   Row: {
-                    "avoid": (string)[],"updated_at": string,"user_id": string
+                    "avoid": (string)[],"consent_version": number | null,"consented_at": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avoid"?: (string)[],"updated_at"?: string,"user_id": string
+                    "avoid"?: (string)[],"consent_version"?: number | null,"consented_at"?: string | null,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "avoid"?: (string)[],"updated_at"?: string,"user_id"?: string
+                    "avoid"?: (string)[],"consent_version"?: number | null,"consented_at"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
