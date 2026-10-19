@@ -225,7 +225,7 @@ salga a las tiendas. Vive en `app/app.json`, que es de donde la lee la pantalla 
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 578 tests pgTAP (15 ficheros) contra Supabase local; 782 comprobaciones sin Docker
+**Probado:** 608 tests pgTAP (16 ficheros) contra Supabase local; 816 comprobaciones sin Docker
 (`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 95 tests de la
 lógica de la función de búsqueda (`npm run test:funciones`), 22 contra el runtime de Edge Functions de
 verdad (`npm run fn:check`) y 121 de la lógica de la app (`npm run test:app`). La función, además,
