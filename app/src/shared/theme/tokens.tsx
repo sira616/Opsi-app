@@ -56,6 +56,27 @@ export type Palette = {
   frostSoft: string;
   /** Texto sobre `frostSoft`. `frost` ahí se queda en 3.9:1. */
   frostInk: string;
+
+  // ── Escala del Nutri-Score (A a E) ──────────────────────────────────────
+  //
+  // Solo los usa `features/nutricion`, y SOLO ellos: ninguno de estos colores significa
+  // otra cosa en la app. Ni el rojo de la caducidad ni el ámbar del aviso se reutilizan
+  // para la escala; la E es un naranja a más de 15° de matiz de todo el rojo de
+  // caducidad (`scripts/check-contrast.mjs` lo comprueba). Cada ficha lleva el color de
+  // su letra: la letra se ve SIEMPRE, el color nunca va solo (docs/DISENO.md).
+  nutriA: string;
+  /** Letra sobre `nutriA`. */
+  nutriAInk: string;
+  nutriB: string;
+  nutriBInk: string;
+  nutriC: string;
+  nutriCInk: string;
+  nutriD: string;
+  nutriDInk: string;
+  nutriE: string;
+  nutriEInk: string;
+  /** Borde grueso de la ficha activa: el contorno que da la forma contra el fondo. */
+  nutriBorder: string;
 };
 
 const CLARO: Palette = {
@@ -81,6 +102,17 @@ const CLARO: Palette = {
   frost: '#2A7BB8',
   frostSoft: '#E2F0FA',
   frostInk: '#1D5580',
+  nutriA: '#0B7F43',
+  nutriAInk: '#FFFFFF',
+  nutriB: '#8FC83A',
+  nutriBInk: '#16181A',
+  nutriC: '#F2D90F',
+  nutriCInk: '#16181A',
+  nutriD: '#F5B50A',
+  nutriDInk: '#16181A',
+  nutriE: '#F07A0A',
+  nutriEInk: '#16181A',
+  nutriBorder: '#16181A',
 };
 
 const OSCURO: Palette = {
@@ -106,6 +138,19 @@ const OSCURO: Palette = {
   frost: '#7CC4F2',
   frostSoft: '#17262F',
   frostInk: '#B4DCF7',
+  // La escala sirve tal cual en oscuro (todas superan 3:1 contra el fondo oscuro sin
+  // tocarlas): lo que cambia es el borde, que pasa a claro.
+  nutriA: '#0B7F43',
+  nutriAInk: '#FFFFFF',
+  nutriB: '#8FC83A',
+  nutriBInk: '#111316',
+  nutriC: '#F2D90F',
+  nutriCInk: '#111316',
+  nutriD: '#F5B50A',
+  nutriDInk: '#111316',
+  nutriE: '#F07A0A',
+  nutriEInk: '#111316',
+  nutriBorder: '#F2F3F5',
 };
 
 // ── El color base (Opsi Premium ⭐) ───────────────────────────────────────

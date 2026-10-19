@@ -8,6 +8,7 @@ import {
   ChartBar,
   ChatCircleDots,
   Check,
+  JarLabel,
   ListChecks,
   Package,
   Palette,
@@ -45,10 +46,11 @@ import {
  * categoría, no una sección nueva de una lista que ya nadie lee entera.
  *
  * Todo lo premium lo decide el SERVIDOR: el color solo lo guarda el trigger de
- * `user_settings` si el plan lo permite, y `most_used_products` y `my_known_products`
- * rechazan a quien no lo tiene. Esta pantalla enseña candados en vez de botones que van a
- * fallar, y esa es toda su parte; si alguien se saltara los candados, el servidor diría
- * que no igual. El chat NO está bloqueado: todavía no hay nada que cobrar ni limitar.
+ * `user_settings` si el plan lo permite, y `most_used_products`, `my_known_products` y
+ * `nutrition_of_products` rechazan a quien no lo tiene. Esta pantalla enseña candados en
+ * vez de botones que van a fallar, y esa es toda su parte; si alguien se saltara los
+ * candados, el servidor diría que no igual. El chat NO está bloqueado: todavía no hay nada
+ * que cobrar ni limitar.
  *
  * Es una pestaña de la barra, donde antes estaba el chat de Opsi (que ahora vive como una
  * pantalla propia y se abre desde la nevera y desde aquí).
@@ -108,7 +110,7 @@ export default function Premium() {
   }
 
   /** Un widget de Premium: sin el plan no abre nada y lo dice; con él, va a su pantalla. */
-  function abrir(ruta: '/productos' | '/gastos') {
+  function abrir(ruta: '/productos' | '/gastos' | '/nutricion') {
     if (!premium) {
       setAviso('Eso es de Opsi Premium ⭐.');
       return;
@@ -187,6 +189,14 @@ export default function Premium() {
               resumen={resumenGastos}
               bloqueado={!premium}
               onPress={() => abrir('/gastos')}
+            />
+            {/* El resumen dice qué hay dentro y no cuenta nada: la nutrición se pide al abrir la pantalla, no en este panel. */}
+            <Widget
+              icono={JarLabel}
+              titulo="Nutrición"
+              resumen="Nutri-Score y NOVA de tus productos"
+              bloqueado={!premium}
+              onPress={() => abrir('/nutricion')}
             />
           </View>
         </View>
