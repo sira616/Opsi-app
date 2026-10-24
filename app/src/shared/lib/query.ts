@@ -124,6 +124,9 @@ export const queryKeys = {
    */
   preferenciasSalud: ['salud', 'preferencias'] as const,
 
+  /** El perfil personal (opcional, sensible): solo su dueña lo lee. Se vacía al cambiar de persona. */
+  perfil: ['perfil'] as const,
+
   /**
    * Un producto del catálogo, con su ficha de salud ya limpia. Lo leen la ficha del
    * detalle, el alta, el aviso de salud y las hojas rápidas: una sola clave para que

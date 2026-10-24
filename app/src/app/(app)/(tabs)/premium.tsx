@@ -12,14 +12,17 @@ import {
   Package,
   Palette,
   Star,
+  UserCircle,
 } from 'phosphor-react-native';
 
 import { fetchMasUsados, fetchProductosConocidos, GASTOS_EN_RESUMEN } from '@/api/premium';
 import { fetchSettings, updateSettings } from '@/api/settings';
 import { Nota, useAjustesStyles } from '@/features/ajustes/ui';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { usePerfil } from '@/features/perfil/usePerfil';
 import { Widget } from '@/features/premium/Widget';
 import { describeDbError } from '@/shared/lib/db-errors';
+import { resumenDelPerfil } from '@/shared/lib/perfil';
 import { queryKeys } from '@/shared/lib/query';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import {
@@ -117,6 +120,9 @@ export default function Premium() {
     router.push(ruta);
   }
 
+  // El perfil personal es opcional y no lleva candado: es tu dato, no una función de pago.
+  const { guardado: perfilGuardado, cargando: cargandoPerfil } = usePerfil();
+
   const totalProductos = conocidos.data?.length ?? 0;
   const masGastado = gastos.data?.[0];
 
@@ -167,6 +173,13 @@ export default function Premium() {
               titulo="Chat de Opsi"
               resumen="Pregúntale qué cenar o qué gastar primero"
               onPress={() => router.push('/chat')}
+            />
+            <Widget
+              ancho
+              icono={UserCircle}
+              titulo="Tu perfil"
+              resumen={cargandoPerfil ? '' : resumenDelPerfil(perfilGuardado)}
+              onPress={() => router.push('/perfil')}
             />
           </View>
         </View>

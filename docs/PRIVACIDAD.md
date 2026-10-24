@@ -22,6 +22,7 @@
 | **Ajustes:** zona horaria, hora del resumen, color, listas por omisión | Que la app funcione a tu manera | Solo tú |
 | **Cuándo usas el chat** (solo la fecha y hora de cada mensaje, **nunca lo que escribes**) | Poner un límite de mensajes por persona, porque cada uno cuesta | Solo tú: nadie, ni tú, lo lee a mano; solo lo cuenta el servidor. Se borra a los dos días y con la cuenta |
 | **Alérgenos e intolerancias** que marcas (**dato de salud**) | Marcarte en tu nevera lo que lleve eso | **Solo tú**, nunca quien comparte nevera contigo |
+| **Tu perfil** (opcional): cuánto te mueves, cómo comes, lo que te gusta y lo que no, y productos concretos que no te gustan (**dato sensible**) | Que las recomendaciones se parezcan a ti. **Hoy no se usa para recomendar nada**: se guarda para cuando se use | **Solo tú**, nunca quien comparte nevera contigo. **No sale a ningún proveedor de IA**: hará falta un permiso propio para eso |
 | **Códigos de barras** que escaneas | Buscar el producto | El código viaja a un servidor propio, que consulta Open Food Facts; no se manda nada tuyo |
 
 El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
@@ -29,6 +30,7 @@ El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
 ## 3 · Base legal
 
 - **Cuenta, nevera y ajustes:** la ejecución del servicio que pides al usar la app.
+- **Tu perfil:** tu **consentimiento explícito** y propio, distinto del de salud, que das con «Aceptar y rellenar» en la pantalla del perfil. Todo es opcional. Se retira con «Borrar mi perfil».
 - **Alérgenos e intolerancias:** tu **consentimiento explícito** (RGPD, art. 9.2.a), que das con «Aceptar y elegir» en
   Ajustes. Sin él no se guarda ni se usa nada. Lo puedes retirar cuando quieras con «Borrar mis datos de salud», que
   elimina lo guardado y la fecha del permiso. El servidor guarda qué versión de este aviso aceptaste y cuándo.

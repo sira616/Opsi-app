@@ -191,6 +191,29 @@ producto con ingredientes rellenados pero sin las etiquetas calculadas no avisar
 son declaraciones de quien edita la ficha. No se detectan otras intolerancias (histamina, fructosa…). Nada de esto se ha
 probado con un móvil real ni con una llamada real de la función a OFF desde el runtime de producción.
 
+## 9 · Perfil personal: lo que cada persona cuenta de sí (opcional)
+
+Una tabla nueva (`user_profile`) y un trigger (`check_user_profile`), en `20261025100000_perfil_personal`. Nivel de ejercicio, dieta, gustos, disgustos y productos concretos que no gustan.
+**Todo es opcional**, y se trata con el cuidado de un dato de salud: una dieta o lo que no se tolera rozan la salud y las creencias, y cuánto se mueve alguien no es asunto de nadie más.
+
+**Flujo:** la persona acepta un aviso («Aceptar y rellenar») → una fila propia con su permiso (`consent_version`) → rellena lo que quiere → la app lo lee de esa fila. **Hoy nada recomienda con
+él**: se guarda para cuando algo lo haga, y el aviso lo dice.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **I**nfo disclosure | Otra persona —de la misma nevera compartida o no— lee el perfil | RLS por `user_id` en select, insert, update y delete; permisos por columna; `anon` y `service_role` sin ningún privilegio sobre la tabla | `perfil_personal_test.sql` (quien no es la dueña no ve, no inserta, no actualiza y no borra; `anon` y `service_role` sin acceso) |
+| **I**nfo disclosure | Una función SECURITY DEFINER, una vista o la Edge Function lo leen y un fallo suyo lo saca | Ninguna lo hace. **Cuando la asistente lo use hará falta un permiso PROPIO para mandarlo al proveedor del modelo**: tener el perfil guardado no es permiso para enviarlo | `perfil_personal_test.sql` (busca el nombre de la tabla en el código de todas las funciones; ninguna vista ni política de otra tabla depende de ella) |
+| **I**nfo disclosure | Se guarda sin consentimiento | El trigger no deja guardar nada que no esté vacío sin `consent_version` (P0001, pista `consentimiento_perfil`); la fecha del permiso la pone el servidor y no se puede escribir; el permiso es PROPIO, distinto del de salud | `perfil_personal_test.sql`, `perfil.test.ts` |
+| **I**nfo disclosure | No se puede retirar el permiso ni borrar | La persona borra su fila (retirar el permiso es borrar); la RLS solo deja la suya; al borrar la cuenta se va con ella (`on delete cascade`) | `perfil_personal_test.sql` |
+| **I**nfo disclosure | El perfil sale en un mensaje de error (PostgREST copia la fila fallida en `details`), en un registro, en una URL o en el disco | `api/perfil.ts` quita `details` antes de que el error llegue a `describeDbError`; no se escribe en ningún `console.*`, URL, ruta ni almacenamiento; la caché es memoria y se vacía al cambiar de persona | revisión del código; **sin test automático** del «no sale» (pendiente) |
+| **T**ampering | Valores que no son de las listas, o enormes | CHECK de listas cerradas con tope; una cosa no puede estar en «me gusta» y «no me gusta» a la vez; el trigger deja las listas sin repetidos y ordenadas | `perfil_personal_test.sql` |
+| **T**ampering / **E**levation | **Texto libre con instrucciones** (los «productos concretos» pueden acabar algún día en una petición a un modelo): marcado, llaves, comillas inversas, caracteres de control, de formato (dirección, ancho cero) o las «etiquetas» U+E0000 que no se ven | El trigger rechaza todo eso (22023, «Escribe solo el nombre del producto, de 2 a 40 caracteres.»), recorta, quita repetidos sin distinguir mayúsculas y limita a 10; la app aplica la misma regla antes de mandar (`limpiarProducto`) y vuelve a limpiar lo que lee (`leerPerfil`). **Lo libre se trata siempre como dato, nunca como instrucción** | `perfil_personal_test.sql` (las entradas hostiles: marcado, llaves, comillas inversas, control, dirección, ancho cero y etiquetas), `perfil.test.ts` (incluye el BOM, que el `\s` de JavaScript se comía) |
+| **E**levation | Reescribir la identidad de la fila (`user_id`) o escribir la de otra persona | Sin permiso de UPDATE sobre `user_id`; la RLS comprueba `user_id = auth.uid()` en el INSERT y en el UPDATE; la app hace UPDATE y luego INSERT, no `upsert` | `perfil_personal_test.sql` (42501) |
+| **I**nfo disclosure | Un perfil de antes del permiso (no hay: la tabla es nueva), o de una versión vieja del aviso, se sigue usando | `perfilEfectivo`: sin permiso vigente no se usa nada. Solo lo comprueba el cliente (el servidor exige que haya versión, no cuál) | `perfil.test.ts` |
+
+**Lo que no cubre:** no hay opciones religiosas (halal, kosher) a propósito, porque serían otra categoría especial. Nada recomienda con el perfil todavía, así que no hay riesgo de que una recomendación lo
+filtre; ese riesgo nace cuando se use. Nada se ha probado en un móvil real.
+
 ## 10 · El chat de Opsi: la asistente (`opsi-chat`)
 
 Una Edge Function (`supabase/functions/opsi-chat`, lógica en `_shared/chat.ts`, `herramientas.ts`, `modelo.ts` y `saneo.ts`), la tabla `chat_usage` y la función `use_chat_quota` (migración
