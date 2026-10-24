@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **17 ficheros pgTAP, 669 tests** contra pgTAP real · `db:check`: **881 comprobaciones** en PGlite · `test:app`: **174**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **17 ficheros pgTAP, 669 tests** contra pgTAP real · `db:check`: **881 comprobaciones** en PGlite · `test:app`: **180**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1132,6 +1132,26 @@ saltarse la renovación, pero solo se perjudica a sí mismo.
 **Lo que NO está hecho** (sigue en PENDIENTES, 🟠): el aviso de privacidad completo (hay un **borrador con huecos** en `docs/PRIVACIDAD.md`; el responsable, el contacto y la
 base legal los pone el dueño del proyecto y conviene que los revise alguien que sepa de derecho), **exportar** los datos, **borrar la cuenta desde la app** y la
 política de retención.
+
+### D-47 · El margen de arriba del escáner lo pone un solo sitio · 2026-10-19
+
+Los botones de cerrar y de la linterna del escáner **volvieron a quedar bajo el notch** en el móvil del usuario (era el arreglo de D-41). **No se ha podido
+reproducir ni ver en un móvil con recorte**: lo que sigue es la causa más probable y el arreglo que la hace imposible, no una causa confirmada.
+
+**La causa probable.** El código calculaba el margen como «lo que falta para llegar a un mínimo» (`max(0, mínimo − insets.top) + 16`) y dejaba además que un
+`SafeAreaView` aplicara el área segura de arriba. Esas dos cuentas solo cuadran si el `SafeAreaView` y el gancho `useSafeAreaInsets` dan el MISMO valor. Dentro de
+un modal a pantalla completa pueden no darlo: si el gancho da 59 (isla dinámica) y el `SafeAreaView` mide 0, el margen sale `0 + max(0, 47 − 59) + 16 = 16` y la
+barra queda pegada al recorte. El arreglo anterior cubría el caso «los dos dan 0», no este.
+
+**El arreglo.** El margen de arriba lo calcula **un solo sitio** (`shared/lib/margen.ts`, función pura con 6 tests): el MAYOR entre el área segura y un mínimo por
+plataforma (iOS 47; Android, la barra de estado con un suelo de 32 por los recortes altos; web, solo el área segura). No se suma ni se resta: se elige el mayor. Y el
+`SafeAreaView` del escáner ya no aplica el borde de arriba (`edges={['left', 'right', 'bottom']}`), de modo que no puede contarlo dos veces ni medirlo distinto. Pasarse
+un poco por arriba es barato; quedarse corto deja un botón inalcanzable.
+
+**Sin confirmar:** que en el móvil de la persona los botones ya se toquen bien. Si vuelve a pasar, **hace falta saber en qué móvil** (modelo y sistema) y si es el escáner u
+otra pantalla, porque el margen solo se ha reescrito en el escáner.
+
+**«Mantener pulsado el − o el +».** El usuario lo ha probado en su móvil: repite y **se deja como está**. Cerrado en PENDIENTES.
 
 ### D-48 · Premium en widgets, pantalla base del chat y avisos al abrir la app · 2026-10-19
 
@@ -2443,6 +2463,15 @@ sigue intacta); y una lista **de antes del permiso** (el inventario avisa y Ajus
 **Se aprendió:** (1) el trigger de una tabla se dispara ANTES de las comprobaciones CHECK y de la RLS, así que los tests que esperaban un 23505 o un 23514 sobre una fila
 con lista no vacía tuvieron que llevar ya el permiso: el orden de los disparos decide qué error se ve. (2) Un test que cuenta filas «de la tabla» falla contra la base local
 con datos reales: se acota a los ids de la prueba.
+
+### 2026-10-19 (sesión 40) · El notch del escáner, otra vez
+
+**Hecho** ([D-47](#d-47--el-margen-de-arriba-del-escáner-lo-pone-un-solo-sitio--2026-10-19)): el margen de arriba del escáner lo calcula un solo sitio y el `SafeAreaView` ya no
+aplica el borde de arriba. PENDIENTES al día (lo de mantener pulsado el − y el +, cerrado).
+
+**Verificado aquí:** `tsc` y `eslint` limpios; `test:app` **131** (6 nuevos, del margen). **Sin verificar:** en un móvil con recorte, que es donde falló.
+
+**Se aprendió:** un margen calculado como «lo que falta para un mínimo» depende de que dos mediciones coincidan; elegir el mayor de dos valores no depende de nada.
 
 ### 2026-10-19 (sesión 41) · Premium en widgets, el chat base y los avisos
 
