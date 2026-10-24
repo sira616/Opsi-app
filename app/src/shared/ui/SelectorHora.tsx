@@ -6,6 +6,7 @@ import {
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ScrollViewInstance,
 } from 'react-native';
 
 import { fonts, makeStyles, radius, tabular } from '@/shared/theme/tokens';
@@ -77,7 +78,7 @@ function Rueda({
   onSeleccionar: (indice: number) => void;
 }) {
   const styles = useStyles();
-  const ref = useRef<ScrollView>(null);
+  const ref = useRef<ScrollViewInstance>(null);
   const reposo = useRef<ReturnType<typeof setTimeout> | null>(null);
   // El número que está bajo el marco AHORA, mientras se arrastra. Es lo que pinta
   // grande; lo que se guarda (`seleccionado`) solo cambia cuando la rueda se para.

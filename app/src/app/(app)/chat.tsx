@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -52,7 +53,7 @@ export default function Chat() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [texto, setTexto] = useState(() => borradorDeRuta(params.mensaje));
   const [respondiendo, setRespondiendo] = useState(false);
-  const lista = useRef<ScrollView>(null);
+  const lista = useRef<ScrollViewInstance>(null);
   const contador = useRef(0);
   const nuevoId = () => String(++contador.current);
 
