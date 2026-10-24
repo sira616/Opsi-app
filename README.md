@@ -225,10 +225,10 @@ salga a las tiendas. Vive en `app/app.json`, que es de donde la lee la pantalla 
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 669 tests pgTAP (17 ficheros) contra Supabase local; 881 comprobaciones sin Docker
-(`npm run db:check`); 11 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 95 tests de la
+**Probado:** 691 tests pgTAP (18 ficheros) contra Supabase local; 907 comprobaciones sin Docker
+(`npm run db:check`); 17 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 133 tests de la
 lógica de la función de búsqueda (`npm run test:funciones`), 22 contra el runtime de Edge Functions de
-verdad (`npm run fn:check`) y 121 de la lógica de la app (`npm run test:app`). La función, además,
+verdad (`npm run fn:check`) y 182 de la lógica de la app (`npm run test:app`). La función, además,
 **contra Open Food Facts de verdad** (sin los campos de alérgenos e ingredientes, que solo se probaron
 sin red). La app, en el navegador con dos cuentas; los avisos de alérgenos y «congélalo o úsalo», solo
 con datos de prueba y sin sesión. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.

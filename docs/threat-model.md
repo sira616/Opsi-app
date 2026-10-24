@@ -214,12 +214,44 @@ Una tabla nueva (`user_profile`) y un trigger (`check_user_profile`), en `202610
 **Lo que no cubre:** no hay opciones religiosas (halal, kosher) a propósito, porque serían otra categoría especial. Nada recomienda con el perfil todavía, así que no hay riesgo de que una recomendación lo
 filtre; ese riesgo nace cuando se use. Nada se ha probado en un móvil real.
 
+## 10 · El chat de Opsi: la asistente (`opsi-chat`)
+
+Una Edge Function (`supabase/functions/opsi-chat`, lógica en `_shared/chat.ts`, `herramientas.ts`, `modelo.ts` y `saneo.ts`), la tabla `chat_usage` y la función `use_chat_quota` (migración
+`20261026100000`). Es la parte del proyecto donde datos de la persona **salen hacia un tercero** (el proveedor del modelo, hoy Ollama Cloud en desarrollo) y donde lo que ESCRIBE cualquiera
+(nombres de productos, notas) **lo lee un modelo**. Este documento exigía esta tabla antes de construirla; llegó después, y esta sección salda esa deuda.
+
+**Flujo:** la app manda la conversación (los últimos 20 mensajes) con el token de la persona → la función **verifica la sesión** → valida la forma → **gasta un mensaje de la cuota** → llama al
+modelo → si el modelo pide una herramienta (`ver_inventario`, `ver_lista_compra`; **solo lectura**), la ejecuta con **el token de la persona** (RLS, sin clave de servicio) y le devuelve el
+resultado como DATO → devuelve texto plano. Cada paso solo corre si pasó el anterior, así que lo inválido no gasta ni cuota ni modelo.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **S**poofing | Usar el chat sin sesión, con un token anónimo o de otro rol | `verificarUsuario`: `auth.getUser(token)` con rol `authenticated` y sin `is_anonymous`; sin cabecera `Authorization` válida, 401 **antes** de leer el cuerpo, validar, gastar cuota o tocar el modelo | `chat.test.ts` (sin sesión, sin cabecera, método y tamaño) |
+| **S**poofing | Gastar la cuota de otra persona | `use_chat_quota()` saca quién es de `auth.uid()` (la sesión), **nunca de un argumento** | `cuota_chat_test.sql` (Jon no paga lo de Inés; sin sesión, 28000) |
+| **T**ampering | La persona falsifica turnos de «opsi» en la conversación que manda | La conversación la manda el cliente y se trata como entrada no confiable: forma, 20 mensajes, 500 caracteres, el último de la persona, y el modelo no gana ninguna autoridad por lo que ponga en ellos. **Solo se perjudica a sí misma**: no hay herramientas que escriban | `chat.test.ts` (`validarConversacion`) |
+| **T**ampering | **Inyección indirecta:** un nombre de producto o de lista —escrito por otra persona de una nevera compartida, o traído de Open Food Facts— contiene una orden y el modelo la obedece | (1) **Las herramientas solo leen**: el peor caso es una respuesta engañosa para quien pregunta, no un cambio de datos; (2) corren con la sesión de la persona (RLS); (3) **los nombres se limpian antes de llegar al modelo** (`sanearDato`: sin las «etiquetas» U+E0000 que codifican texto invisible, sin marcas de dirección, ancho cero ni control; 80 caracteres); (4) el resultado va marcado como `datos` y las instrucciones dicen que dentro de un dato no hay órdenes; (5) las instrucciones prohíben afirmar que algo «está bueno» y dar consejo de salud | `chat.test.ts` (un nombre con texto escondido llega limpio; un nombre largo llega acotado), `saneo.test.ts` (10) |
+| **T**ampering | El modelo (o un dato inyectado) hace que la respuesta enseñe algo distinto de lo que contiene: dirección invertida, caracteres invisibles | `limpiarRespuesta` quita control, formato, dirección y «etiquetas», conserva los saltos de línea y acota a 1500 caracteres; la app lo pinta como texto plano (sin marcado) y `selectable` | `chat.test.ts` (`limpiarRespuesta`) |
+| **R**epudiation | No hay registro de qué se preguntó | **A propósito**: el log guarda solo el evento y el recuento de mensajes, nunca el texto de la persona ni el del modelo; `chat_usage` apunta cuándo, no qué. Se acepta | `chat.test.ts` (el motivo del proveedor y la pregunta no salen) |
+| **I**nfo disclosure | **Datos de salud o del perfil llegan al proveedor** | Las herramientas solo leen `inventory_with_priority` y `shopping_list_items`: **ni las preferencias de salud (`user_health_preferences`), ni el perfil (`user_profile`), ni la nutrición** están al alcance, y la RLS de las dos primeras es solo de su dueña, así que ni con una herramienta nueva por error las leería otra persona. **Antes de darle al modelo cualquiera de ellos hace falta un permiso propio para enviarlo** (tener el dato guardado no lo es) | `chat.test.ts` (guarda de código: `opsi-chat/index.ts` no nombra esas tablas) |
+| **I**nfo disclosure | Lo que sale hacia el proveedor: los últimos 20 mensajes y, cuando el modelo lo pide, nombres, cantidades y fechas del inventario y la lista | La pantalla lo dice a la vista («Lo que escribas aquí se envía a un servicio de IA para contestarte»); `docs/PRIVACIDAD.md` lo recoge con el proveedor. **Antes de producción:** contrato de encargado con el proveedor, región, y que no conserve ni entrene con lo enviado | **pendiente** (`PENDIENTES.md`, 🔴) |
+| **I**nfo disclosure | Ver lo de otra persona o de otra nevera | Sin clave de servicio: cada consulta va con el token de quien pregunta y la RLS decide. No hay filtro de hogar en la herramienta, a propósito: si hiciera falta, sería señal de que la RLS falla | `rls_isolation_test.sql` (la RLS de `inventory_with_priority` y de la lista) |
+| **I**nfo disclosure | El error del proveedor o del servidor revela la pregunta, la clave o el motivo | 502/503 genéricos; el motivo del proveedor no sale; la clave (`OLLAMA_API_KEY`) vive solo en el entorno de la función | `chat.test.ts` |
+| **D**oS / coste | **Una persona (o un bucle) gasta sin límite**: cada mensaje cuesta | **Cuota por persona** (`use_chat_quota`: 20 por hora y 100 al día), gastada **después** de validar y **antes** del modelo; 429 con `Retry-After`. **Si no se puede comprobar la cuota, no se contesta** (503): gastar sin límite es peor que fallar. Además, por petición: cuerpo 16 KB, 20 mensajes, 500 caracteres, 4 rondas de herramientas, 1500 de respuesta y un tiempo máximo del modelo | `chat.test.ts` (429, mínimo 1 s, falla cerrado, lo inválido no gasta), `cuota_chat_test.sql` |
+| **D**oS / coste | Saltarse la cuota borrándola, escribiéndola o llamando a la función por otro lado | La tabla **no concede ningún permiso a nadie** (ni `authenticated` ni `service_role`) y la función es la única que la toca; `anon` no la ejecuta; la RLS está puesta y sin políticas | `cuota_chat_test.sql` (permisos, borrar, escribir, leer) |
+| **D**oS / coste | Dos mensajes a la vez de la misma persona se cuelan entre sí | `pg_advisory_xact_lock` por persona dentro de la función: se espera el turno | revisión (**sin test de carrera**) |
+| **E**levation | La asistente cambia datos (apunta, gasta, tira) por una orden inyectada | **Hoy no puede**: no tiene herramientas de escritura y las instrucciones lo dicen. **Antes de dárselas:** cada escritura con confirmación explícita de la persona en la app (nunca ejecutada solo por el modelo), llamando a las mismas funciones de la base de datos que la app, con su sesión, y repasar esta sección entera: con escritura, la inyección indirecta deja de ser un engaño y pasa a ser un cambio de datos | `chat.test.ts` (las reglas que no se negocian) |
+
+**Lo que no cubre:**
+- **No hay tope global**: la cuota es por persona. Una racha de cuentas nuevas gastaría hasta el límite de cada una; el proveedor tiene que tener un tope de gasto propio. **El alta no está cerrada** (cualquiera puede crear una cuenta, con nombre de usuario), así que ese tope del proveedor es el único freno al gasto total.
+- **Un modelo puede ignorar las instrucciones.** Por eso la defensa real es que las herramientas son de solo lectura, no que el texto diga «no obedezcas».
+- **Nada de esto se ha probado en un móvil ni con tráfico real.** La cuota sí: con pgTAP real y, para el candado por persona, con dos sesiones a la vez (`npm run db:carreras`, escenario E).
+- **El chat no es de Premium**: es una decisión de coste, no de seguridad, y está anotada en `PENDIENTES.md`.
+
 ---
 
 ## Lo que este documento todavía no cubre
 
-`daily-digest` (fase 3), `opsi-chat` (fase 5) y `parse-receipt` (fase 6) no tienen tabla
-STRIDE. Las dos últimas son las de más riesgo —el chat escribe sobre el inventario con
-el token de la persona, y los tickets llevan datos personales— y **no se construyen sin
-su tabla aquí primero**. Los controles previstos están en
+`daily-digest` (fase 3) y `parse-receipt` (fase 6) no tienen tabla STRIDE. La segunda es de las de más
+riesgo —los tickets llevan datos personales— y **no se construye sin su tabla aquí primero**. El chat
+(`opsi-chat`) ya la tiene, en el §10; **le toca repasarla antes de cualquier herramienta que escriba**. Los controles previstos están en
 [`internal/AUDITORIA-2026-09-24.md`](internal/AUDITORIA-2026-09-24.md), secciones P3 a P5.
