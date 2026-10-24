@@ -17,6 +17,8 @@ supabase/.env
 supabase/functions/**/.env
 
 # --- Expo / React Native ---
+# `.expo/` a secas: también aparece en la raíz si se arranca Expo desde allí.
+.expo/
 app/.expo/
 app/dist/
 app/web-build/

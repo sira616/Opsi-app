@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-24** (sesión 44)
+> Última actualización: **2026-10-24** (sesión 45)
 
 ---
 
@@ -62,7 +62,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
 | Tests | **19 ficheros pgTAP, 899 tests** contra pgTAP real · `db:check`: **1119 comprobaciones** en PGlite · `test:app`: **256**, la lógica de calendario, el destino de un producto, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **176** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
-| App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
+| App | Expo SDK 58 (React Native 0.88, React 19.3) · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
 ### Verificado vs. no verificado
@@ -1267,6 +1267,24 @@ exactamente dos. Lo que llega al proveedor se decide a propósito, no por descui
 
 **Lo que NO se ha hecho:** el chat sigue sin ser de Premium (decisión tuya); no hay **tope global** (el alta no está cerrada: ese freno es el del proveedor); el contrato de encargado con el proveedor,
 la región y la retención siguen pendientes y son un 🔴 antes de producción; y no hay herramientas de escritura.
+
+### D-52 · Subida a Expo SDK 58 · 2026-10-24
+
+**Por qué:** Expo Go del iPhone se actualizó a SDK 58 y el proyecto estaba en el 57. En iOS solo se puede instalar la última versión de Expo Go, así que no había forma de abrir la app en el móvil sin subir de SDK.
+
+**Qué cambia:** `expo` 58.0.19, React Native 0.86 → **0.88**, React 19.2 → **19.3**, y todos los módulos de Expo a su 58 (`expo install --fix`). `expo-doctor`: **20/20**. Node: SDK 58 pide 22.13+/24.3+/26; la CI usa 24 y la máquina de desarrollo 26.
+
+**Lo que hubo que tocar:**
+- **Tipos de React Native 0.88** (API estricta): `useRef<ScrollView>` ya no vale como tipo de la referencia; ahora es `useRef<ScrollViewInstance>` (pantalla del chat y `SelectorHora`).
+- **`app.json`:** fuera `android.edgeToEdgeEnabled` y `newArchEnabled` (en SDK 58 ya no existen: el modo de borde a borde y la nueva arquitectura son siempre así) y el `splash` de primer nivel pasa a ser opciones del plugin `expo-splash-screen`, con los mismos valores. `expo install` añadió también los plugins `expo-font`, `expo-splash-screen` y `expo-status-bar`.
+- **`.gitignore`:** `.expo/` también en la raíz (`expo-doctor` lo pedía).
+- No hizo falta tocar nada de lo que SDK 58 elimina (`InteractionManager`, `Modal animated`, props de `StatusBar`, imports de `react-native/Libraries`): la app no los usa.
+
+**Se aprendió (cuesta horas):** al subir de SDK **sobre un `node_modules` y un lockfile ya existentes**, npm 11 deja `expo-router` y `expo-constants` **anidados** en `app/node_modules` y duplicados, y `expo start` se cae con «Cannot find module 'expo-router/internal/testing'» (el CLI de Expo lo busca en la raíz). `npm dedupe` falla con ERESOLVE, y `--package-lock-only` en el mismo directorio solo vuelve a escribir el árbol anidado que ya hay. Lo que funciona: **resolver desde cero en una carpeta aparte sin `node_modules`** (copiar solo `package.json` y `app/package.json`), usar ese lockfile y reinstalar con `npm ci`. Cuesta unos 3 minutos de resolución y 10 de instalación en esta máquina. Y **con el disco lleno** (ENOSPC) el `npm install` puede dejar `node_modules` a medias: se reinstala entero.
+
+**Qué se comprobó:** `tsc`, `eslint`, `test:app` 256, `test:funciones` 176, `db:check` 1119, `check:audit` (las dos exenciones vigentes) y el empaquetado de Metro para Android e iOS con Hermes (≈10 MB cada uno); el servidor de desarrollo arranca y sirve el paquete web.
+
+**Lo que NO se comprobó:** la app en un móvil con Expo Go SDK 58 ni los gestos y pantallas con React Native 0.88. Si se usa una *development build* (`expo-dev-client`), hay que **crear una nueva** tras la subida.
 
 ## 3. Convenciones
 
@@ -2608,3 +2626,11 @@ sin ella, la cuota falla y el chat falla cerrado (503).
 
 **Se aprendió:** una función en el `FROM` que no depende de ninguna columna (`generate_series(1,20) g, lateral f()`) se ejecuta UNA vez y se repite su resultado; para llamarla veinte veces hay que ponerla
 en la lista de columnas. El test «caben 20» pasaba por casualidad y el «el 21 no cabe» lo delató.
+
+### 2026-10-24 (sesión 45) · Subida a SDK 58
+
+**Hecho** ([D-52](#d-52--subida-a-expo-sdk-58--2026-10-24)): la app pasa de Expo SDK 57 a 58 (React Native 0.88) porque Expo Go del iPhone ya solo abre el 58. Dos arreglos de tipos, tres campos de `app.json` y un lockfile resuelto desde cero.
+
+**Verificado aquí:** `expo-doctor` 20/20, `tsc`, `eslint`, `test:app` **256**, `test:funciones` **176**, `db:check` **1119**, `check:audit`, empaquetado de Android e iOS.
+
+**Sin verificar:** la app en un móvil con Expo Go SDK 58.
