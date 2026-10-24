@@ -221,7 +221,7 @@ resultado como DATO → devuelve texto plano. Cada paso solo corre si pasó el a
 **Lo que no cubre:**
 - **No hay tope global**: la cuota es por persona. Una racha de cuentas nuevas gastaría hasta el límite de cada una; el proveedor tiene que tener un tope de gasto propio. **El alta no está cerrada** (cualquiera puede crear una cuenta, con nombre de usuario), así que ese tope del proveedor es el único freno al gasto total.
 - **Un modelo puede ignorar las instrucciones.** Por eso la defensa real es que las herramientas son de solo lectura, no que el texto diga «no obedezcas».
-- **Nada de esto se ha probado en un móvil ni con tráfico real**, y la cuota se ha probado con SQL, no con dos peticiones a la vez.
+- **Nada de esto se ha probado en un móvil ni con tráfico real.** La cuota sí: con pgTAP real y, para el candado por persona, con dos sesiones a la vez (`npm run db:carreras`, escenario E).
 - **El chat no es de Premium**: es una decisión de coste, no de seguridad, y está anotada en `PENDIENTES.md`.
 
 ---

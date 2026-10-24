@@ -51,6 +51,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"chat_usage": {
+                  Row: {
+                    "id": number,"used_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: never,"used_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "id"?: never,"used_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"household_icons": {
                   Row: {
                     "key": string,"label": string,"sort_order": number
@@ -823,6 +837,11 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"use_chat_quota":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "allowed": boolean,"wait_s": number
+            }[]
+                           },
 "use_quantity":
 { Args: { "p_amount": number,"p_item_id": string }; Returns: {
               "category": Database["public"]['Enums']["food_category"],
