@@ -20,6 +20,7 @@
 | **Cuenta:** nombre de usuario, contraseña (guardada cifrada, nunca en claro) y, si lo añades, un correo | Entrar y recuperar la cuenta | Solo tú |
 | **Tu nevera:** lo que guardas, cantidades, fechas, historial de cada cosa, listas de la compra | Decirte qué gastar primero | Tú y **las personas con las que compartes esa nevera** |
 | **Ajustes:** zona horaria, hora del resumen, color, listas por omisión | Que la app funcione a tu manera | Solo tú |
+| **Cuándo usas el chat** (solo la fecha y hora de cada mensaje, **nunca lo que escribes**) | Poner un límite de mensajes por persona, porque cada uno cuesta | Solo tú: nadie, ni tú, lo lee a mano; solo lo cuenta el servidor. Se borra a los dos días y con la cuenta |
 | **Alérgenos e intolerancias** que marcas (**dato de salud**) | Marcarte en tu nevera lo que lleve eso | **Solo tú**, nunca quien comparte nevera contigo |
 | **Códigos de barras** que escaneas | Buscar el producto | El código viaja a un servidor propio, que consulta Open Food Facts; no se manda nada tuyo |
 
