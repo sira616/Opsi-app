@@ -26,6 +26,7 @@ import { HojaAltaRapida, type Elegido } from '@/features/alta/HojaAltaRapida';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { esCodigoDeNoComida, normalizarGtin } from '@/shared/lib/gtin';
+import { margenSuperior } from '@/shared/lib/margen';
 import { tomarGuardado } from '@/shared/lib/ultimo-guardado';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -74,12 +75,13 @@ export default function Escanear() {
   const c = useTheme();
   const router = useRouter();
   // Lo que hay que bajar la barra de arriba para que quede por debajo del notch o de
-  // la isla. Se confía en el área segura, pero con un mínimo propio: dentro de un modal
-  // a pantalla completa algunos móviles dan 0 y los botones quedaban tapados. El mínimo
-  // es lo que mide una barra de estado (Android: la real; iPhone con recorte: ~47).
+  // la isla: el mayor entre el área segura y un mínimo por plataforma (ver
+  // `shared/lib/margen.ts`). El área segura de ARRIBA se aplica aquí y solo aquí: el
+  // `SafeAreaView` de abajo no la aplica, porque dentro de un modal a pantalla completa
+  // puede medirla distinta (0) de lo que da el gancho, y entonces los botones de cerrar y
+  // la linterna quedaban pegados al recorte y no se podían tocar.
   const insets = useSafeAreaInsets();
-  const minimoArriba = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 47;
-  const extraArriba = Math.max(0, minimoArriba - insets.top) + space.lg;
+  const margenArriba = margenSuperior(insets.top, Platform.OS, StatusBar.currentHeight);
   const { activa } = useNeveraActual();
   const [permiso, pedirPermiso] = useCameraPermissions();
 
@@ -221,11 +223,11 @@ export default function Escanear() {
         />
       ) : null}
 
-      <SafeAreaView style={[styles.capa, !verCamara && styles.capaSinCamara]}>
+      <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.capa, !verCamara && styles.capaSinCamara]}>
         {/* ── Barra superior ─────────────────────────────────────────── */}
         {/* Con holgura de sobra por arriba: en un móvil con notch o isla, los botones
             pegados al borde quedaban debajo del recorte y no se podían tocar. */}
-        <View style={[styles.barra, { paddingTop: extraArriba }]}>
+        <View style={[styles.barra, { paddingTop: margenArriba + space.md }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar el escáner"
