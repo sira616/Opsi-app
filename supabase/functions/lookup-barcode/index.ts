@@ -14,7 +14,10 @@
  *   · Lo que vuelve de OFF es entrada no confiable (lo edita cualquiera): se
  *     filtra aquí y se vuelve a filtrar en `upsert_global_product`.
  *   · La clave de servicio no sale de este fichero. Y no puede escribir tablas: solo
- *     ejecutar cinco funciones de la base de datos (privilegios_test.sql).
+ *     ejecutar seis funciones de la base de datos (privilegios_test.sql) y leer DOS
+ *     columnas de `product_nutrition` (si la ficha tiene su nutrición, no cuál es).
+ *   · La nutrición es de Opsi Premium: se guarda aquí pero NO se devuelve. La app la lee
+ *     por `nutrition_of_products`, que comprueba el plan.
  *
  * Variables de entorno:
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   las pone Supabase solo
@@ -25,7 +28,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 
-import { aProducto, manejar, type Dependencias, type FilaCatalogo } from '../_shared/lookup.ts';
+import { aFilaCatalogo, aProducto, manejar, type Dependencias, type FilaCatalogo } from '../_shared/lookup.ts';
 import { consultarOff, payloadDeOrigen, type ProductoOff } from '../_shared/off.ts';
 
 const url = Deno.env.get('SUPABASE_URL');
@@ -91,15 +94,21 @@ const dependencias: Dependencias = {
       .from('products')
       // Los datos de salud se piden por su nombre y no con `*`: `off_payload` no tiene
       // por qué viajar hasta aquí. `health_data_at` solo sirve para saber si constan.
+      // De la nutrición solo se pide la FECHA (es lo único que `service_role` puede leer
+      // de esa tabla): basta para saber si la ficha ya la tiene. OJO al desplegar: este embed
+      // está en el camino crítico del escáner, así que la migración `20261024100000_nutricion`
+      // tiene que estar aplicada ANTES que esta versión de la función; sin ella, todos los
+      // escaneos darían 500.
       .select(
         'id, barcode, name, brand, unit_family, net_quantity, image_url, updated_at, ' +
-          'allergens_tags, traces_tags, labels_tags, ingredients_text, health_data_at',
+          'allergens_tags, traces_tags, labels_tags, ingredients_text, health_data_at, ' +
+          'product_nutrition(nutrition_data_at)',
       )
       .eq('barcode', codigo)
       .is('household_id', null)
       .maybeSingle();
     if (error) throw error;
-    return data ? { ...aProducto(data), updated_at: String(data.updated_at) } : null;
+    return data ? aFilaCatalogo(data) : null;
   },
 
   async esFaltaReciente(codigo) {
@@ -135,6 +144,33 @@ const dependencias: Dependencias = {
     });
     if (error) throw error;
     return aProducto(data as Record<string, unknown>);
+  },
+
+  async guardarNutricion(productoId, nutricion) {
+    // La base de datos vuelve a validarlo todo y pone `nutrition_data_at`. Todos los
+    // parámetros se mandan, con null cuando OFF no da el dato: la función los exige. Si
+    // falla se lanza, y `manejar` lo registra y devuelve la ficha igualmente.
+    const { error } = await admin.rpc('upsert_product_nutrition', {
+      p_product_id: productoId,
+      p_nutriscore_grade: nutricion.nutriscoreGrade,
+      p_nova_group: nutricion.novaGroup,
+      p_basis: nutricion.basis,
+      p_energy_kcal: nutricion.energyKcal,
+      p_fat: nutricion.fat,
+      p_saturated_fat: nutricion.saturatedFat,
+      p_carbohydrates: nutricion.carbohydrates,
+      p_sugars: nutricion.sugars,
+      p_fiber: nutricion.fiber,
+      p_proteins: nutricion.proteins,
+      p_salt: nutricion.salt,
+      p_fat_level: nutricion.fatLevel,
+      p_saturated_fat_level: nutricion.saturatedFatLevel,
+      p_sugars_level: nutricion.sugarsLevel,
+      p_salt_level: nutricion.saltLevel,
+      p_serving_size: nutricion.servingSize,
+      p_additives_tags: nutricion.additivesTags,
+    });
+    if (error) throw error;
   },
 
   async registrarFalta(codigo) {

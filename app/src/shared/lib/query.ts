@@ -143,6 +143,25 @@ export const queryKeys = {
    * bajo la misma clave se pisan.
    */
   ingredientes: (id: string) => ['catalogo', 'ingredientes', id] as const,
+
+  // ── Nutrición (premium) ─────────────────────────────────────────────────
+
+  /**
+   * La nutrición que lee la app, de Open Food Facts: Nutri-Score, NOVA, valores por 100 g,
+   * niveles, ración y aditivos. Solo vive en esta caché en memoria, que `session.tsx` vacía
+   * al cambiar de persona: no se copia a AsyncStorage ni a ningún otro disco.
+   *
+   * Dos claves, y a propósito: la de la LISTA solo lee, y la del DETALLE puede además renovar
+   * una ficha antigua en Open Food Facts (gasta cuota). Con la misma clave, las dos funciones
+   * se pisarían la caché. Las dos cuelgan de `nutricion` y renovar una ficha invalida la lista.
+   */
+  nutricion: ['nutricion'] as const,
+  /** La nutrición de varios productos a la vez (la lista). Los ids van ordenados. */
+  nutricionDe: (ids: readonly string[]) => ['nutricion', 'lista', ...ids] as const,
+  /** Prefijo de todas las listas: lo que se invalida cuando el detalle renueva una ficha. */
+  nutricionListas: ['nutricion', 'lista'] as const,
+  /** El detalle de un producto, con su renovación si la ficha es antigua. */
+  nutricionDeProducto: (id: string) => ['nutricion', 'producto', id] as const,
 };
 
 export const queryClient = new QueryClient({

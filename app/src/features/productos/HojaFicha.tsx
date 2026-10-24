@@ -7,6 +7,7 @@ import type { Nevera } from '@/api/household';
 import type { ProductoConocido } from '@/api/premium';
 import { CargandoListas, ElegirListas, useListasElegidas } from '@/features/lista/ElegirListas';
 import { ElegirNevera } from '@/features/neveras/ElegirNevera';
+import { BotonNutricion, ContenidoNutricion } from '@/features/nutricion/ContenidoNutricion';
 import { BotonIngredientes, ContenidoIngredientes } from '@/features/salud/Ingredientes';
 import { etiquetaCategoria } from '@/shared/lib/categorias';
 import { IconoCategoria } from '@/shared/lib/categorias-iconos';
@@ -47,7 +48,9 @@ export function describirOrigen(p: ProductoConocido): string {
  * más de una, se elige adónde. Para apuntarlo la hoja pasa a elegir la lista (o las listas)
  * sin abrir otra encima: en iOS dos hojas a la vez no se presentan. Con los ingredientes
  * pasa lo mismo: se enseñan en esta misma hoja, y solo de un producto de Open Food Facts
- * (en uno escrito a mano no hay nada que consultar y no se pinta ningún hueco).
+ * (en uno escrito a mano no hay nada que consultar y no se pinta ningún hueco). Y con la
+ * nutrición también: «Ver nutrición» sustituye el contenido, con su «Atrás», en vez de abrir
+ * otra hoja encima.
  */
 export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar, onClose }: Props) {
   const styles = useStyles();
@@ -57,7 +60,8 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
   const [eligiendo, setEligiendo] = useState(false);
   const [apuntando, setApuntando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [verIngredientes, setVerIngredientes] = useState(false);
+  // Qué se ve dentro de la misma hoja: la ficha, sus ingredientes o su nutrición.
+  const [vista, setVista] = useState<'ficha' | 'ingredientes' | 'nutricion'>('ficha');
 
   const variasListas = listas.length > 1;
   const variasNeveras = neveras.length > 1;
@@ -77,11 +81,20 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
   // El producto es de Open Food Facts y tiene código: lo único que se puede consultar.
   const productoOff = p.productoId !== null && p.origen === 'openfoodfacts' && p.codigo !== null ? p.productoId : null;
 
-  if (verIngredientes && productoOff) {
+  if (vista === 'ingredientes' && productoOff) {
     return (
       <HojaInferior visible onClose={onClose} titulo="Ingredientes">
         <ContenidoIngredientes productoId={productoOff} />
-        <Button label="Atrás" variant="quiet" onPress={() => setVerIngredientes(false)} />
+        <Button label="Atrás" variant="quiet" onPress={() => setVista('ficha')} />
+      </HojaInferior>
+    );
+  }
+
+  if (vista === 'nutricion' && productoOff) {
+    return (
+      <HojaInferior visible onClose={onClose} titulo="Nutrición">
+        <ContenidoNutricion productoId={productoOff} />
+        <Button label="Atrás" variant="quiet" onPress={() => setVista('ficha')} />
       </HojaInferior>
     );
   }
@@ -144,7 +157,12 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
             ) : null}
           </View>
 
-          {productoOff ? <BotonIngredientes onPress={() => setVerIngredientes(true)} /> : null}
+          {productoOff ? (
+            <View style={styles.accesos}>
+              <BotonIngredientes onPress={() => setVista('ingredientes')} />
+              <BotonNutricion onPress={() => setVista('nutricion')} />
+            </View>
+          ) : null}
 
           <ElegirNevera neveras={neveras} valor={destino} onValor={setDestino} />
 
@@ -213,4 +231,5 @@ const useStyles = makeStyles((c) => ({
   codigo: { ...tabular, letterSpacing: 0.5 },
   pasillo: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 },
   botones: { gap: space.xs },
+  accesos: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.xl },
 }));

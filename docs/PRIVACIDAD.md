@@ -23,7 +23,7 @@
 | **Cuándo usas el chat** (solo la fecha y hora de cada mensaje, **nunca lo que escribes**) | Poner un límite de mensajes por persona, porque cada uno cuesta | Solo tú: nadie, ni tú, lo lee a mano; solo lo cuenta el servidor. Se borra a los dos días y con la cuenta |
 | **Alérgenos e intolerancias** que marcas (**dato de salud**) | Marcarte en tu nevera lo que lleve eso | **Solo tú**, nunca quien comparte nevera contigo |
 | **Tu perfil** (opcional): cuánto te mueves, cómo comes, lo que te gusta y lo que no, y productos concretos que no te gustan (**dato sensible**) | Que las recomendaciones se parezcan a ti. **Hoy no se usa para recomendar nada**: se guarda para cuando se use | **Solo tú**, nunca quien comparte nevera contigo. **No sale a ningún proveedor de IA**: hará falta un permiso propio para eso |
-| **Códigos de barras** que escaneas | Buscar el producto | El código viaja a un servidor propio, que consulta Open Food Facts; no se manda nada tuyo |
+| **Códigos de barras** que escaneas (o de un producto cuya nutrición abres) | Buscar el producto y traer sus datos | El código viaja a un servidor propio, que consulta Open Food Facts; no se manda nada tuyo |
 
 El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
 
@@ -40,7 +40,7 @@ El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
 | Quién | Qué recibe | Notas |
 |---|---|---|
 | **Supabase** (alojamiento de la base de datos y la cuenta) | Todo lo anterior, cifrado en tránsito | Región prevista: UE. `[Confirmar región y contrato de encargado]` |
-| **Open Food Facts** | Solo el código de barras que escaneas, desde el servidor | No recibe datos personales. Sus datos son abiertos (ODbL) |
+| **Open Food Facts** | Solo el código de barras que escaneas o de un producto cuya nutrición abres, desde el servidor | No recibe datos personales. Sus datos son abiertos (ODbL) |
 | **Proveedor de IA** (la asistente, solo en desarrollo) | Los mensajes de la conversación abierta (los últimos 20) y, cuando el modelo lo pide, los resultados de mirar tu inventario y tu lista de la compra: nombres, cantidades y fechas. No se envían alérgenos, ingredientes ni tu correo | Hoy: Ollama Cloud, solo con datos de prueba. **`[Pendiente: proveedor, país y contrato del modelo de producción (Q4) antes de abrirla a personas reales]`** |
 
 Los datos de salud **no** salen de tu cuenta: ninguna función del servidor los lee, y el cruce con los productos se hace en tu móvil.

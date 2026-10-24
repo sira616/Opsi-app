@@ -3,15 +3,17 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
+  aFilaCatalogo,
   aProducto,
   DIAS_CADUCIDAD_CACHE,
   manejar,
   MAX_CUERPO_PETICION,
+  tieneNutricion,
   type Dependencias,
   type FilaCatalogo,
   type ProductoCatalogo,
 } from './lookup.ts';
-import type { ProductoOff, ResultadoOff } from './off.ts';
+import type { NutricionOff, ProductoOff, ResultadoOff } from './off.ts';
 
 const CODIGO = '5449000000996';
 // Un relleno: solo importa que cumpla el formato de un Bearer (10 a 4096 caracteres
@@ -34,6 +36,7 @@ const FILA: FilaCatalogo = {
   ingredients_text: 'Agua, azúcar y leche.',
   health_data: true,
   updated_at: new Date(AHORA - 86_400_000).toISOString(),
+  nutrition_data: true,
 };
 
 /** Una ficha de ANTES de los datos de salud: la base de datos la sirve con todo NULL. */
@@ -44,6 +47,50 @@ const FILA_SIN_SALUD: FilaCatalogo = {
   labels_tags: [],
   ingredients_text: null,
   health_data: false,
+};
+
+/** Una ficha con salud pero SIN su fila de nutrición (de antes de la función, o a medias). */
+const FILA_SIN_NUTRICION: FilaCatalogo = { ...FILA, nutrition_data: false };
+
+const NUTRICION: NutricionOff = {
+  nutriscoreGrade: 'e',
+  novaGroup: 4,
+  basis: 'ml',
+  energyKcal: 42,
+  fat: 0,
+  saturatedFat: 0,
+  carbohydrates: 10.6,
+  sugars: 10.6,
+  fiber: null,
+  proteins: 0,
+  salt: 0.01,
+  fatLevel: 'low',
+  saturatedFatLevel: 'low',
+  sugarsLevel: 'high',
+  saltLevel: 'low',
+  servingSize: '330 ml',
+  additivesTags: ['en:e150d', 'en:e338'],
+};
+
+/** Open Food Facts conoce el producto pero no declara ninguna nutrición. */
+const NUTRICION_SIN_DATOS: NutricionOff = {
+  nutriscoreGrade: null,
+  novaGroup: null,
+  basis: null,
+  energyKcal: null,
+  fat: null,
+  saturatedFat: null,
+  carbohydrates: null,
+  sugars: null,
+  fiber: null,
+  proteins: null,
+  salt: null,
+  fatLevel: null,
+  saturatedFatLevel: null,
+  sugarsLevel: null,
+  saltLevel: null,
+  servingSize: null,
+  additivesTags: null,
 };
 
 const PRODUCTO_OFF: ProductoOff = {
@@ -57,10 +104,19 @@ const PRODUCTO_OFF: ProductoOff = {
   tracesTags: [],
   labelsTags: ['en:no-lactose'],
   ingredientsText: 'Agua, azúcar y leche.',
+  nutrition: NUTRICION,
 };
 
 type Llamadas = Record<
-  'verificarUsuario' | 'consumirCuota' | 'buscarEnCatalogo' | 'esFaltaReciente' | 'reservarHuecoOff' | 'consultarOff' | 'guardar' | 'registrarFalta',
+  | 'verificarUsuario'
+  | 'consumirCuota'
+  | 'buscarEnCatalogo'
+  | 'esFaltaReciente'
+  | 'reservarHuecoOff'
+  | 'consultarOff'
+  | 'guardar'
+  | 'guardarNutricion'
+  | 'registrarFalta',
   number
 >;
 
@@ -74,6 +130,7 @@ function montar(sobre: Partial<Dependencias> = {}) {
     reservarHuecoOff: 0,
     consultarOff: 0,
     guardar: 0,
+    guardarNutricion: 0,
     registrarFalta: 0,
   };
   const logs: Record<string, unknown>[] = [];
@@ -118,6 +175,9 @@ function montar(sobre: Partial<Dependencias> = {}) {
         ingredients_text: PRODUCTO_OFF.ingredientsText,
         health_data: true,
       };
+    },
+    async guardarNutricion() {
+      llamadas.guardarNutricion++;
     },
     async registrarFalta() {
       llamadas.registrarFalta++;
@@ -390,13 +450,27 @@ test('está en el catálogo: se sirve de la caché y NO se llama a OFF', async (
   assert.equal(llamadas.esFaltaReciente, 0);
 });
 
-test('la respuesta lleva solo los campos públicos: ni updated_at ni el payload', async () => {
+test('la respuesta lleva solo los campos públicos: ni updated_at ni el payload ni NADA de nutrición', async () => {
   const { dep } = montar({
     async buscarEnCatalogo() {
-      return { ...FILA, off_payload: { secreto: 1 }, household_id: 'x' } as unknown as FilaCatalogo;
+      // Una fila con más de lo debido: el payload, el hogar y la nutrición, en todas las formas
+      // en que podría llegar (columnas sueltas, un objeto pegado, el propio booleano).
+      return {
+        ...FILA,
+        off_payload: { secreto: 1 },
+        household_id: 'x',
+        nutriscore_grade: 'a',
+        energy_kcal: 42,
+        sugars: 10.6,
+        additives_tags: ['en:e330'],
+        nutrition: NUTRICION,
+        product_nutrition: { nutrition_data_at: '2026-10-24T10:00:00Z', energy_kcal: 42 },
+      } as unknown as FilaCatalogo;
     },
   });
   const cuerpo = await leer(await manejar(peticion(), dep));
+  // Es de Opsi Premium y esta función no mira el plan: ni el booleano que decide la caducidad sale.
+  assert.doesNotMatch(JSON.stringify(cuerpo), /nutri|energy|kcal|nova|additiv|sugar|serving|secreto/i);
   assert.deepEqual(Object.keys(cuerpo.product).sort(), [
     'allergens_tags',
     'barcode',
@@ -552,6 +626,392 @@ test('guardar recibe los datos de salud ya filtrados que devolvió OFF', async (
   });
   await manejar(peticion(), dep);
   assert.deepEqual(recibido, PRODUCTO_OFF);
+});
+
+// ── Nutrición (Opsi Premium) ─────────────────────────────────────────────
+
+test('una ficha sin su fila de nutrición cuenta como caducada y se renueva desde OFF aunque sea de ayer', async () => {
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.equal(llamadas.reservarHuecoOff, 1);
+  assert.equal(llamadas.consultarOff, 1);
+  assert.equal(llamadas.guardar, 1);
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.equal(llamadas.registrarFalta, 0);
+});
+
+test('una ficha con salud y con nutrición, al día, NO se renueva', async () => {
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.equal(llamadas.consultarOff, 0);
+  assert.equal(llamadas.guardar, 0);
+  assert.equal(llamadas.guardarNutricion, 0);
+});
+
+test('ficha sin nutrición: la cuota por persona se sigue cobrando antes de mirar nada', async () => {
+  const { dep, llamadas } = montar({
+    async consumirCuota() {
+      return { permitido: false, reintentarEn: 10 };
+    },
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 429);
+  assert.equal(llamadas.buscarEnCatalogo, 0);
+  assert.equal(llamadas.consultarOff, 0);
+});
+
+test('ficha sin nutrición y un ERROR de OFF (red, tiempo, 5xx): se sirve la vieja y NO se marca nada: se reintentará', async () => {
+  for (const off of [
+    { tipo: 'error', motivo: 'tiempo_agotado' },
+    { tipo: 'error', motivo: 'red' },
+    { tipo: 'error', motivo: 'http_503' },
+    { tipo: 'error', motivo: 'http_429' },
+    { tipo: 'error', motivo: 'respuesta_ilegible' },
+  ] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_NUTRICION;
+      },
+      async consultarOff() {
+        return off;
+      },
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200, JSON.stringify(off));
+    assert.equal((await leer(r)).product.name, 'Refresco de cola');
+    assert.equal(llamadas.guardar, 0);
+    // Un fallo de OFF no es una respuesta: marcar la ficha como «consultada» la dejaría sin
+    // renovar cuando OFF vuelva.
+    assert.equal(llamadas.guardarNutricion, 0, JSON.stringify(off));
+    assert.equal(llamadas.registrarFalta, 0, 'una ficha que existía no pasa a ser una falta');
+  }
+});
+
+test('ficha sin nutrición y OFF ya no tiene el producto (no_existe): se sirve la vieja y se deja la marca VACÍA, una sola vez', async () => {
+  let marca: { id: string; nutricion: NutricionOff } | null = null;
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_existe' };
+    },
+    async guardarNutricion(id, nutricion) {
+      llamadas.guardarNutricion++;
+      marca = { id, nutricion };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  const cuerpo = await leer(r);
+  assert.equal(cuerpo.found, true);
+  assert.equal(cuerpo.product.name, 'Refresco de cola', 'la respuesta no cambia: se sirve la ficha que hay');
+  assert.equal(llamadas.guardar, 0, 'no se reescribe la ficha');
+  assert.equal(llamadas.registrarFalta, 0, 'una ficha que existía no pasa a ser una falta');
+  // «OFF se consultó y no declara nada»: todo null, colgado de la ficha del catálogo.
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.deepEqual(marca, { id: FILA_SIN_NUTRICION.id, nutricion: NUTRICION_SIN_DATOS });
+});
+
+test('tras esa marca la ficha ya no cuenta como caducada: el escaneo siguiente no gasta ni un hueco de OFF', async () => {
+  // La base de datos la devuelve ahora CON su fila de nutrición (todo NULL): al día.
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA;
+    },
+  });
+  assert.equal((await manejar(peticion(), dep)).status, 200);
+  assert.equal(llamadas.reservarHuecoOff, 0);
+  assert.equal(llamadas.consultarOff, 0);
+  assert.equal(llamadas.guardarNutricion, 0);
+});
+
+test('ficha CON nutrición pero caducada y OFF ya no la tiene: no se toca su nutrición', async () => {
+  const vieja: FilaCatalogo = { ...FILA, updated_at: new Date(AHORA - 40 * 86_400_000).toISOString() };
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return vieja;
+      },
+      async consultarOff() {
+        return off;
+      },
+    });
+    assert.equal((await manejar(peticion(), dep)).status, 200, off.tipo);
+    assert.equal(llamadas.guardarNutricion, 0, `${off.tipo}: ya tiene su fila; no se pisa con una vacía`);
+  }
+});
+
+test('sin ficha en el catálogo y OFF no_existe / no_es_comida: no hay a quién colgar una marca', async () => {
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, llamadas } = montar({
+      async consultarOff() {
+        return off;
+      },
+    });
+    assert.equal((await manejar(peticion(), dep)).status, 200, off.tipo);
+    assert.equal(llamadas.guardarNutricion, 0, off.tipo);
+  }
+});
+
+test('si dejar la marca vacía falla, no se tumba nada: 200 igual y el fallo va al log como nutricion_error', async () => {
+  for (const off of [{ tipo: 'no_existe' }, { tipo: 'no_es_comida' }] as ResultadoOff[]) {
+    const { dep, logs } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_NUTRICION;
+      },
+      async consultarOff() {
+        return off;
+      },
+      async guardarNutricion() {
+        throw new Error('base de datos caída');
+      },
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200, off.tipo);
+    const evento = logs.find((l) => l.resultado === 'nutricion_error');
+    assert.ok(evento, off.tipo);
+    assert.equal(evento.error, 'Error');
+    assert.match(String(evento.detalle), /base de datos caída/);
+    assert.doesNotMatch(JSON.stringify(logs), new RegExp(CODIGO));
+  }
+});
+
+test('ficha sin nutrición y sin hueco o sin User-Agent: se sirve la vieja y no se llama a OFF', async () => {
+  for (const sobre of [
+    { async reservarHuecoOff() { return false; } },
+    { userAgentOff: null },
+  ] as Partial<Dependencias>[]) {
+    const { dep, llamadas } = montar({
+      async buscarEnCatalogo() {
+        return FILA_SIN_NUTRICION;
+      },
+      ...sobre,
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200);
+    assert.equal(llamadas.consultarOff, 0);
+    assert.equal(llamadas.guardarNutricion, 0);
+  }
+});
+
+test('ficha sin nutrición y OFF dice que no es comida: manda OFF (la respuesta no cambia) y se deja la marca vacía', async () => {
+  let marca: { id: string; nutricion: NutricionOff } | null = null;
+  const { dep, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'no_es_comida' };
+    },
+    async guardarNutricion(id, nutricion) {
+      llamadas.guardarNutricion++;
+      marca = { id, nutricion };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  // Exactamente lo de siempre: «no es comida», sin la ficha.
+  assert.deepEqual(await leer(r), { found: false, barcode: CODIGO, not_food: true });
+  assert.equal(llamadas.guardar, 0);
+  assert.equal(llamadas.registrarFalta, 0, 'una falta se contestaría luego como «no lo conozco»');
+  // OFF SÍ se acaba de consultar: la marca evita gastar un hueco en cada escaneo.
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.deepEqual(marca, { id: FILA_SIN_NUTRICION.id, nutricion: NUTRICION_SIN_DATOS });
+});
+
+test('la nutrición se guarda DESPUÉS de la ficha, con el id que ésta devolvió y la nutrición filtrada de OFF', async () => {
+  const orden: string[] = [];
+  let recibida: { id: string; nutricion: NutricionOff } | null = null;
+  const { dep } = montar({
+    async guardar(codigo): Promise<ProductoCatalogo> {
+      orden.push('ficha');
+      return { ...FILA, id: 'id-de-la-ficha', barcode: codigo };
+    },
+    async guardarNutricion(id, nutricion) {
+      orden.push('nutricion');
+      recibida = { id, nutricion };
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.deepEqual(orden, ['ficha', 'nutricion']);
+  assert.deepEqual(recibida, { id: 'id-de-la-ficha', nutricion: NUTRICION });
+});
+
+test('OFF encuentra el producto pero no declara nutrición: se guarda igualmente la fila, con todo a null', async () => {
+  let recibida: NutricionOff | null = null;
+  const { dep, llamadas } = montar({
+    async consultarOff(): Promise<ResultadoOff> {
+      return { tipo: 'encontrado', producto: { ...PRODUCTO_OFF, nutrition: NUTRICION_SIN_DATOS } };
+    },
+    async guardarNutricion(_id, nutricion) {
+      llamadas.guardarNutricion++;
+      recibida = nutricion;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  // Es la marca de «se consultó»: sin ella la ficha se renovaría en cada escaneo.
+  assert.equal(llamadas.guardarNutricion, 1);
+  assert.deepEqual(recibida, NUTRICION_SIN_DATOS);
+});
+
+test('si falla guardar la nutrición NO se tumba el escaneo: 200 con la ficha ya guardada, y el fallo va al log', async () => {
+  const { dep, llamadas, logs } = montar({
+    async guardarNutricion() {
+      llamadas.guardarNutricion++;
+      throw new TypeError(`function public.upsert_product_nutrition does not exist en 10.0.0.5 ${'x'.repeat(400)}`);
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  // La nutrición es un extra de Premium; el escáner es la función central.
+  assert.equal(r.status, 200);
+  const cuerpo = await leer(r);
+  assert.equal(cuerpo.found, true);
+  assert.equal(cuerpo.product.id, 'nuevo', 'es la ficha que acaba de guardar guardar()');
+  assert.equal(cuerpo.product.name, 'Refresco de cola');
+  assert.equal(llamadas.guardar, 1, 'la ficha se guardó antes');
+  assert.equal(llamadas.guardarNutricion, 1, 'se intentó una vez, sin reintentos');
+  assert.equal(llamadas.registrarFalta, 0, 'un fallo de la nutrición no convierte la ficha en una falta');
+
+  // Un evento claro con el resultado `nutricion_error`: solo el nombre del error y el mensaje cortado.
+  const evento = logs.find((l) => l.resultado === 'nutricion_error');
+  assert.ok(evento, 'se esperaba un evento con resultado nutricion_error');
+  assert.equal(evento.evento, 'lookup-barcode');
+  assert.equal(evento.user_id, 'user-1');
+  assert.match(String(evento.request_id), /^[0-9a-f-]{36}$/);
+  assert.equal(evento.error, 'TypeError');
+  assert.match(String(evento.detalle), /upsert_product_nutrition/);
+  assert.equal(String(evento.detalle).length, 200, 'el mensaje se corta a 200 caracteres');
+  assert.deepEqual(Object.keys(evento).sort(), ['detalle', 'error', 'evento', 'request_id', 'resultado', 'user_id']);
+
+  // Ni la fila, ni los datos de OFF, ni el código de barras (dice qué compra la persona) en ningún log.
+  const todo = JSON.stringify(logs);
+  assert.doesNotMatch(todo, new RegExp(CODIGO));
+  assert.doesNotMatch(todo, /330 ml|en:e150d|Refresco de cola|nutritionExtra/);
+  // Y el log normal de la petición sigue ahí: terminó bien.
+  assert.equal(logs.at(-1)?.resultado, 'off');
+  assert.equal(logs.at(-1)?.estado, 200);
+});
+
+test('si la nutrición falla con algo que no es un Error, también se registra y sigue: 200', async () => {
+  for (const raro of ['texto suelto', { message: 'objeto de la base de datos', details: 'fila: (42,…)' }, null, 7]) {
+    const { dep, logs } = montar({
+      async guardarNutricion() {
+        throw raro;
+      },
+    });
+    const r = await manejar(peticion(), dep);
+    assert.equal(r.status, 200, JSON.stringify(raro));
+    const evento = logs.find((l) => l.resultado === 'nutricion_error');
+    assert.ok(evento, JSON.stringify(raro));
+    assert.equal(evento.detalle, '', 'de algo que no es un Error no se copia nada');
+    assert.doesNotMatch(JSON.stringify(logs), /fila: \(42/);
+  }
+});
+
+test('si la nutrición falla, la ficha sigue «sin fila»: el escaneo siguiente la renueva (cuenta como caducada)', async () => {
+  // Primer escaneo: la nutrición falla, pero la ficha se guarda y se devuelve.
+  const { dep: primero } = montar({
+    async guardarNutricion() {
+      throw new Error('red caída');
+    },
+  });
+  assert.equal((await manejar(peticion(), primero)).status, 200);
+  // Segundo escaneo: el catálogo trae la ficha SIN fila de nutrición, y se vuelve a intentar.
+  const { dep: segundo, llamadas } = montar({
+    async buscarEnCatalogo() {
+      return FILA_SIN_NUTRICION;
+    },
+  });
+  const r = await manejar(peticion(), segundo);
+  assert.equal(r.status, 200);
+  assert.equal(llamadas.consultarOff, 1);
+  assert.equal(llamadas.guardar, 1);
+  assert.equal(llamadas.guardarNutricion, 1);
+});
+
+
+test('si falla guardar la ficha no se intenta guardar la nutrición (no habría a quién colgarla)', async () => {
+  const { dep, llamadas } = montar({
+    async guardar() {
+      throw new Error('rpc caída');
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 500);
+  assert.equal(llamadas.guardarNutricion, 0);
+});
+
+test('recién traída de OFF, la respuesta tampoco lleva nutrición aunque guardar devuelva de más', async () => {
+  const { dep } = montar({
+    async guardar(codigo) {
+      // Un index.ts descuidado podría devolver la fila entera con la nutrición pegada.
+      return { ...FILA, barcode: codigo, nutrition: NUTRICION, nutrition_data: true, energy_kcal: 42 } as unknown as ProductoCatalogo;
+    },
+  });
+  const cuerpo = await leer(await manejar(peticion(), dep));
+  assert.equal(cuerpo.found, true);
+  assert.doesNotMatch(JSON.stringify(cuerpo), /nutri|energy|kcal|nova|additiv|sugar|serving/i);
+});
+
+test('tieneNutricion: solo cuenta una fila con su fecha, como objeto o como lista de uno', () => {
+  assert.equal(tieneNutricion({ nutrition_data_at: '2026-10-24T10:00:00+00:00' }), true);
+  assert.equal(tieneNutricion([{ nutrition_data_at: '2026-10-24T10:00:00+00:00' }]), true);
+  for (const no of [null, undefined, [], {}, [{}], { nutrition_data_at: null }, { nutrition_data_at: '' }, { nutrition_data_at: 1 }, 'x', 7, true, [null], [[]]]) {
+    assert.equal(tieneNutricion(no), false, JSON.stringify(no));
+  }
+});
+
+test('aFilaCatalogo: el producto público más la fecha y si trae nutrición; aProducto no deja pasar el booleano', () => {
+  const base = {
+    id: 'x', barcode: CODIGO, name: 'Algo', brand: null, unit_family: null, net_quantity: null, image_url: null,
+    allergens_tags: [], traces_tags: [], labels_tags: [], ingredients_text: null,
+    health_data_at: '2026-10-21T10:00:00+00:00', updated_at: '2026-10-24T10:00:00+00:00',
+  };
+  const con = aFilaCatalogo({ ...base, product_nutrition: { nutrition_data_at: '2026-10-24T10:00:00+00:00' } });
+  assert.equal(con.nutrition_data, true);
+  assert.equal(con.updated_at, '2026-10-24T10:00:00+00:00');
+  assert.equal(con.health_data, true);
+  for (const sin of [null, [], undefined]) {
+    assert.equal(aFilaCatalogo({ ...base, product_nutrition: sin }).nutrition_data, false, JSON.stringify(sin));
+  }
+  // Lo público no lleva el booleano ni la nutrición, aunque la fila los traiga.
+  assert.equal('nutrition_data' in aProducto({ ...base, product_nutrition: { nutrition_data_at: 'x' } }), false);
+});
+
+test('ninguna pieza del escáner lee los VALORES de la nutrición: solo la fecha, y nunca la devuelve', () => {
+  // `service_role` solo puede leer `product_id` y `nutrition_data_at` de esa tabla, y la
+  // función no tiene por qué llamar a `nutrition_of_products` (que es de la app y premium).
+  const carpetas = [new URL('.', import.meta.url), new URL('../lookup-barcode/', import.meta.url)];
+  const fuentes = carpetas.flatMap((carpeta) =>
+    readdirSync(carpeta)
+      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map((f) => ({ f, texto: readFileSync(new URL(f, carpeta), 'utf8') })),
+  );
+  for (const { f, texto } of fuentes) {
+    assert.doesNotMatch(texto, /from\(\s*['"]product_nutrition['"]\s*\)/, `${f}: no se lee la tabla directamente`);
+    assert.doesNotMatch(texto, /rpc\(\s*['"]nutrition_of_products['"]/, `${f}: la lectura es de la app`);
+    for (const uso of texto.matchAll(/product_nutrition\(([^)]*)\)/g)) {
+      assert.equal(uso[1], 'nutrition_data_at', `${f}: del embed solo se pide la fecha`);
+    }
+  }
+  const index = fuentes.find((s) => s.f === 'index.ts')?.texto ?? '';
+  assert.match(index, /product_nutrition\(nutrition_data_at\)/);
 });
 
 // ── De la fila de la base de datos a lo que se devuelve ──────────────────

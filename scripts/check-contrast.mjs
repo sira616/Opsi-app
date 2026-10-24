@@ -68,7 +68,7 @@ const contraste = (a, b) => {
  * 4.5:1 para texto, 3:1 para bordes de controles, que es lo que pide la norma
  * para elementos de interfaz no textuales.
  */
-function casos(p) {
+function casos(p, conEscala = false) {
   return [
     ['texto principal sobre el fondo', p.ink, p.ground, 4.5],
     ['texto principal sobre tarjeta', p.ink, p.surface, 4.5],
@@ -91,13 +91,60 @@ function casos(p) {
     ['texto sobre el fondo de congelado', p.ink, p.frostSoft, 4.5],
     ['nota sobre el fondo de congelado', p.inkMuted, p.frostSoft, 4.5],
     ['borde de control sobre tarjeta', p.borderStrong, p.surface, 3.0],
+    ...(conEscala ? casosEscala(p) : []),
   ];
 }
 
-function comprobar(titulo, paleta) {
+/**
+ * La escala del Nutri-Score (A a E). La letra de cada ficha sobre su relleno llega a 4.5:1.
+ * La forma contra el fondo la da el borde grueso de la ficha activa, no el relleno: un
+ * amarillo o un lima sobre blanco no llegan a 3:1 por sí solos, y por eso la ficha activa
+ * nunca va sin su borde. La letra de una ficha apagada (neutra, sin color) también cuenta.
+ *
+ * Solo se comprueba con la paleta base: los colores premium cambian la marca y nada de esto.
+ */
+function casosEscala(p) {
+  return [
+    ...['A', 'B', 'C', 'D', 'E'].map((g) => [
+      `letra de la ficha ${g} del Nutri-Score`,
+      p[`nutri${g}Ink`],
+      p[`nutri${g}`],
+      4.5,
+    ]),
+    ['borde de la activa sobre tarjeta', p.nutriBorder, p.surface, 3.0],
+    ['borde de la activa sobre el fondo', p.nutriBorder, p.ground, 3.0],
+    ['letra de una ficha apagada', p.inkMuted, p.surfaceAlt, 4.5],
+  ];
+}
+
+// ── La E no puede parecer caducidad ───────────────────────────────────────
+//
+// El rojo es SOLO de la caducidad (docs/DISENO.md). La ficha E del Nutri-Score es un naranja,
+// y no basta con que no reutilice los tokens: tiene que quedar lejos en matiz de todo el
+// rojo de caducidad, relleno, texto y borde incluidos. 15° es el mínimo que pide el diseño.
+const MATIZ_MINIMO = 15;
+const TOKENS_DE_CADUCIDAD = ['expiry', 'expirySoft', 'expiryInk', 'expiryLine'];
+
+/** Matiz HSL en grados, de 0 a 360. */
+function matiz(h) {
+  const [r, g, b] = canales(h);
+  const alto = Math.max(r, g, b);
+  const delta = alto - Math.min(r, g, b);
+  if (delta === 0) return 0;
+  const sector = alto === r ? ((g - b) / delta) % 6 : alto === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  return (sector * 60 + 360) % 360;
+}
+
+/** La distancia más corta entre dos matices, dando la vuelta al círculo. */
+function distanciaDeMatiz(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+function comprobar(titulo, paleta, conEscala = false) {
   console.log(`\n\x1b[1m${titulo}\x1b[0m`);
   let fallos = 0;
-  for (const [etiqueta, fg, bg, minimo] of casos(paleta)) {
+  for (const [etiqueta, fg, bg, minimo] of casos(paleta, conEscala)) {
     if (!fg || !bg) {
       console.log(`  \x1b[31m✗\x1b[0m ${etiqueta.padEnd(38)} falta un color en la paleta`);
       fallos++;
@@ -110,13 +157,38 @@ function comprobar(titulo, paleta) {
       `  ${bien ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${etiqueta.padEnd(38)} ${r.toFixed(2)}:1  (mín ${minimo})`,
     );
   }
+  if (conEscala) fallos += comprobarMatizDeLaE(paleta);
+  return fallos;
+}
+
+/** Cada token de caducidad tiene que quedar a `MATIZ_MINIMO` grados o más del naranja de la E. */
+function comprobarMatizDeLaE(paleta) {
+  if (!paleta.nutriE) {
+    console.log('  \x1b[31m✗\x1b[0m falta nutriE en la paleta');
+    return 1;
+  }
+  let fallos = 0;
+  const e = matiz(paleta.nutriE);
+  for (const token of TOKENS_DE_CADUCIDAD) {
+    if (!paleta[token]) {
+      console.log(`  \x1b[31m✗\x1b[0m falta ${token} en la paleta`);
+      fallos++;
+      continue;
+    }
+    const d = distanciaDeMatiz(e, matiz(paleta[token]));
+    const bien = d >= MATIZ_MINIMO;
+    if (!bien) fallos++;
+    console.log(
+      `  ${bien ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${`la E lejos de ${token} (matiz)`.padEnd(38)} ${d.toFixed(1)}°  (mín ${MATIZ_MINIMO}°)`,
+    );
+  }
   return fallos;
 }
 
 const fuente = readFileSync(TOKENS, 'utf8');
 const claro = leerPaleta(fuente, 'CLARO');
 const oscuro = leerPaleta(fuente, 'OSCURO');
-let fallos = comprobar('MODO CLARO', claro) + comprobar('MODO OSCURO', oscuro);
+let fallos = comprobar('MODO CLARO', claro, true) + comprobar('MODO OSCURO', oscuro, true);
 
 const acentos = leerAcentos(fuente);
 if (Object.keys(acentos).length !== 6) {

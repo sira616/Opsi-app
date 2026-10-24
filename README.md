@@ -222,16 +222,17 @@ salga a las tiendas. Vive en `app/app.json`, que es de donde la lee la pantalla 
 - [x] **Escáner de códigos de barras**: pantalla con cámara (EAN-13, EAN-8, UPC-A) y entrada a mano, función `lookup-barcode` que consulta Open Food Facts **solo desde el servidor**, filtra la ficha y la guarda en una caché global; un producto que nadie conoce se recuerda en la nevera. Con límites por persona, caché de faltas y un modelo de amenazas con sus tests ([`docs/threat-model.md`](docs/threat-model.md))
 - [x] **Varias listas de la compra** (hasta 3 en el plan básico) y la base de **Opsi Premium ⭐**: color de la app (los de las perlas de las siete princesas de Pichi Pichi Pitch), tus productos (un almacén con su ficha, escaneado o a mano, que se guarda en la nevera que elijas) y lo que más gastas (los cinco primeros y la lista entera). Es la pestaña donde estaba el chat, organizada en widgets por categoría; el chat tiene ya su pantalla base (todavía sin IA) y la nevera avisa al abrirla de lo que vence pronto. El plan lo decide el servidor; **todavía no se puede contratar** (sin pago)
 - [x] **Alérgenos e intolerancias** (los 14 de la UE y la lactosa) con avisos —nunca prohibiciones— en la nevera y al añadir, **ingredientes de Open Food Facts** consultables en la ficha de un producto, y «congélalo o úsalo» para lo que se acaba y se puede congelar. Lo que cada persona evita es un dato de salud: solo lo ve ella. **Falta**, antes de abrir a usuarios reales, el consentimiento explícito y el aviso de privacidad ([`docs/internal/PENDIENTES.md`](docs/internal/PENDIENTES.md))
+- [x] **Nutrición** (Premium): Nutri-Score, grupo NOVA, información por 100 g o 100 ml, niveles, ración y aditivos de cada uno de tus productos, siempre con su origen en Open Food Facts y sin opinar sobre lo que comes. Una tabla propia que solo lee quien tiene el plan, decidido por el servidor ([`docs/threat-model.md`](docs/threat-model.md) §8)
 - [ ] Probar la cámara en un móvil con Expo Go (`expo-camera` viene incluido)
 - [ ] Development build con EAS (hace falta para los avisos y el almacén cifrado de la sesión)
 
-**Probado:** 691 tests pgTAP (18 ficheros) contra Supabase local; 907 comprobaciones sin Docker
-(`npm run db:check`); 17 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 133 tests de la
-lógica de la función de búsqueda (`npm run test:funciones`), 22 contra el runtime de Edge Functions de
-verdad (`npm run fn:check`) y 182 de la lógica de la app (`npm run test:app`). La función, además,
+**Probado:** 899 tests pgTAP (19 ficheros) contra Supabase local; 1119 comprobaciones sin Docker
+(`npm run db:check`); 17 de carreras entre dos sesiones a la vez (`npm run db:carreras`); 176 tests de la
+lógica de la función de búsqueda (`npm run test:funciones`), 25 contra el runtime de Edge Functions de
+verdad (`npm run fn:check`) y 256 de la lógica de la app (`npm run test:app`). La función, además,
 **contra Open Food Facts de verdad** (sin los campos de alérgenos e ingredientes, que solo se probaron
 sin red). La app, en el navegador con dos cuentas; los avisos de alérgenos y «congélalo o úsalo», solo
-con datos de prueba y sin sesión. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.
+con datos de prueba y sin sesión; la nutrición, con datos reales de dos escaneos pero sin haber visto aún sus pantallas. **Sin probar todavía en un móvil**, y por tanto sin ver la cámara.
 
 ```bash
 npm install && npm run up && npm run app:web

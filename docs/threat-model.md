@@ -84,7 +84,7 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 | **D**oS | Un usuario consulta en bucle | `consume_lookup_quota()`: 30 por minuto y 500 por día **por persona**, con un solo `insert … on conflict do update` (atómico). Cuenta aunque se resuelva desde la caché. Una lectura sucia (código inválido) no gasta cuota | `escaner_test.sql`, `lookup.test.ts` (orden: nada se cuenta antes de validar), `npm run db:carreras` (**dos sesiones a la vez**: 40 consultas dan exactamente 30 permitidas y el contador marca 40) |
 | **D**oS | OFF nos limita y el escáner entero deja de funcionar | `consume_off_slot()`: 10 por minuto entre **todas** las personas (por debajo del límite que recoge `PENDIENTES.md`, unas 15 por IP); timeout de 4 s; cuerpo máximo de 256 KB leído en flujo; **caché de faltas** de 6 horas; ficha caducada (30 días) sigue sirviéndose si OFF falla; si no hay respuesta, la app degrada al alta a mano con el código ya puesto | `escaner_test.sql`, `off.test.ts` (tiempo agotado, respuesta enorme con y sin `content-length`), `lookup.test.ts` |
 | **D**oS | Sin `OFF_USER_AGENT` (o con el valor de ejemplo) la función llamaría a OFF de forma anónima | No llama: sigue sirviendo la caché y degrada lo demás | `lookup.test.ts` |
-| **E**levation | Escribir el catálogo global desde el cliente | Imposible por diseño: `is_household_member(NULL)` es falso, así que ninguna política de escritura admite filas globales. `service_role` solo **lee** `products` y **ejecuta** cinco funciones; ni `anon` ni `authenticated` ejecutan ninguna | `privilegios_test.sql`, `escaner_test.sql` |
+| **E**levation | Escribir el catálogo global desde el cliente | Imposible por diseño: `is_household_member(NULL)` es falso, así que ninguna política de escritura admite filas globales. `service_role` solo **lee** `products` (y dos columnas de `product_nutrition`) y **ejecuta** seis funciones; ni `anon` ni `authenticated` ejecutan ninguna | `privilegios_test.sql`, `escaner_test.sql` |
 | **E**levation | El contenido de OFF (nombres, marcas) se interpreta como instrucción cuando llegue al chat | Nunca se interpola en un prompt: se pasa como datos, recortado y sin saltos de línea. Los filtros de arriba ya quitan lo que sirve para esconder una instrucción (saltos de línea, caracteres de control y direccionales), pero **el encapsulado en el prompt se hace en la fase 5** | no probado (fase 5) |
 
 ### Ficha del endpoint
@@ -93,14 +93,14 @@ normalizar → guardar con `upsert_global_product()` → devolver.
 - **Tipo:** Edge Function (Deno)
 - **Método y ruta:** `POST /functions/v1/lookup-barcode`, cuerpo `{ "barcode": "<8–14 cifras>" }`, máximo 1 KB (también `OPTIONS`, para el preflight de la versión web)
 - **Autenticación:** JWT de una persona con sesión, **verificado dentro de la función**
-- **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función, y solo por `upsert_global_product`
+- **Autorización:** cualquier persona autenticada puede consultar el catálogo; nadie puede escribir en él excepto la propia función, y solo por `upsert_global_product` (y, para la nutrición, `upsert_product_nutrition`: ver §8)
 - **Entrada validada:** solo cifras, 8, 12, 13 o 14 de ellas, dígito de control GS1 correcto, y no una cadena de ceros. Además, **solo comida**: un EAN-13 con prefijo de revista, libro, recibo o cupón (977–984 y 990–999) contesta «no es comida» sin gastar cuota ni preguntar a nadie, y un código que OFF dice que es de otra base (cosmética, mascotas, otros productos) también
-- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, allergens_tags, traces_tags, labels_tags, ingredients_text, health_data, source: "openfoodfacts" } }` (los datos de salud, ver §7) o `{ "found": false, "barcode": "…" }` (con `"not_food": true` si no es comida). Nunca el `off_payload`. Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
+- **Salida:** `{ "found": true, "product": { id, barcode, name, brand, unit_family, net_quantity, image_url, allergens_tags, traces_tags, labels_tags, ingredients_text, health_data, source: "openfoodfacts" } }` (los datos de salud, ver §7) o `{ "found": false, "barcode": "…" }` (con `"not_food": true` si no es comida). Nunca el `off_payload` ni nada de **nutrición** (es premium y esta función no mira el plan: §8). Errores: `{ "code", "message" }` con 400, 401, 405, 413, 429 (con `Retry-After`), 500 o 503
 - **Límites:** 30/min y 500/día por persona; 10/min globales hacia OFF; timeout 4 s; respuesta de OFF ≤ 256 KB
 - **Riesgos:** SSRF, envenenamiento de la caché, abuso de cuota, filtrado de errores, entrada no confiable hacia el modelo
 - **Controles en servidor:** los de la tabla de arriba
 - **Secretos:** `OFF_USER_AGENT` (nombre de la app y un contacto **real**; el valor de ejemplo se rechaza) en el entorno de la función. La clave de servicio la inyecta Supabase y no sale de ahí
-- **Tests automatizados:** `npm run test:funciones` (95, sin Deno ni red), `npm run db:test` (`escaner_test.sql`), `npm run db:carreras` y `npm run fn:check` (22, en el runtime de Edge Functions de verdad)
+- **Tests automatizados:** `npm run test:funciones` (150 con los del chat, sin Deno ni red), `npm run db:test` (`escaner_test.sql`, `nutricion_test.sql`), `npm run db:carreras` y `npm run fn:check` (25, en el runtime de Edge Functions de verdad)
 - **Estado:** `[x] diseño`  `[x] código`  `[x] tests`  `[x] inventario`  `[ ] prod`
 
 **Lo que no está probado:** la cámara en un móvil real; la llamada a OFF desde el runtime con la
@@ -246,6 +246,67 @@ resultado como DATO → devuelve texto plano. Cada paso solo corre si pasó el a
 - **Un modelo puede ignorar las instrucciones.** Por eso la defensa real es que las herramientas son de solo lectura, no que el texto diga «no obedezcas».
 - **Nada de esto se ha probado en un móvil ni con tráfico real.** La cuota sí: con pgTAP real y, para el candado por persona, con dos sesiones a la vez (`npm run db:carreras`, escenario E).
 - **El chat no es de Premium**: es una decisión de coste, no de seguridad, y está anotada en `PENDIENTES.md`.
+
+---
+
+## 8 · Nutrición de los productos (Opsi Premium ⭐)
+
+Una tabla nueva (`product_nutrition`), una función de lectura (`nutrition_of_products`) y una de escritura
+(`upsert_product_nutrition`), en `20261024100000_nutricion` (D-49). `lookup-barcode` la guarda pero **no la devuelve**.
+Nutri-Score, grupo NOVA, valores por 100 g o 100 ml, semáforos, ración y aditivos de un producto del catálogo global,
+de Open Food Facts. **El plan lo decide el servidor**: ocultar la pantalla no es una puerta.
+
+**Flujo:** `lookup-barcode` consulta OFF → `normalizarNutricion` filtra → guarda la ficha (`upsert_global_product`) y justo
+después su nutrición (`upsert_product_nutrition`, que lo revalida todo; si ésta falla se registra y el escaneo sigue) → responde **sin** nutrición. La app, si la persona
+es premium, la pide con `nutrition_of_products(ids)`. Sin plan, la función da 42501 con pista `premium` y un `select` directo
+a la tabla da cero filas: son dos candados independientes (la función es SECURITY INVOKER, así que la RLS sigue por debajo).
+
+**Por qué una tabla aparte y no columnas en `products`:** `products` la lee cualquier persona con sesión. Cerrar unas columnas
+exigiría pasar `products` a permisos de columna, uno a uno: cada columna nueva nace cerrada (o, si se olvida, un permiso de tabla
+la abre) y cada `select *` del código falla entero. La RLS filtra filas, no columnas. Una tabla propia se cierra con RLS por plan
+en un solo sitio, y `products` no cambia. Además la **fila es la marca** de «se consultó OFF»: sin fila no consta; fila con todo
+NULL = OFF no declara nada. «Sin datos» nunca es cero.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **E**levation | Leer la nutrición sin ser premium: un `select` directo a la tabla o la función | Candado 1, RLS: `select` solo si `my_plan() = 'premium'` (sin plan, **0 filas**). Candado 2, `nutrition_of_products`: comprueba el plan **antes de leer nada** (42501, pista `premium`, el mismo mensaje que `my_known_products`). Probado quitando cada uno por separado: el test falla | `nutricion_test.sql` (E: Bruno básico no lee por ninguna de las dos vías; Ana premium sí) |
+| **E**levation | Ponerse premium desde la app para leerla | Ningún permiso de columna concede `plan`; sin fila de ajustes cuenta como básico. El plan se lee en cada consulta: si baja de plan, deja de leer en la misma sesión | `nutricion_test.sql` (E), `listas_premium_test.sql` |
+| **S**poofing | Llamar a la función o leer la tabla sin sesión, con la `anon key` | `anon` sin EXECUTE ni ningún permiso de tabla o de columna; `service_role` tampoco ejecuta la función de lectura | `nutricion_test.sql` (A, E), `privilegios_test.sql` |
+| **I**nfo disclosure | `lookup-barcode` devuelve la nutrición a todo el mundo: la función no mira el plan | **No la devuelve.** `publico()` copia campo a campo; el booleano con el que decide la caducidad (`nutrition_data`) tampoco sale; `buscarEnCatalogo` pide solo la fecha del embed | `lookup.test.ts` (una fila con nutrición pegada de varias maneras no llega a la respuesta; la ficha recién traída de OFF tampoco), `fn:check` (la respuesta real no lleva ni una palabra de nutrición) |
+| **I**nfo disclosure | La nutrición se cuela en `products.off_payload`, que lee cualquiera | `payloadDeOrigen` **nombra** los campos que guarda en vez de quitar los que sobran: un campo nuevo no entra solo | `off.test.ts` |
+| **I**nfo disclosure | La clave `service_role` (que vive en la Edge Function) saca los valores | `service_role` solo lee `product_id` y `nutrition_data_at` y ejecuta `upsert_product_nutrition`, que no devuelve nada. Sin SELECT de tabla ni de ninguna otra columna (tampoco las futuras) | `privilegios_test.sql`, `nutricion_test.sql` (A, E) |
+| **T**ampering | Una persona de una nevera escribe nutrición falsa en un producto **privado** («0 g de azúcar») para que sus compañeras la vean | Nadie con sesión tiene permiso de escritura sobre la tabla (ni de columna). Un trigger (`check_nutrition_product`) rechaza cualquier fila cuyo producto sea privado o no exista, **también escribiendo como `postgres`**. `products` no tiene columnas de nutrición a las que agarrarse. Un producto no cambia de nevera (`forbid_household_change`) | `nutricion_test.sql` (C, F). Probado quitando el trigger: el test falla |
+| **T**ampering | La caché global se envenena (OFF lo edita cualquiera): valores imposibles, textos con marcado o instrucciones, listas enormes | **Tres filtros.** `off.ts`: solo un `number` finito dentro de rango (si no, ese campo a NULL y la ficha se conserva), listas cerradas para Nutri-Score, NOVA y semáforos, textos limpios, ración de ≤ 60 sin recortar, aditivos con formato exacto (`en:e` + 3 o 4 cifras + hasta 4 letras, para `en:e330`, `en:e150d` y subformas como `en:e331iii`). `upsert_product_nutrition` lo revalida todo (22023). Los CHECK de la tabla (23514) son el último cerrojo | `off.test.ts` (campos fuera de rango, de otro tipo, NaN, Infinity, textos de megabytes, 100 000 aditivos), `nutricion_test.sql` (B y D: cada rango, lista, formato y par; la función da 22023 y la tabla 23514, así que si falta una comprobación de la función el test lo nota) |
+| **T**ampering | Una ficha incoherente hace pasar un producto por sano (más saturadas que grasas, más azúcares que hidratos, 1000 kcal por 100 g) | Rangos (energía 0–950, el resto 0–100) y dos pares coherentes con 0,5 g de margen. En la Edge Function el par que se contradice se descarta **entero** (los dos valores a NULL), no se «arregla» ninguno | `off.test.ts`, `nutricion_test.sql` |
+| **T**ampering | **Un falso cero**: «sin datos» se lee como 0 g de azúcar o 0 aditivos | Todo es NULL-able y nada se rellena con 0 (`numeroEnRango` devuelve null, no 0; y un positivo que al redondear a dos decimales queda en 0, como una sal de 0,004 g, también es null: un 0 significa «OFF declara cero»). La fila es la marca de «se consultó»: sin fila = no consta; fila con todo NULL = OFF no declara nada; un NULL suelto = ese dato no consta. `nutrition_of_products` no devuelve filas de lo que no consta. **Aditivos:** OFF los saca de los ingredientes, así que una lista vacía de una ficha sin ingredientes no dice «sin aditivos». `lookup-barcode` guarda `additives_tags = NULL` (no se sabe) si no es una lista, si es vacía y la ficha no trae ingredientes, o si trae algo pero nada con formato válido; `{}` solo si la lista viene vacía CON ingredientes. Aun así la app nunca afirma «sin aditivos» | `off.test.ts` (`aditivosDeLaFicha` y la ficha completa: con y sin ingredientes), `nutricion_test.sql` (D y G: NULL y `{}` se guardan distintos) |
+| **E**levation | El texto de OFF (la ración) se interpreta como marcado, enlace o instrucción | Texto plano, con tres filtros (como los ingredientes): `off.ts` quita todo `\p{C}` (control, formato, bidireccionales, ancho cero, uso privado, «etiqueta») y `<` `>`; la función SQL y el CHECK de la tabla rechazan una **clase ampliada** (la antigua de `upsert_global_product` más U+061C, U+180E, U+FFF9 a U+FFFB, el uso privado U+E000 a U+F8FF y los caracteres «etiqueta» U+E0000 a U+E007F, con los que se esconde texto invisible), escrita con escapes. Una ración que no cabe en 60 caracteres es NULL, no un recorte. En el prompt del chat (fase 5) irá encapsulada | `off.test.ts`, `nutricion_test.sql` (B y D: los extremos de cada rango nuevo, rechazados en la función y en el CHECK, y los vecinos de fuera, aceptados); **no probado** el encapsulado (fase 5) |
+| **D**oS | Una ficha sin fila de nutrición se renueva en cada escaneo y agota la cuota hacia OFF | Cuenta como caducada y se renueva **una vez**: aunque OFF no declare nada se guarda la fila (todo NULL). Esto vale también cuando OFF ya no devuelve el producto (`no_existe`) o dice que no es comida: si la ficha del catálogo no tiene su fila, se deja la marca vacía («consultado y sin datos») y se sigue sirviendo la ficha como hasta ahora. Con un **error** de OFF (red, tiempo, 5xx) no se marca nada: eso se reintenta; y sin hueco o sin User-Agent tampoco, porque no se consultó. Siguen la cuota por persona (30/min, 500/día) y el hueco global (10/min) | `lookup.test.ts` (cada rama, y que con un error de OFF no se escribe), `fn:check` (la ficha sin fila sale como `cache_vieja` en el registro del runtime real) |
+| **D**oS | Pedir la nutrición de miles de productos de golpe | Un solo POST de RPC con 200 ids como máximo (22023 si es más, o si el array es nulo), tras comprobar el plan | `nutricion_test.sql` (E) |
+| **D**oS | Un fallo de la nutrición (red, base de datos) tumba el escaneo, que es la función central: la nutrición es solo un extra de Premium | **No lo tumba.** Si `upsert_product_nutrition` falla tras guardar la ficha, `manejar` lo captura, lo registra con el resultado `nutricion_error` (solo el nombre del error y su mensaje cortado a 200 caracteres: nunca la fila, los datos de OFF ni el código de barras) y devuelve igualmente la ficha, con un 200. Sin fila de nutrición cuenta como caducada, así que la próxima vez que se escanee se reintenta. Nada queda a medias de forma que parezca «consta». Un fallo al guardar la **ficha** sí sigue siendo un 500 genérico | `lookup.test.ts` (200 con la ficha, el evento `nutricion_error` sin datos, errores que no son `Error`, y el reintento en el escaneo siguiente) |
+
+**Lo que no cubre:**
+
+- El `off_payload` de un producto **privado** lo escribe cualquier miembro de su nevera (es una columna de `products`) y puede llevar lo que quiera,
+  también cifras que parezcan nutrición. Es inofensivo mientras nadie lo lea como tal: **la app solo lee la nutrición por
+  `nutrition_of_products`**, nunca de `off_payload` ni de ninguna otra parte.
+- Lo premium depende de quién puede escribir `user_settings.plan`: hoy solo quien tiene la base de datos. Cuando haya pago, la función que
+  reciba el aviso del proveedor pasa a ser la llave de todo esto y habrá que modelarla.
+- Lo que una persona premium ya ha leído y guardado en su móvil (la caché de la app, en memoria) no se retira si baja de plan.
+- No se comprueba la coherencia entre nutrientes más allá de los rangos y los dos pares (grasas + hidratos + proteínas por encima de 100,
+  o una energía que no cuadra con los macros, pasan).
+- La diferencia entre `additives_tags = NULL` («no se sabe») y `{}` («OFF analizó los ingredientes y no declara ninguno») la decide solo la Edge Function,
+  que es quien conoce los ingredientes: la base de datos guarda lo que llega y no la comprueba. Y `{}` sigue siendo lo que OFF declara, no una garantía:
+  la app no afirma «sin aditivos». La lista de aditivos es de todo o nada: un solo elemento con formato inválido, o más de 60, la dejan en NULL (una lista
+  parcial o truncada daría un recuento menor que el real).
+- Lo mismo con el redondeo: un valor positivo que al redondear a dos decimales queda en 0 (una sal de 0,004 g) lo guarda la Edge Function como NULL, porque
+  un 0 significa «OFF declara cero». La base de datos **no lo impone**: guarda el 0,00 que le llegue.
+- **Deuda (a `PENDIENTES`):** la clase de caracteres prohibidos de `upsert_global_product` (nombre, marca e ingredientes, migraciones antiguas) es la débil, sin
+  los rangos que aquí se añaden (U+061C, U+180E, U+FFF9 a U+FFFB, uso privado y «etiqueta»), y es más estrecha que el `\p{C}` de `off.ts`. Queda sin tocar.
+  El filtro de la Edge Function sí los quita, pero la base de datos no los rechazaría si ese filtro fallara.
+- **Despliegue:** la migración `20261024100000_nutricion` tiene que estar aplicada **antes** que la nueva versión de `lookup-barcode`. `buscarEnCatalogo` hace
+  el embed `product_nutrition(nutrition_data_at)` en el camino crítico del escáner: sin la tabla, todos los escaneos darían 500.
+- `basis` (g o ml) se deduce de la familia de unidades del producto; si se desconoce es NULL aunque haya valores. Nada de esto se ha probado con un
+  móvil real ni con una llamada real de la función a OFF desde el runtime de producción.
 
 ---
 

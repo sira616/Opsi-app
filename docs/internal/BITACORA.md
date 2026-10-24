@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-18** (sesión 34)
+> Última actualización: **2026-10-24** (sesión 44)
 
 ---
 
@@ -31,6 +31,11 @@ Regla: **si una decisión se toma en una conversación y no acaba aquí, se ha p
 
 ## 1. Estado actual
 
+**2026-10-19 (sesión 42)** — **Nutrición** en Premium ([D-49](#d-49--nutrición-de-open-food-facts-por-producto-en-una-tabla-propia-que-solo-lee-premium--2026-10-19)):
+Nutri-Score, grupo NOVA, información por 100 g/ml, niveles, ración y aditivos de cada uno de «Tus productos», desde Open Food Facts, en una tabla propia que solo lee
+quien tiene el plan (lo decide el servidor). Probado en local con pgTAP, funciones, app y una revisión de seguridad independiente; **las pantallas no se han visto en el navegador ni en un
+móvil** (`PENDIENTES.md`). Cifras en la tabla de abajo y en la [sesión 42](#2026-10-19-sesión-42--nutrición).
+
 **2026-10-19 (sesión 37)** — **Alérgenos e intolerancias, ingredientes de Open Food Facts y «congélalo o úsalo»**
 implementados y probados en local ([D-44](#d-44--alérgenos-e-intolerancias-ingredientes-de-open-food-facts-y-congélalo-o-úsalo--2026-10-19)).
 Lo que cada persona evita es un **dato de salud**: antes de abrir a usuarios reales hace falta consentimiento explícito
@@ -53,10 +58,10 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 
 | Área | Qué hay hoy |
 |---|---|
-| Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
+| Esquema | **39 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **18 ficheros pgTAP, 691 tests** contra pgTAP real · `db:check`: **907 comprobaciones** en PGlite · `test:app`: **182**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **133** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **19 ficheros pgTAP, 899 tests** contra pgTAP real · `db:check`: **1119 comprobaciones** en PGlite · `test:app`: **256**, la lógica de calendario, el destino de un producto, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **176** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1176,6 +1181,40 @@ no vence pronto, y a igual urgencia, por nombre; «Vence/Caduca hoy|mañana.» c
 la app»); es **de este aparato**, como el aspecto, no de la cuenta. Es la misma función de «congelar» que la tarjeta del inventario, así que el aviso y la tarjeta nunca discrepan.
 
 **Lo que NO se ha hecho:** la receta no genera nada (hace falta la IA); los avisos no usan todavía lo que se sepa de la persona (alérgenos, gustos): eso llega con el perfil personal; y los avisos fuera de la app (push) siguen siendo la fase 3.
+
+### D-49 · Nutrición de Open Food Facts por producto, en una tabla propia que solo lee Premium · 2026-10-19
+
+Una sección nueva dentro de Premium, **Nutrición**: por cada uno de «Tus productos», su **Nutri-Score** (A–E), su **grupo NOVA** (1–4), la información nutricional por 100 g o 100 ml (energía en kcal, grasas, de las cuales saturadas, hidratos, de los cuales azúcares, fibra,
+proteínas y sal), los **niveles** que da Open Food Facts (OFF), la ración y los **aditivos**. Un widget en «Tu comida», una pantalla con buscador (`/nutricion`), el detalle de cada producto (`/nutricion/[id]`) y un «Ver nutrición» en la ficha de «Tus productos». El móvil sigue sin llamar a
+terceros: los datos entran por la Edge Function `lookup-barcode`, con el patrón de los datos de salud (D-44). Migración `20261024100000_nutricion`.
+
+**Una tabla separada, `product_nutrition`, y no columnas en `products`.** `products` la lee cualquier persona con sesión; esconder unas columnas a quien no es Premium habría exigido pasar `products` a permisos columna a columna (`revoke select` de la tabla y un `grant` por cada columna que sí se
+lee), que es frágil por dos lados: cada columna nueva y cada `select *` de la app. Una tabla propia se cierra en un solo sitio. **El plan lo decide el servidor, con dos cerrojos**: la política RLS de lectura (`my_plan() = 'premium'`) y la función `nutrition_of_products(uuid[])`, `SECURITY INVOKER`, que
+rechaza con `42501` y pista `premium` («Esto es de Opsi Premium ⭐.») antes de mirar nada, como `my_known_products`. La función es la vía de la app (un POST con hasta 200 ids, sin los límites de longitud de una URL); la política protege además el acceso directo a la tabla, donde quien no es Premium ve 0
+filas sin error. Quien no tiene el plan no lee nutrición por ninguna vía: **`lookup-barcode` no la devuelve** (la función no mira el plan de quien pregunta, así que devolverla saltaría el candado) y solo lee de ella SI existe, para saber si la ficha está al día.
+
+**«Sin datos» no es «cero».** La **fila es la marca** de «se consultó OFF» (`nutrition_data_at`, que pone el servidor). Sin fila = no consta (ficha antigua, producto hecho a mano, privado o pendiente de renovar). Fila con todo `NULL` = OFF se consultó y no declara nada. Un `NULL` suelto = ese dato no
+consta. La app lo pinta «—» o lo omite, nunca 0; un «0 g» solo sale si OFF declara cero. Sin ningún dato, «Sin datos nutricionales» y nada más: ni escala, ni tabla de guiones, ni una letra inventada. Un valor positivo que al redondear a 2 decimales quedaría en 0 (sal 0,004) se guarda como `NULL`, no como 0.
+
+**Quién escribe.** Solo `upsert_product_nutrition` (`SECURITY DEFINER`, solo `service_role`), que revalida todo lo que la Edge Function ya filtró y exige que el producto exista y sea del catálogo global. Un **trigger** (`check_nutrition_product`) impide además nutrición en un producto **privado** de una nevera, que escribe
+cualquier miembro: es el equivalente del `CHECK` de salud, que aquí no puede mirar otra tabla, y vale también para `postgres`. Nadie más tiene permiso de escritura sobre la tabla. `service_role` gana una sexta función y un permiso de lectura de **dos columnas** (`product_id`, `nutrition_data_at`), no los valores.
+**Triple filtro**: la Edge Function (cada campo fuera de rango, de tipo o de formato pasa a `NULL` sin perder la ficha entera), la función SQL y los `CHECK` de tabla (rechazan), y la app (`leerNutricion`). Rangos por 100 g/ml: energía 0–950 kcal, el resto 0–100 g; coherencia por pares (saturadas ≤ grasas + 0,5 y azúcares ≤
+hidratos + 0,5: un par que se contradice se descarta entero); niveles `low`/`moderate`/`high`; ración de hasta 60 caracteres; aditivos con formato `en:e330` (hasta 4 letras de subforma, máximo 60; una lista con un elemento malo se descarta ENTERA, no se guarda partida). La lista de aditivos vacía solo cuenta como
+«OFF no declara aditivos» si la ficha trae ingredientes; sin ellos es `NULL`. Los textos de OFF no llevan marcado, control, formato bidireccional ni los caracteres invisibles que esconden instrucciones (bloque de «etiquetas» U+E0000, uso privado…). Los nutrientes no entran en `off_payload`.
+
+**Cómo se renueva una ficha antigua.** Una ficha sin fila cuenta como **caducada** en `lookup-barcode` (igual que sin datos de salud) y se renueva al escanearla; y en la app, **al abrir el detalle** de un producto de OFF con código que no tiene fila, que llama una sola vez a `lookup-barcode` (gasta cuota; sin reintento
+automático; «Reintentar» es de la persona). **Listar no renueva nada.** Si OFF ya no tiene el producto o dice que no es comida, se guarda la fila vacía para no gastar un hueco de OFF en cada escaneo; con un error de OFF no se marca nada (se reintenta). **Un fallo al guardar la nutrición no tumba el escaneo**: se
+registra (`nutricion_error`, solo el nombre del error y el mensaje cortado, nunca el código ni datos de OFF) y la ficha se devuelve igual. **Despliegue**: la migración va ANTES que la nueva `lookup-barcode`, porque la búsqueda en la caché hace el embed `product_nutrition(nutrition_data_at)` en el camino crítico del escáner.
+
+**Cómo se enseña (docs/VOZ.md y docs/DISENO.md, sección «3 bis»).** Opsi **no es un nutricionista**: ni «sano», ni «cuidado», ni cuánto conviene comer, ni qué evitar (regla nueva en VOZ §4); se enseña el dato con su origen («Nutri-Score calculado por Open Food Facts», «Grupo NOVA según Open Food Facts») y una línea que no falta nunca:
+«Open Food Facts puede estar incompleto o desactualizado. Mira siempre la etiqueta.», más la licencia ODbL. **Color**: el rojo de la app es solo caducidad, así que el Nutri-Score usa la escala reconocible de cinco fichas **sin llegar al rojo**: verde, lima, amarillo, ámbar y **naranja** para la E (matiz 29°, a 18,8° de la caducidad en claro y
+17,4° en oscuro; `check:contrast` lo comprueba y no reutiliza ningún token de caducidad). Las fichas apagadas son neutras; la activa va más grande con un borde grueso (obligatorio: el lima y el amarillo solos no llegan a 3:1 sobre blanco); **la letra siempre a la vista** y todo el sello es UN elemento para el lector de
+pantalla («Nutri-Score C, calculado por Open Food Facts»). Los colores de la escala no se usan en ningún otro sitio. **NOVA y los niveles van en neutro**: NOVA con su número y el nombre de su clasificación (1 «Sin procesar o mínimamente procesado» … 4 «Ultraprocesado»), los niveles como texto atribuido, sin semáforo.
+
+**Lo que NO se ha hecho.** No cruza nada con las preferencias de salud (eso es D-44/D-46 y sigue sin tocarse). No compara productos ni propone alternativas. No hay raciones recomendadas ni cantidades diarias: sería opinar. `basis` (por 100 g o por 100 ml) sale de la unidad del producto, no de lo que declara OFF; en
+productos que se miden por unidades queda `NULL` y la tabla dice «por 100 g o 100 ml». Un producto escaneado pero privado (origen `user`) se puede abrir y dice «Sin datos nutricionales» sin «Reintentar».
+
+**Revisión de seguridad:** ningún hallazgo crítico, alto ni medio; cuatro bajos, todos aplicados (caracteres invisibles que dejaban pasar SQL y app, lista de aditivos partida, fichas sin datos que gastaban un hueco en cada escaneo, y el redondeo a 0). Pendiente, anotado en `PENDIENTES.md`: la clase de caracteres prohibidos de `upsert_global_product` (nombre, marca, ingredientes) sigue siendo la antigua, más débil.
 
 ### D-50 · Perfil personal opcional, con permiso propio · 2026-10-19
 
@@ -2514,6 +2553,28 @@ comprobado. Lo creado se borró.
 
 **Se aprendió:** (1) el ejecutor de tests de Node no resuelve el alias `@/` y el código de la app no puede importar con extensión `.ts`: la lógica que necesita otra función de la app la recibe por parámetro. (2) Un efecto que decide «una vez»
 y se cancela en la limpieza se pierde si las dependencias cambian antes de que acabe: se guarda un indicador de «ya decidido» y otro de «sigue montado».
+
+### 2026-10-19 (sesión 42) · Nutrición
+
+**Hecho** ([D-49](#d-49--nutrición-de-open-food-facts-por-producto-en-una-tabla-propia-que-solo-lee-premium--2026-10-19)): la tabla `product_nutrition` con su RLS por plan, `nutrition_of_products` y `upsert_product_nutrition`; `lookup-barcode` pide, filtra y guarda los campos
+nutricionales y trata una ficha sin ellos como caducada (sin devolverlos nunca); en la app, el widget «Nutrición» en «Tu comida», la lista con buscador, el detalle por producto, «Ver nutrición» en la ficha y la lectura estricta de lo que llega. Modelo de amenazas §8, `docs/security-inventory.md`, `docs/DISENO.md` («3 bis»)
+y `docs/VOZ.md` (regla 10 de §4 y tabla 5.6) al día. Trabajo repartido: backend (base de datos y función), app, y una revisión de seguridad independiente.
+
+**Verificado aquí:** pgTAP **816** en 17 ficheros (**205** de `nutricion_test.sql`: acceso con y sin plan por tabla y por función, `anon`, `service_role` columna a columna, un miembro de una nevera que no escribe ni deja nutrición en un producto privado, cada rango, formato y lista cerrada, y los pares de coherencia); `db:check` **1028**;
+`db:lint` sin errores; `test:funciones` **156** (de los 95 que había antes, los de nutrición y los del chat que trajo `main`) y `fn:check` **25** en el runtime de verdad (con una comprobación nueva: una ficha sin fila de nutrición se sirve como `cache_vieja`); `test:app` **224** (74 nuevos, todos de `nutricion.ts`); `check:contrast` con los pares de la escala nuevos y la distancia de matiz de la E a la
+caducidad; `tsc` y `eslint` limpios; `check:credenciales` limpio. **Por mutación:** 12 de SQL (quitar el plan de la política y de la función, el trigger del producto privado, cada rango, un permiso de `service_role`, la clase de caracteres…), 29 de la función (que `publico()` copie nutrición, que una ficha sin fila no caduque, que el
+fallo de nutrición tumbe el escaneo…), 29 de la lectura de la app (null→0, 150 g, NaN, prototipo heredado, tildes…) y 3 del validador de contraste (una E roja, una letra blanca sobre el amarillo, un borde claro); todas detectadas. **Revisión de seguridad independiente:** probó con las filas reales y con `set local role` que quien no es Premium no lee por la tabla, por la
+función, por `anon` ni por `service_role`, 35 entradas hostiles contra la Edge Function y 17 contra la app; ningún hallazgo crítico, alto ni medio, y los 4 bajos están aplicados. En la base local hay **dos fichas reales con nutrición** de escaneos con Open Food Facts de verdad (unas galletas con Nutri-Score E y NOVA 4, y un producto con la fila vacía), y el
+backend hizo además una consulta real a OFF para comprobar la forma de `nutriscore_grade`, `nova_group`, `nutriments`, `nutrient_levels` y `additives_tags`. Datos de prueba `zzprueba…` sembrados y borrados; `compi` sigue en básico.
+
+**Verificado después, en el navegador** (con la cuenta de pruebas, ancho de móvil, por contenido de la página; las capturas no salieron): con Premium, el widget «Nutrición» en «Tu comida» (con el aviso de «Nutri-Score y NOVA de tus productos»), la lista (la ficha real de unas galletas con Nutri-Score E y NOVA 4, y un producto escrito a mano con «Sin datos nutricionales») y el detalle (escala A–E con su letra, NOVA 4 «Ultraprocesado», la tabla por 100 g con los niveles de Open Food Facts, la ración, «Open Food Facts no declara aditivos.», el aviso de que puede estar incompleto y la atribución ODbL); y **con el plan básico**, la lista y el detalle (también por URL directa) dicen que es de Premium y no enseñan nada. Lo creado se borró y la cuenta volvió a básica.
+
+**Sin verificar:** **en un móvil**, y cómo se ve la escala en claro y en oscuro (no hay captura), el lector de pantalla, el flujo de renovar una ficha antigua desde el detalle y la hoja «Ver nutrición» en iOS. Tampoco: la capa HTTP de PostgREST con un
+JWT (los roles se simularon en SQL, equivalente para permisos y RLS), `String.prototype.normalize` del buscador en Hermes, la nube (el `GRANT` por defecto de funciones allí) y el campo `no_nutrition_data` de OFF, que no se usa.
+
+**Se aprendió:** (1) Un `CHECK` no puede mirar otra tabla: lo que en `products` se resolvía con un `CHECK` (`products_health_global_only_ck`) en una tabla propia es un trigger. (2) Los tres filtros de texto (función, SQL y app) se separan sin que nadie lo note: el de la función usaba `\p{C}` y los otros dos una lista corta de rangos, y por la rendija
+pasaban las «etiquetas» U+E0000, que no se ven y esconden instrucciones; se compara cada filtro con el más fuerte y Postgres admite `\U000E0000` en la clase. (3) El embed de PostgREST de una relación uno a uno devuelve un objeto o `null` (a veces una lista de uno): quien lo lee tiene que aceptar las tres formas. (4) Las herramientas de escritura colaron caracteres invisibles
+literales en el código dos veces (dos agentes distintos): se barren los ficheros tocados y las clases de caracteres se escriben siempre con escapes. (5) Una lista «partida» (aditivos con uno malo, truncada a 60) miente peor que ninguna: o entera o `NULL`. (6) La función de escaneo tiene el embed de la nueva tabla en su camino crítico: la migración se despliega antes que la función.
 
 ### 2026-10-19 (sesión 43) · Perfil personal
 

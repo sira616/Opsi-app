@@ -220,13 +220,19 @@ caro que puede cometer esta app.
    contiene» como afirmación propia: Opsi dice lo que Open Food Facts declara (y de dónde
    sale) y, si no hay datos, «Sin datos de alérgenos». Una etiqueta de «sin gluten» o «sin
    lactosa» se cuenta atribuida y nunca quita un aviso.
+10. **Opinar de lo que comes.** Ni «sano», ni «poco sano», ni «bueno», ni «malo», ni
+    «cuidado», ni cuánto conviene comer ni qué evitar. De nutrición Opsi enseña lo que Open
+    Food Facts declara —Nutri-Score, grupo NOVA, cifras por 100 g, niveles, ración, aditivos—
+    con su origen al lado, y se calla lo demás. Los nombres de los grupos NOVA son los de su
+    clasificación, sin un adjetivo más; un dato que falta es «—», nunca un cero; y «sin
+    aditivos» tampoco se dice: se dice que Open Food Facts no los declara.
 
 ---
 
 ## 5. Antes y después
 
-**36 casos reales de la app**, más los textos de las neveras (5.5), que nacieron ya
-con la guía. Las filas marcadas «Igual» están aquí a propósito:
+**36 casos reales de la app**, más los textos de las neveras (5.5) y los de la
+nutrición (5.6), que nacieron ya con la guía. Las filas marcadas «Igual» están aquí a propósito:
 son texto que ya cumple la guía y que no debe «mejorarse» en una limpieza futura.
 
 ### 5.1 Vacíos, listas y secciones pendientes
@@ -318,6 +324,32 @@ está** y **qué pasa al elegir**.
 | `InvitacionesRecibidas` · confirmar «Entrar» | ¿Entrar en «X»? Lo que tienes guardado se queda en tu nevera de ahora y no te lo llevas. | ¿Entrar en «Piso»? Se suma a tus neveras y puedes cambiar entre ellas cuando quieras. La tuya sigue como está. | El texto viejo era verdad en el modelo anterior (aceptar te movía). Ahora aceptar añade, y lo que hay que tranquilizar es lo contrario: que no pierdes nada. |
 | `SalirDeLaNevera` · no la llevas | — (nuevo) | ¿Salir de «Piso»? Lo guardado se queda ahí y dejas de verla. Tu nevera sigue como está. Para volver, tendrían que invitarte otra vez. | Escalón 3, sin humor: es una salida que no se deshace sola. Dice qué se queda, qué no se pierde y cómo se vuelve. |
 | `SalirDeLaNevera` · la llevas y eres la única persona | — (nuevo) | ¿Salir de «Piso»? Se queda sin nadie y lo que hay guardado deja de estar a tu alcance. No se puede deshacer. | Escalón 4: lo más serio de los tres casos. No hay «borrar nevera», así que esta es la única forma de liberar plaza, y por eso lleva encima una nota que lo explica. |
+
+### 5.6 Nutrición
+
+Los datos son de Open Food Facts (OFF), no de Opsi: el tono es datos con su origen al lado y
+nada de opinión (sección 4, regla 10). La gracia cabe solo en el título del vacío de la lista.
+
+| Dónde | Texto actual | Texto propuesto | Por qué |
+|---|---|---|---|
+| `premium.tsx` · widget | — (nuevo) | Nutrición · Nutri-Score y NOVA de tus productos | Dice qué hay dentro y no cuenta nada: la nutrición se pide al abrir la pantalla, no en el panel. Sin Premium, «Opsi Premium ⭐» como los demás. |
+| `nutricion.tsx` · sin Premium | — (nuevo) | Con Opsi Premium ⭐ ves el Nutri-Score y el grupo NOVA de tus productos. | El mismo patrón de «Tus productos» y «Lo que más gastas». |
+| `nutricion.tsx` · lista vacía | — (nuevo) | Ni una etiqueta que leer · Escanea algo y guárdalo en Mi casa. Aquí verás su Nutri-Score y su grupo NOVA. · Añadir alimento | Las tres piezas de la sección 6. La gracia, solo en el título: el cuerpo dice qué pasaría si hubiera algo y el botón lo resuelve. |
+| `nutricion.tsx` · búsqueda sin resultados | — (nuevo) | Nada coincide con tu búsqueda · Prueba con otro nombre o con la marca. · Borrar búsqueda | Sin broma: el otro vacío ya la lleva y son dos estados de la misma pantalla. La búsqueda ignora tildes y mayúsculas. |
+| `FilaNutricion` · sin datos | — (nuevo) | Sin datos nutricionales | Ni un cero ni una letra inventada. «No consta» y «Open Food Facts no declara nada» se dicen igual. |
+| `FilaNutricion` · con datos pero sin sellos | — (nuevo) | Sin Nutri-Score ni grupo NOVA | Hay cifras, pero ni letra ni grupo: se dice, no se rellena. |
+| `nutricion.tsx` · pie de la lista | — (nuevo) | Nutri-Score y grupo NOVA según Open Food Facts. | Una línea para toda la lista, en vez de repetir el origen en cada fila. |
+| `FilaNutricion` · etiqueta de accesibilidad | — (nuevo) | Ver la nutrición de Yogur natural. Nutri-Score C, calculado por Open Food Facts. Grupo NOVA 4: Ultraprocesado, según Open Food Facts. | Pulsable: dice qué hace. El resumen lleva el origen, que la ficha pequeña no puede escribir. |
+| `DatosNutricion` · Nutri-Score | — (nuevo) | Nutri-Score calculado por Open Food Facts | El origen, a la vista del sello. Etiqueta: «Nutri-Score C, calculado por Open Food Facts». |
+| `DatosNutricion` · NOVA | — (nuevo) | 4 · Ultraprocesado, con «Grupo NOVA según Open Food Facts» debajo | Los nombres exactos de la clasificación: 1 «Sin procesar o mínimamente procesado», 2 «Ingrediente culinario procesado», 3 «Procesado», 4 «Ultraprocesado». Sin adjetivos. |
+| `DatosNutricion` · sin Nutri-Score o sin NOVA | — (nuevo) | Open Food Facts no calcula el Nutri-Score de este producto. · Open Food Facts no da el grupo NOVA de este producto. | Solo cuando la ficha tiene otros datos. Dice de quién es la falta. |
+| `DatosNutricion` · niveles | — (nuevo) | Nivel alto · Niveles calculados por Open Food Facts. | Texto atribuido, sin color ni icono: un «alto» en rojo parecería caducidad. |
+| `DatosNutricion` · ración | — (nuevo) | Ración: 30 g | El texto de OFF tal cual, ya limpio. Opsi no calcula nada por ración. |
+| `DatosNutricion` · aditivos | — (nuevo) | Open Food Facts declara 3 aditivos: E330, E322, E150D. · Open Food Facts no declara aditivos. | Regla 9: nunca «sin aditivos» como afirmación propia. Si OFF no da la lista, el bloque no sale. |
+| `ContenidoNutricion` · sin datos | — (nuevo) | Sin datos nutricionales · Reintentar | Y nada más: ni escala ni tabla de guiones. «Reintentar» solo aparece si hay ficha de OFF que renovar, y es de la persona. |
+| `PieNutricion` | — (nuevo) | Open Food Facts puede estar incompleto o desactualizado. Mira siempre la etiqueta. · Datos de Open Food Facts, bajo licencia ODbL. | Siempre visible, con o sin datos. |
+| `ContenidoNutricion` · el plan no llega | — (nuevo) | El mensaje del servidor, sin tocar, en una nota de aviso | Sección 7: «Esto es de Opsi Premium ⭐.» tal cual y sin rojo. |
+| `HojaFicha` · botón | — (nuevo) | Ver nutrición | Junto a «Ver ingredientes». Solo en un producto de OFF con código. |
 
 ---
 
