@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **842 comprobaciones** en PGlite · `test:app`: **158**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **133** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **17 ficheros pgTAP, 630 tests** contra pgTAP real · `db:check`: **842 comprobaciones** en PGlite · `test:app`: **158**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **133** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -2498,9 +2498,12 @@ función, 429 y el aviso en la pantalla), la guarda de código y las filas de PE
 **Verificado aquí:** `test:funciones` **133** (las nuevas: cuota, falla cerrado, lo inválido no gasta, nombres con texto escondido, la guarda de código y 10 de `saneo.ts`); `test:app` **152**; `tsc` y `eslint` limpios; `db:check` **842**
 (corre los tests de pgTAP sobre un Postgres embebido: **22** nuevos de `cuota_chat_test.sql`) y el inventario de seguridad al día.
 
-**Sin verificar:** **pgTAP contra el Postgres real de Docker y la migración aplicada a la base local**: Docker Desktop estaba apagado y no se arrancó. Hay que correr `npx supabase migration up` (y, para
-no encontrar un 503, **hacerlo antes de usar el chat**: con la función de la cuota sin aplicar, el chat falla cerrado). Tampoco: la cuota con dos peticiones a la vez, el chat con un modelo real y la
-pantalla en un móvil.
+**Con Docker encendido, después:** la migración se aplicó a la base local (`npx supabase migration up`), `supabase test db` da **17 ficheros y 630 tests** contra pgTAP real (los 22 de la cuota entre ellos) y
+`db:carreras` pasa a **17** con un escenario nuevo: dos sesiones de la misma persona gastan 15 mensajes cada una a la vez y quedan apuntados exactamente 20. Quitando el candado de la función, ese
+escenario falla (30 apuntados), y las mutaciones de la tabla (tope del día, cuenta sin filtrar por persona, permiso de borrado) las detecta el pgTAP. **Para usar el chat hace falta aplicar la migración**:
+sin ella, la cuota falla y el chat falla cerrado (503).
+
+**Sin verificar:** el chat con un modelo real y la pantalla en un móvil.
 
 **Se aprendió:** una función en el `FROM` que no depende de ninguna columna (`generate_series(1,20) g, lateral f()`) se ejecuta UNA vez y se repite su resultado; para llamarla veinte veces hay que ponerla
 en la lista de columnas. El test «caben 20» pasaba por casualidad y el «el 21 no cabe» lo delató.
