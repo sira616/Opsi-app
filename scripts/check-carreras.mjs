@@ -255,6 +255,27 @@ try {
     `select coalesce(sum(n), 0) from public.lookup_usage where clave = 'u:${USUARIO}:m';`,
   );
   comprobar('el contador del minuto marca 40: ninguna consulta se perdió', Number(contadas.salida) === 40, `marca: ${contadas.salida}`);
+
+  // ── E · La cuota del chat, gastada por la MISMA persona desde dos sesiones ─
+  // Veinte mensajes por hora. `use_chat_quota` cuenta y luego apunta: sin el candado
+  // por persona, las dos sesiones contarían cero filas confirmadas y se colarían las
+  // quince de cada una (30 en total). Con él, la segunda espera a que la primera
+  // confirme y solo caben cinco.
+  console.log('\n  Dos sesiones de la misma persona gastan a la vez la cuota del chat (20 por hora): 15 mensajes cada una');
+  await psql(`delete from public.chat_usage where user_id = '${USUARIO}';`);
+  const quince =
+    `select count(*) filter (where (t.q).allowed) || '/' || count(*) ` +
+    `from (select public.use_chat_quota() as q from generate_series(1, 15)) as t;`;
+  const resE = await carrera(quince, quince);
+  const pasadas = (r) => Number((r.salida.split('\n')[0] ?? '').split('/')[0]);
+  comprobar('la primera pasa sus 15', pasadas(resE.primera) === 15, `respuesta: ${resE.primera.error || resE.primera.salida}`);
+  comprobar(
+    'la segunda solo pasa 5: las otras 10 se pasan del cupo',
+    pasadas(resE.segunda) === 5,
+    `respuesta: ${resE.segunda.error || resE.segunda.salida}`,
+  );
+  const apuntadas = await psql(`select count(*) from public.chat_usage where user_id = '${USUARIO}';`);
+  comprobar('quedan apuntados 20, no 30: ningún mensaje se coló', Number(apuntadas.salida) === 20, `apuntados: ${apuntadas.salida}`);
 } catch (error) {
   fallos.push('la comprobación terminó con un error');
   console.error(rojo(`\n${error.message}`));

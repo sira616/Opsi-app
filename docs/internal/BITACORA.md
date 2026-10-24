@@ -56,7 +56,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **36 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **16 ficheros pgTAP, 608 tests** contra pgTAP real · `db:check`: **816 comprobaciones** en PGlite · `test:app`: **156**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **95** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
+| Tests | **17 ficheros pgTAP, 630 tests** contra pgTAP real · `db:check`: **842 comprobaciones** en PGlite · `test:app`: **158**, la lógica de calendario, el destino de un producto, los alérgenos y cuándo recomendar congelar · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **133** · `fn:check`: **22**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1176,6 +1176,33 @@ no vence pronto, y a igual urgencia, por nombre; «Vence/Caduca hoy|mañana.» c
 la app»); es **de este aparato**, como el aspecto, no de la cuenta. Es la misma función de «congelar» que la tarjeta del inventario, así que el aviso y la tarjeta nunca discrepan.
 
 **Lo que NO se ha hecho:** la receta no genera nada (hace falta la IA); los avisos no usan todavía lo que se sepa de la persona (alérgenos, gustos): eso llega con el perfil personal; y los avisos fuera de la app (push) siguen siendo la fase 3.
+
+### D-51 · La deuda del chat: modelo de amenazas, saneo de nombres y cuota por persona · 2026-10-24
+
+El chat con IA (`opsi-chat`, PR #27) se conectó con tres cosas pendientes que el propio proyecto exigía: **este documento no tenía su tabla STRIDE** (el modelo de amenazas decía que
+no se construía sin ella), **no había tope por persona** (cada mensaje cuesta) y lo que **escribe cualquiera** llegaba al modelo tal cual. Esta decisión las salda.
+
+**Modelo de amenazas (§10 de `threat-model.md`).** Flujo, doce amenazas con su mitigación y dónde se prueba, y lo que no cubre. Lo que conviene recordar: la defensa real contra la
+**inyección indirecta** (un nombre de producto o de lista, escrito por otra persona de una nevera compartida o traído de Open Food Facts, con una orden dentro) es que **las herramientas solo
+leen** y corren con la sesión de la persona; lo demás es defensa en profundidad. **Con herramientas de escritura esa inyección dejaría de ser un engaño y pasaría a cambiar datos**: antes,
+confirmación de la persona en la app para cada escritura y repasar §10 entero. El inventario de seguridad ya no dice «Sin diseñar» y recoge el proveedor de IA como integración externa.
+
+**Los nombres, limpios antes de llegar al modelo** (`_shared/saneo.ts`, 10 tests). Se quitan los caracteres de control, de dirección, de ancho cero, el uso privado y sobre todo las
+**«etiquetas» U+E0000, que codifican texto invisible** (una instrucción que una persona que revisa el dato no ve), se compacta el espacio en blanco y se acota a 80 caracteres. La respuesta del modelo
+pasa por la misma limpieza (conservando los saltos de línea) antes de llegar a la pantalla. Es la misma clase de caracteres que ya se filtra en salud, nutrición y perfil. **No es la defensa**: una
+orden escrita con letras corrientes pasa, y por eso el test lo dice.
+
+**Cuota por persona** (migración `20261026100000`): la tabla `chat_usage` —una fila por mensaje, de quién y cuándo, **nunca el contenido**— que **nadie** puede tocar a mano (ni `authenticated`,
+ni `service_role`), y la función `use_chat_quota()`, `SECURITY DEFINER` con el `search_path` vacío, que saca quién es de `auth.uid()` (no de un argumento: no se gasta la cuota de otra persona),
+espera su turno con un candado por persona, limpia lo de más de dos días, cuenta la última hora y el último día y, si cabe, apunta uno más. **20 por hora y 100 al día**, cifras razonables sin datos de
+uso real. `opsi-chat` la llama con el token de la persona (sigue sin clave de servicio) **después de validar y antes del modelo**: lo inválido no gasta cuota. Sin cuota: **429** con `Retry-After` y
+«Prueba otra vez en N minutos» en la pantalla. **Si no se puede comprobar la cuota, no se contesta** (503): gastar sin límite es peor que fallar.
+
+**Una guarda de código**: un test lee el código del chat y falla si nombra `user_health_preferences`, `user_profile`, `product_nutrition` o los alérgenos, y comprueba que las herramientas son
+exactamente dos. Lo que llega al proveedor se decide a propósito, no por descuido.
+
+**Lo que NO se ha hecho:** el chat sigue sin ser de Premium (decisión tuya); no hay **tope global** (el alta no está cerrada: ese freno es el del proveedor); el contrato de encargado con el proveedor,
+la región y la retención siguen pendientes y son un 🔴 antes de producción; y no hay herramientas de escritura.
 
 ## 3. Convenciones
 
@@ -2462,3 +2489,21 @@ comprobado. Lo creado se borró.
 
 **Se aprendió:** (1) el ejecutor de tests de Node no resuelve el alias `@/` y el código de la app no puede importar con extensión `.ts`: la lógica que necesita otra función de la app la recibe por parámetro. (2) Un efecto que decide «una vez»
 y se cancela en la limpieza se pierde si las dependencias cambian antes de que acabe: se guarda un indicador de «ya decidido» y otro de «sigue montado».
+
+### 2026-10-24 (sesión 44) · La deuda del chat
+
+**Hecho** ([D-51](#d-51--la-deuda-del-chat-modelo-de-amenazas-saneo-de-nombres-y-cuota-por-persona--2026-10-24)): el modelo de amenazas del chat (§10), el saneo de nombres y de la respuesta, la cuota por persona (tabla,
+función, 429 y el aviso en la pantalla), la guarda de código y las filas de PENDIENTES (la del chat decía «falta conectar la pantalla» cuando ya estaba conectada).
+
+**Verificado aquí:** `test:funciones` **133** (las nuevas: cuota, falla cerrado, lo inválido no gasta, nombres con texto escondido, la guarda de código y 10 de `saneo.ts`); `test:app` **152**; `tsc` y `eslint` limpios; `db:check` **842**
+(corre los tests de pgTAP sobre un Postgres embebido: **22** nuevos de `cuota_chat_test.sql`) y el inventario de seguridad al día.
+
+**Con Docker encendido, después:** la migración se aplicó a la base local (`npx supabase migration up`), `supabase test db` da **17 ficheros y 630 tests** contra pgTAP real (los 22 de la cuota entre ellos) y
+`db:carreras` pasa a **17** con un escenario nuevo: dos sesiones de la misma persona gastan 15 mensajes cada una a la vez y quedan apuntados exactamente 20. Quitando el candado de la función, ese
+escenario falla (30 apuntados), y las mutaciones de la tabla (tope del día, cuenta sin filtrar por persona, permiso de borrado) las detecta el pgTAP. **Para usar el chat hace falta aplicar la migración**:
+sin ella, la cuota falla y el chat falla cerrado (503).
+
+**Sin verificar:** el chat con un modelo real y la pantalla en un móvil.
+
+**Se aprendió:** una función en el `FROM` que no depende de ninguna columna (`generate_series(1,20) g, lateral f()`) se ejecuta UNA vez y se repite su resultado; para llamarla veinte veces hay que ponerla
+en la lista de columnas. El test «caben 20» pasaba por casualidad y el «el 21 no cabe» lo delató.

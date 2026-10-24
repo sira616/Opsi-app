@@ -17,11 +17,12 @@ import { Nota } from '@/features/ajustes/ui';
 import {
   MAX_LONGITUD_MENSAJE,
   SUGERENCIAS,
+  avisoDeLimite,
   borradorDeRuta,
   puedeEnviar,
   type Mensaje,
 } from '@/features/chat/mensajes';
-import { responder } from '@/features/chat/responder';
+import { ErrorLimiteChat, responder } from '@/features/chat/responder';
 import { fonts, makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
@@ -65,8 +66,11 @@ export default function Chat() {
     let respuesta: string;
     try {
       respuesta = await responder(conversacion);
-    } catch {
-      respuesta = 'No he podido contestar. Prueba otra vez.';
+    } catch (caught) {
+      respuesta =
+        caught instanceof ErrorLimiteChat
+          ? avisoDeLimite(caught.esperaS)
+          : 'No he podido contestar. Prueba otra vez.';
     }
     setMensajes((actuales) => [...actuales, { id: nuevoId(), de: 'opsi', texto: respuesta }]);
     setRespondiendo(false);

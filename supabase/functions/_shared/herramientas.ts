@@ -10,13 +10,16 @@
  *   · Los argumentos los escribe un modelo: son entrada no confiable. Cada herramienta los
  *     valida y, si no valen, devuelve un error que el modelo puede leer y corregir.
  *   · Lo que devuelven es DATO, no instrucción. Los nombres de producto los escribe quien
- *     sea (o vienen de Open Food Facts): el bucle los entrega al modelo marcados como datos.
+ *     sea (o vienen de Open Food Facts): se limpian de caracteres que no se ven ni de dirección y
+ *     se acotan (`sanearDato`), y el bucle los entrega al modelo marcados como datos. Es defensa
+ *     en profundidad: lo que protege de verdad es que estas herramientas SOLO LEEN.
  *   · Las consultas corren con el token de la persona (ver `index.ts`): la RLS limita lo que
  *     se ve. Aquí no hay ningún filtro de hogar, a propósito: si hiciera falta uno, sería
  *     señal de que la RLS falla.
  */
 
 import type { DescripcionHerramienta } from './modelo.ts';
+import { sanearDato } from './saneo.ts';
 
 export type Prioridad = 'high' | 'medium' | 'low' | 'undated' | 'frozen';
 const PRIORIDADES: readonly Prioridad[] = ['high', 'medium', 'low', 'undated', 'frozen'];
@@ -107,7 +110,7 @@ const verInventario: Herramienta = {
     return {
       total: filas.length,
       elementos: filas.map((f) => ({
-        nombre: f.name,
+        nombre: sanearDato(f.name),
         estado: f.state,
         sitio: f.location,
         cantidad: `${f.remaining_quantity} ${UNIDAD_BASE[f.unit_family]}`,
@@ -139,7 +142,7 @@ const verListaCompra: Herramienta = {
     return {
       total: filas.length,
       pendientes: filas.map((f) => ({
-        nombre: f.name,
+        nombre: sanearDato(f.name),
         cantidad:
           f.quantity !== null && f.unit_family ? `${f.quantity} ${UNIDAD_BASE[f.unit_family]}` : null,
       })),
