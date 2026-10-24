@@ -100,6 +100,8 @@ function Puerta() {
       <Stack.Screen name="nutricion/[id]" />
       {/* El chat de Opsi: pantalla entera, con su cuadro de escribir. Se abre desde la nevera y desde Premium. */}
       <Stack.Screen name="chat" />
+      {/* El perfil personal, opcional: pantalla entera, con su aviso de permiso y su botón de borrar. */}
+      <Stack.Screen name="perfil" />
       <Stack.Screen name="cambiar-nevera" options={hojaSelector} />
       <Stack.Screen name="nevera/nueva" options={hoja} />
       <Stack.Screen name="nevera/[id]/editar" options={hoja} />

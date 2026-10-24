@@ -14,13 +14,36 @@ import { paraEnviar, type Mensaje } from './mensajes';
  * pantalla y `docs/PRIVACIDAD.md` (el hueco del proveedor de IA).
  *
  * Si algo falla se lanza el error y la pantalla dice que no ha podido contestar: aquí no se
- * inventa una respuesta.
+ * inventa una respuesta. Si la persona ha llegado al límite de mensajes (la cuota del servidor, 429)
+ * se lanza `ErrorLimiteChat` con lo que falta, y la pantalla se lo dice.
  */
+/** La persona ha gastado su cuota de mensajes: `esperaS` es lo que falta para poder volver a preguntar. */
+export class ErrorLimiteChat extends Error {
+  constructor(readonly esperaS: number) {
+    super('limite_de_mensajes');
+  }
+}
+
+/** Si el fallo de la función es un 429, cuánto falta; si no, null. El cuerpo es entrada de fuera. */
+async function esperaDelLimite(error: unknown): Promise<number | null> {
+  const contexto = (error as { context?: unknown } | null)?.context as
+    | { status?: unknown; json?: () => Promise<unknown> }
+    | undefined;
+  if (!contexto || contexto.status !== 429) return null;
+  const cuerpo = (await contexto.json?.().catch(() => null)) as { espera_s?: unknown } | null;
+  const espera = cuerpo?.espera_s;
+  return typeof espera === 'number' && Number.isFinite(espera) && espera > 0 ? espera : 60;
+}
+
 export async function responder(conversacion: readonly Mensaje[]): Promise<string> {
   const { data, error } = await supabase.functions.invoke('opsi-chat', {
     body: { mensajes: paraEnviar(conversacion) },
   });
-  if (error) throw error;
+  if (error) {
+    const espera = await esperaDelLimite(error);
+    if (espera !== null) throw new ErrorLimiteChat(espera);
+    throw error;
+  }
   const respuesta = (data as { respuesta?: unknown } | null)?.respuesta;
   if (typeof respuesta !== 'string' || respuesta.trim() === '') {
     throw new Error('opsi-chat no devolvió una respuesta');

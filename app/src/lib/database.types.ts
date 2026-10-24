@@ -51,6 +51,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"chat_usage": {
+                  Row: {
+                    "id": number,"used_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: never,"used_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "id"?: never,"used_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"household_icons": {
                   Row: {
                     "key": string,"label": string,"sort_order": number
@@ -327,6 +341,20 @@ isOneToOne: false
                   }
                   Update: {
                     "avoid"?: (string)[],"consent_version"?: number | null,"consented_at"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"user_profile": {
+                  Row: {
+                    "activity_level": string | null,"consent_version": number | null,"consented_at": string | null,"diet": string | null,"dislikes": (string)[],"dislikes_custom": (string)[],"likes": (string)[],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "activity_level"?: string | null,"consent_version"?: number | null,"consented_at"?: string | null,"diet"?: string | null,"dislikes"?: (string)[],"dislikes_custom"?: (string)[],"likes"?: (string)[],"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "activity_level"?: string | null,"consent_version"?: number | null,"consented_at"?: string | null,"diet"?: string | null,"dislikes"?: (string)[],"dislikes_custom"?: (string)[],"likes"?: (string)[],"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -873,6 +901,11 @@ isOneToOne: false
       } },
 "upsert_product_nutrition":
 { Args: { "p_additives_tags": (string)[],"p_basis": string,"p_carbohydrates": number,"p_energy_kcal": number,"p_fat": number,"p_fat_level": string,"p_fiber": number,"p_nova_group": number,"p_nutriscore_grade": string,"p_product_id": string,"p_proteins": number,"p_salt": number,"p_salt_level": string,"p_saturated_fat": number,"p_saturated_fat_level": string,"p_serving_size": string,"p_sugars": number,"p_sugars_level": string }; Returns: undefined
+                           },
+"use_chat_quota":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "allowed": boolean,"wait_s": number
+            }[]
                            },
 "use_quantity":
 { Args: { "p_amount": number,"p_item_id": string }; Returns: {

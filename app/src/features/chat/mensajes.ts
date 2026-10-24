@@ -76,6 +76,24 @@ export function paraEnviar(conversacion: readonly Mensaje[]): { de: Mensaje['de'
     .map((m) => ({ de: m.de, texto: m.texto.trim().slice(0, MAX_LONGITUD_MENSAJE) }));
 }
 
+/**
+ * Lo que se le dice a la persona cuando llega al límite de mensajes (la cuota del servidor,
+ * `opsi-chat` → 429): el dato primero y qué hacer, con la espera redondeada hacia ARRIBA para
+ * no decirle que vuelva antes de tiempo. Sin dato de cuánto falta, un minuto.
+ */
+export function avisoDeLimite(esperaS: number): string {
+  const s = Number.isFinite(esperaS) && esperaS > 0 ? esperaS : 60;
+  const minutos = Math.ceil(s / 60);
+  let cuando: string;
+  if (s < 60) cuando = 'menos de un minuto';
+  else if (minutos < 60) cuando = minutos === 1 ? 'un minuto' : `${minutos} minutos`;
+  else {
+    const horas = Math.ceil(minutos / 60);
+    cuando = horas === 1 ? 'una hora' : `${horas} horas`;
+  }
+  return `Has llegado al límite de mensajes. Prueba otra vez en ${cuando}.`;
+}
+
 /** ¿Se puede mandar? Con algo escrito de verdad, y sin pasarse. */
 export function puedeEnviar(texto: string): boolean {
   const t = texto.trim();

@@ -88,6 +88,18 @@ const dependencias: DependenciasChat = {
     };
   },
 
+  /**
+   * Un mensaje de la cuota de ESTA persona. Va con su token (no hay clave de servicio): la función
+   * `use_chat_quota` lee quién es de su sesión y apunta el uso en una tabla que nadie más toca.
+   */
+  async cuota(token) {
+    const { data, error } = await clienteDe(token).rpc('use_chat_quota');
+    if (error) throw error;
+    const fila = (Array.isArray(data) ? data[0] : data) as { allowed?: unknown; wait_s?: unknown } | null;
+    if (!fila || typeof fila.allowed !== 'boolean') throw new Error('respuesta de cuota no válida');
+    return { permitido: fila.allowed, esperaS: Number(fila.wait_s) || 0 };
+  },
+
   modelo,
   log: (evento) => console.log(JSON.stringify(evento)),
 };

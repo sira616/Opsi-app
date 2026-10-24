@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-19** (sesión 42)
+> Última actualización: **2026-10-24** (sesión 44)
 
 ---
 
@@ -61,7 +61,7 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **39 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **17 ficheros pgTAP, 816 tests** contra pgTAP real · `db:check`: **1028 comprobaciones** en PGlite · `test:app`: **230**, la lógica de calendario, el destino de un producto, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 14, con dos sesiones a la vez · `test:funciones`: **156** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
+| Tests | **19 ficheros pgTAP, 899 tests** contra pgTAP real · `db:check`: **1119 comprobaciones** en PGlite · `test:app`: **256**, la lógica de calendario, el destino de un producto, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **176** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
 | App | Expo SDK 57 · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
@@ -1215,6 +1215,58 @@ pantalla («Nutri-Score C, calculado por Open Food Facts»). Los colores de la e
 productos que se miden por unidades queda `NULL` y la tabla dice «por 100 g o 100 ml». Un producto escaneado pero privado (origen `user`) se puede abrir y dice «Sin datos nutricionales» sin «Reintentar».
 
 **Revisión de seguridad:** ningún hallazgo crítico, alto ni medio; cuatro bajos, todos aplicados (caracteres invisibles que dejaban pasar SQL y app, lista de aditivos partida, fichas sin datos que gastaban un hueco en cada escaneo, y el redondeo a 0). Pendiente, anotado en `PENDIENTES.md`: la clase de caracteres prohibidos de `upsert_global_product` (nombre, marca, ingredientes) sigue siendo la antigua, más débil.
+
+### D-50 · Perfil personal opcional, con permiso propio · 2026-10-19
+
+La función 2 de la lista: poder tener en cuenta **cómo es la persona** —cuánto se mueve, cómo come, qué le gusta y qué no, y productos concretos que no le gustan— para hacer recomendaciones más
+personalizadas. **Todo es opcional** y se trata con cuidado. Una pantalla nueva (`/perfil`), un widget «Tu perfil» en Premium (en «Asistente», **sin candado**: es un dato de la persona, no una función de pago) y una
+tabla, `user_profile` (migración `20261025100000`).
+
+**Se trata como un dato sensible, con el patrón del consentimiento de salud (D-46).** Cuánto te mueves y cómo comes dicen cosas que no son asunto de nadie más, y una dieta o lo que no se tolera rozan la salud y
+las creencias. Por eso: **RLS por `user_id`** en las cuatro operaciones y permisos columna a columna (`anon` y `service_role` sin ningún permiso, y ninguna función ni vista lo lee); **sin permiso no se guarda
+nada** (`consent_version`; la fecha, `consented_at`, la pone un trigger y la persona no puede escribirla); el permiso es **propio y distinto del de salud** (es otro fin y se acepta por separado); **se borra**
+(retirar el permiso es borrar la fila); y al borrar la cuenta se va con ella. Una fila vacía —solo el permiso— sí se puede crear.
+
+**Listas cerradas validadas en el servidor**: 5 niveles de ejercicio, 5 dietas (**sin opciones religiosas, a propósito**: serían otra categoría especial y no se han pedido) y un vocabulario de 26 alimentos para
+gustos y disgustos, **el mismo para los dos y una cosa no puede estar en ambos**. La única parte libre son los «productos concretos que no te gustan»: hasta 10, de 2 a 40 caracteres, **sin caracteres de control, de
+formato (dirección, ancho cero), las «etiquetas» U+E0000 ni marcado, llaves o comillas inversas**, sin repetidos sin distinguir mayúsculas. Esa lista puede acabar algún día en una petición a un modelo, así que
+**se trata siempre como dato, nunca como instrucción**, y la comprobación está en el servidor, en la app antes de mandar y otra vez al leer.
+
+**Hoy NADA recomienda con el perfil.** Se guarda para cuando algo lo haga, y el aviso de la pantalla lo dice («Todavía no lo uso para recomendar nada: lo guardo para cuando lo haga»). No es un detalle: pedir datos
+sin usarlos va contra la minimización, y se hace porque la persona lo ha pedido para el futuro y se le dice. **Antes de que la asistente o los avisos lo lean hace falta un permiso propio para mandarlo al
+proveedor del modelo** (tenerlo guardado no lo es): está en PENDIENTES como 🔴 y en `docs/PRIVACIDAD.md`.
+
+**La app** (`shared/lib/perfil.ts`, funciones puras con 24 tests): los vocabularios con su etiqueta, la lectura estricta de la fila (lo que no esté en las listas se tira; si algo viniera en las dos listas, gana «no me
+gusta»), `limpiarProducto` (la misma regla del servidor), el permiso (`VERSION_AVISO_PERFIL`, subirla obliga a aceptar de nuevo), `perfilEfectivo` y el resumen del widget. En la pantalla: sin permiso, una tarjeta
+(«Todo esto es opcional») con «Aceptar y rellenar»; con él, chips de un toque (tocar otra vez lo elegido lo quita), «Otros que no te gusten», «Lo aceptaste el …» y **«Borrar mi perfil»** con confirmación. «No me gusta» se
+marca con una X y no con color: el rojo de la app es solo de la caducidad.
+
+### D-51 · La deuda del chat: modelo de amenazas, saneo de nombres y cuota por persona · 2026-10-24
+
+El chat con IA (`opsi-chat`, PR #27) se conectó con tres cosas pendientes que el propio proyecto exigía: **este documento no tenía su tabla STRIDE** (el modelo de amenazas decía que
+no se construía sin ella), **no había tope por persona** (cada mensaje cuesta) y lo que **escribe cualquiera** llegaba al modelo tal cual. Esta decisión las salda.
+
+**Modelo de amenazas (§10 de `threat-model.md`).** Flujo, doce amenazas con su mitigación y dónde se prueba, y lo que no cubre. Lo que conviene recordar: la defensa real contra la
+**inyección indirecta** (un nombre de producto o de lista, escrito por otra persona de una nevera compartida o traído de Open Food Facts, con una orden dentro) es que **las herramientas solo
+leen** y corren con la sesión de la persona; lo demás es defensa en profundidad. **Con herramientas de escritura esa inyección dejaría de ser un engaño y pasaría a cambiar datos**: antes,
+confirmación de la persona en la app para cada escritura y repasar §10 entero. El inventario de seguridad ya no dice «Sin diseñar» y recoge el proveedor de IA como integración externa.
+
+**Los nombres, limpios antes de llegar al modelo** (`_shared/saneo.ts`, 10 tests). Se quitan los caracteres de control, de dirección, de ancho cero, el uso privado y sobre todo las
+**«etiquetas» U+E0000, que codifican texto invisible** (una instrucción que una persona que revisa el dato no ve), se compacta el espacio en blanco y se acota a 80 caracteres. La respuesta del modelo
+pasa por la misma limpieza (conservando los saltos de línea) antes de llegar a la pantalla. Es la misma clase de caracteres que ya se filtra en salud, nutrición y perfil. **No es la defensa**: una
+orden escrita con letras corrientes pasa, y por eso el test lo dice.
+
+**Cuota por persona** (migración `20261026100000`): la tabla `chat_usage` —una fila por mensaje, de quién y cuándo, **nunca el contenido**— que **nadie** puede tocar a mano (ni `authenticated`,
+ni `service_role`), y la función `use_chat_quota()`, `SECURITY DEFINER` con el `search_path` vacío, que saca quién es de `auth.uid()` (no de un argumento: no se gasta la cuota de otra persona),
+espera su turno con un candado por persona, limpia lo de más de dos días, cuenta la última hora y el último día y, si cabe, apunta uno más. **20 por hora y 100 al día**, cifras razonables sin datos de
+uso real. `opsi-chat` la llama con el token de la persona (sigue sin clave de servicio) **después de validar y antes del modelo**: lo inválido no gasta cuota. Sin cuota: **429** con `Retry-After` y
+«Prueba otra vez en N minutos» en la pantalla. **Si no se puede comprobar la cuota, no se contesta** (503): gastar sin límite es peor que fallar.
+
+**Una guarda de código**: un test lee el código del chat y falla si nombra `user_health_preferences`, `user_profile`, `product_nutrition` o los alérgenos, y comprueba que las herramientas son
+exactamente dos. Lo que llega al proveedor se decide a propósito, no por descuido.
+
+**Lo que NO se ha hecho:** el chat sigue sin ser de Premium (decisión tuya); no hay **tope global** (el alta no está cerrada: ese freno es el del proveedor); el contrato de encargado con el proveedor,
+la región y la retención siguen pendientes y son un 🔴 antes de producción; y no hay herramientas de escritura.
 
 ## 3. Convenciones
 
@@ -2523,3 +2575,36 @@ JWT (los roles se simularon en SQL, equivalente para permisos y RLS), `String.pr
 **Se aprendió:** (1) Un `CHECK` no puede mirar otra tabla: lo que en `products` se resolvía con un `CHECK` (`products_health_global_only_ck`) en una tabla propia es un trigger. (2) Los tres filtros de texto (función, SQL y app) se separan sin que nadie lo note: el de la función usaba `\p{C}` y los otros dos una lista corta de rangos, y por la rendija
 pasaban las «etiquetas» U+E0000, que no se ven y esconden instrucciones; se compara cada filtro con el más fuerte y Postgres admite `\U000E0000` en la clase. (3) El embed de PostgREST de una relación uno a uno devuelve un objeto o `null` (a veces una lista de uno): quien lo lee tiene que aceptar las tres formas. (4) Las herramientas de escritura colaron caracteres invisibles
 literales en el código dos veces (dos agentes distintos): se barren los ficheros tocados y las clases de caracteres se escriben siempre con escapes. (5) Una lista «partida» (aditivos con uno malo, truncada a 60) miente peor que ninguna: o entera o `NULL`. (6) La función de escaneo tiene el embed de la nueva tabla en su camino crítico: la migración se despliega antes que la función.
+
+### 2026-10-19 (sesión 43) · Perfil personal
+
+**Hecho** ([D-50](#d-50--perfil-personal-opcional-con-permiso-propio--2026-10-19)): la tabla `user_profile` con su permiso propio y su borrado, la pantalla del perfil, el widget en Premium, y la documentación
+(modelo de amenazas §9, aviso de privacidad, inventario, PENDIENTES).
+
+**Verificado aquí:** pgTAP **669** en 17 ficheros (**61** nuevos de `perfil_personal_test.sql`); `db:check` **881**; `test:app` **174** (24 nuevos); `tsc` y `eslint` limpios; **por mutación (6):** quitar la exigencia del permiso,
+el filtro de marcado, que la fecha del permiso la ponga el servidor, el quitar repetidos, el tope de longitud y la política de borrado: todas detectadas. **En el navegador** con la cuenta de pruebas: la tarjeta de permiso sin nada
+que rellenar; aceptar (en la base: versión 1 con fecha del servidor); elegir ejercicio y dieta; marcar «Arroz» en «te gusta» y luego en «no te gusta» (en la base pasó de una lista a la otra); un texto con marcado
+(rechazado con el mensaje) y uno válido con espacios de más (guardado limpio); y «Borrar mi perfil» con su confirmación (la fila desaparece y vuelve la tarjeta). Lo creado se borró.
+
+**Sin verificar:** en un móvil, y el widget de Premium con el perfil rellenado (se comprobó su texto por código, no en pantalla).
+
+**Se aprendió:** (1) la `\s` de JavaScript y `trim()` también se comen el BOM (U+FEFF), que la de Postgres no: el cliente lo convertía en un espacio donde el servidor lo rechaza; un test con caracteres de formato lo
+cazó. (2) Un parche `git diff -U0` de una inserción en un fichero generado y repetitivo se puede aplicar en un sitio equivocado: para quitar partes de un fichero generado, aplicar al revés los hunks ajenos, cuyas posiciones son exactas.
+
+### 2026-10-24 (sesión 44) · La deuda del chat
+
+**Hecho** ([D-51](#d-51--la-deuda-del-chat-modelo-de-amenazas-saneo-de-nombres-y-cuota-por-persona--2026-10-24)): el modelo de amenazas del chat (§10), el saneo de nombres y de la respuesta, la cuota por persona (tabla,
+función, 429 y el aviso en la pantalla), la guarda de código y las filas de PENDIENTES (la del chat decía «falta conectar la pantalla» cuando ya estaba conectada).
+
+**Verificado aquí:** `test:funciones` **133** (las nuevas: cuota, falla cerrado, lo inválido no gasta, nombres con texto escondido, la guarda de código y 10 de `saneo.ts`); `test:app` **152**; `tsc` y `eslint` limpios; `db:check` **842**
+(corre los tests de pgTAP sobre un Postgres embebido: **22** nuevos de `cuota_chat_test.sql`) y el inventario de seguridad al día.
+
+**Con Docker encendido, después:** la migración se aplicó a la base local (`npx supabase migration up`), `supabase test db` da **17 ficheros y 630 tests** contra pgTAP real (los 22 de la cuota entre ellos) y
+`db:carreras` pasa a **17** con un escenario nuevo: dos sesiones de la misma persona gastan 15 mensajes cada una a la vez y quedan apuntados exactamente 20. Quitando el candado de la función, ese
+escenario falla (30 apuntados), y las mutaciones de la tabla (tope del día, cuenta sin filtrar por persona, permiso de borrado) las detecta el pgTAP. **Para usar el chat hace falta aplicar la migración**:
+sin ella, la cuota falla y el chat falla cerrado (503).
+
+**Sin verificar:** el chat con un modelo real y la pantalla en un móvil.
+
+**Se aprendió:** una función en el `FROM` que no depende de ninguna columna (`generate_series(1,20) g, lateral f()`) se ejecuta UNA vez y se repite su resultado; para llamarla veinte veces hay que ponerla
+en la lista de columnas. El test «caben 20» pasaba por casualidad y el «el 21 no cabe» lo delató.

@@ -8,11 +8,16 @@
  *   3. la conversación es válida       → forma, longitudes y que acabe en un mensaje de la persona
  *   4. bucle con el modelo             → como mucho `MAX_RONDAS` idas y vueltas con herramientas
  *
- * Lo que NO se hace aquí y está en PENDIENTES: la cuota por persona (cada mensaje gasta
- * dinero en producción) y el registro del consentimiento de privacidad.
+ *   3 bis. la cuota de la persona      → después de validar (un cuerpo malo no gasta cuota) y ANTES
+ *                                        de llamar al modelo (que es lo que cuesta). Si no se puede
+ *                                        comprobar, NO se contesta: gastar sin límite es peor que fallar.
+ *
+ * Lo que NO se hace aquí y está en PENDIENTES: el registro del consentimiento de privacidad y
+ * decidir si el chat es de Premium.
  */
 
 import { ErrorArgumentos, HERRAMIENTAS, type AccesoDatos, type Herramienta } from './herramientas.ts';
+import { quitarCaracteresOcultos } from './saneo.ts';
 import {
   ErrorModelo,
   type ClienteModelo,
@@ -46,10 +51,18 @@ Reglas que no se discuten:
 
 export type Sesion = { id: string };
 
+/** El resultado de pedir un mensaje a la cuota de la persona. */
+export type Cuota = { permitido: boolean; esperaS: number };
+
 export type DependenciasChat = {
   verificarUsuario(token: string): Promise<Sesion | null>;
   /** Acceso a los datos con la sesión de ESA persona (RLS). Se crea después de verificarla. */
   datosDe(token: string): AccesoDatos;
+  /**
+   * Gasta un mensaje de la cuota de ESA persona (con su sesión). `permitido: false` trae cuánto
+   * falta para poder volver a preguntar. Si falla, la petición no sigue.
+   */
+  cuota(token: string): Promise<Cuota>;
   modelo: ClienteModelo;
   herramientas?: readonly Herramienta[];
   log(evento: Record<string, unknown>): void;
@@ -116,6 +129,23 @@ export async function manejar(req: Request, dep: DependenciasChat): Promise<Resp
   if (typeof conversacion === 'string') {
     dep.log({ evento: 'opsi-chat', rechazo: conversacion });
     return json(400, { error: 'conversacion_no_valida' });
+  }
+
+  // La cuota va después de validar y antes del modelo. Sin poder comprobarla, no se contesta.
+  let cuota: Cuota;
+  try {
+    cuota = await dep.cuota(token);
+  } catch {
+    dep.log({ evento: 'opsi-chat', ok: false, fallo: 'cuota_no_comprobable' });
+    return json(503, { error: 'cuota_no_comprobable' });
+  }
+  if (!cuota.permitido) {
+    const espera = Math.max(1, Math.ceil(cuota.esperaS));
+    dep.log({ evento: 'opsi-chat', ok: false, fallo: 'limite_de_mensajes' });
+    return new Response(JSON.stringify({ error: 'limite_de_mensajes', espera_s: espera }), {
+      status: 429,
+      headers: { ...CABECERAS, 'Retry-After': String(espera) },
+    });
   }
 
   try {
@@ -185,11 +215,14 @@ async function ejecutarHerramienta(
   }
 }
 
-/** Texto plano y acotado: la app lo pinta tal cual, sin interpretar marcado. */
+/**
+ * Texto plano y acotado: la app lo pinta tal cual, sin interpretar marcado. Se quitan los
+ * caracteres de control y los que no se ven o cambian cómo se lee (marcas de dirección, ancho
+ * cero, «etiquetas» U+E0000): lo que el modelo diga lo lee una persona, y no tiene que poder
+ * enseñarle algo distinto de lo que contiene. Se conservan los saltos de línea.
+ */
 export function limpiarRespuesta(texto: string): string {
-  const limpio = texto
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  const limpio = quitarCaracteresOcultos(texto)
     // Algunos modelos con «razonamiento» dejan su borrador entre etiquetas.
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .trim();

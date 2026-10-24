@@ -5,6 +5,7 @@ import {
   MAX_LONGITUD_MENSAJE,
   MAX_MENSAJES_ENVIADOS,
   SUGERENCIAS,
+  avisoDeLimite,
   borradorDeRuta,
   paraEnviar,
   puedeEnviar,
@@ -83,5 +84,20 @@ test('las sugerencias son frases cortas y se pueden mandar', () => {
   for (const s of SUGERENCIAS) {
     assert.ok(puedeEnviar(s), s);
     assert.ok(s.split(' ').length <= 8, `corta: ${s}`);
+  }
+});
+
+test('avisoDeLimite: dice cuánto falta, redondeando hacia arriba, y qué hacer', () => {
+  assert.equal(avisoDeLimite(30), 'Has llegado al límite de mensajes. Prueba otra vez en menos de un minuto.');
+  assert.equal(avisoDeLimite(60), 'Has llegado al límite de mensajes. Prueba otra vez en un minuto.');
+  assert.equal(avisoDeLimite(61), 'Has llegado al límite de mensajes. Prueba otra vez en 2 minutos.');
+  assert.equal(avisoDeLimite(125), 'Has llegado al límite de mensajes. Prueba otra vez en 3 minutos.');
+  assert.equal(avisoDeLimite(3599), 'Has llegado al límite de mensajes. Prueba otra vez en una hora.');
+  assert.equal(avisoDeLimite(7300), 'Has llegado al límite de mensajes. Prueba otra vez en 3 horas.');
+});
+
+test('avisoDeLimite: sin dato de cuánto falta, un minuto (nunca NaN ni 0)', () => {
+  for (const raro of [0, -5, Number.NaN, Number.POSITIVE_INFINITY * 0]) {
+    assert.match(avisoDeLimite(raro), /en un minuto\.$/, String(raro));
   }
 });
