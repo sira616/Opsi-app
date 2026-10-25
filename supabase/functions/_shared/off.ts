@@ -21,6 +21,8 @@
  * Sin dependencias de Deno: se prueba con `node --test`.
  */
 
+import { esNoComida } from './nocomida.ts';
+
 export type FamiliaUnidad = 'mass' | 'volume' | 'count';
 
 /** Lo ÚNICO que sale de aquí hacia la base de datos. Todo ya filtrado. */
@@ -693,5 +695,9 @@ export async function consultarOff(codigo: string, opciones: OpcionesOff): Promi
   // Un 200 con `status: 0` también significa «no existe» (pasa con códigos que
   // OFF considera inválidos). Y un producto sin nombre es lo mismo para nosotros.
   const producto = normalizarRespuestaOff(json);
-  return producto ? { tipo: 'encontrado', producto } : { tipo: 'no_existe' };
+  if (producto === null) return { tipo: 'no_existe' };
+  // OFF acepta tabaco, vapeadores y mecheros con código de barras. Opsi guarda comida: lo que sus
+  // etiquetas o su nombre delatan como otra cosa se rechaza igual que un libro (ver `nocomida.ts`).
+  if (esNoComida(producto)) return { tipo: 'no_es_comida' };
+  return { tipo: 'encontrado', producto };
 }

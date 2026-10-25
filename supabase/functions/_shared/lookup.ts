@@ -16,6 +16,7 @@
  *      · y su prefijo no es de un libro o un cupón → «no es comida», sin gastar nada
  *   4. cuota por persona               → 429 si se pasa
  *   5. caché global                    → lo normal: sin llamar a nadie
+ *      · una ficha cuyo nombre delata tabaco o vapeo se rechaza como «no es comida»
  *      · una ficha sin datos de salud (anterior a ellos) cuenta como caducada
  *      · y una ficha sin su fila de nutrición también
  *   6. caché de faltas                 → no se vuelve a preguntar por lo que OFF no tiene
@@ -37,6 +38,7 @@
  */
 
 import { esCodigoDeNoComida, normalizarGtin } from './gtin.ts';
+import { esNoComida } from './nocomida.ts';
 import { leerLimitado } from './off.ts';
 import type { FamiliaUnidad, NutricionOff, OpcionesOff, ProductoOff, ResultadoOff } from './off.ts';
 
@@ -373,6 +375,10 @@ export async function manejar(req: Request, dep: Dependencias): Promise<Response
 
     // 5. Caché global.
     const enCatalogo = await dep.buscarEnCatalogo(codigo);
+    // Una ficha que ya estaba guardada de antes de que se rechazara el tabaco: no se sirve.
+    if (enCatalogo && esNoComida({ name: enCatalogo.name })) {
+      return fin('no_comida_cache', json(200, { found: false, barcode: codigo, not_food: true }));
+    }
     if (enCatalogo && !esCaducada(enCatalogo, inicio)) {
       return fin('cache', json(200, publico(enCatalogo)));
     }

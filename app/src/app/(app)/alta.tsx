@@ -47,6 +47,7 @@ import { familyOf, toBase, type MeasurementUnit } from '@/shared/lib/units';
 import { Button } from '@/shared/ui/Button';
 import { CampoFecha } from '@/shared/ui/CampoFecha';
 import { Chips, type ChipOption } from '@/shared/ui/Chips';
+import { AVISO_NO_COMIDA, nombreEsNoComida } from '@/shared/lib/no-comida';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
 import { TextField } from '@/shared/ui/TextField';
 import {
@@ -258,6 +259,7 @@ function Formulario({
 
     const amount = Number(quantity.replace(',', '.'));
     if (!name.trim()) return setError('Ponle un nombre, aunque sea «eso verde del cajón».');
+    if (nombreEsNoComida(name)) return setError(AVISO_NO_COMIDA);
     if (!Number.isFinite(amount) || amount <= 0) {
       return setError('Pon una cantidad mayor que cero.');
     }

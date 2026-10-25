@@ -966,6 +966,24 @@ test('consultarOff: un 404 «de otro tipo» (cosmética, mascotas) es «no es co
   assert.deepEqual(r200, { tipo: 'no_es_comida' });
 });
 
+test('consultarOff: el tabaco y el vapeo no son comida, venga como venga en la ficha', async () => {
+  const conTabaco = (cambios: Record<string, unknown>) =>
+    JSON.stringify({ ...FICHA, product: { ...FICHA.product, ...cambios } });
+  const casos: [string, Record<string, unknown>][] = [
+    ['por la categoría', { categories_tags: ['en:tobacco-products', 'en:cigarettes'] }],
+    ['por la marca de OFF de «no es comida»', { categories_tags: ['en:non-food-products'] }],
+    ['por el nombre', { product_name: 'Tabaco de liar rubio', product_name_es: 'Tabaco de liar rubio' }],
+    ['por el nombre en español aunque el original no lo diga', { product_name: 'X-1', product_name_es: 'Cigarrillos suaves' }],
+  ];
+  for (const [motivo, cambios] of casos) {
+    const r = await consultarOff('8400000000017', conFetch(async () => respuesta(conTabaco(cambios))));
+    assert.deepEqual(r, { tipo: 'no_es_comida' }, motivo);
+  }
+  // Y la comida de siempre sigue entrando.
+  const bien = await consultarOff('8400000000017', conFetch(async () => respuesta(JSON.stringify(FICHA))));
+  assert.equal(bien.tipo, 'encontrado');
+});
+
 test('consultarOff: solo cuenta la frase exacta; el resto de textos de OFF no se interpretan', async () => {
   for (const verbose of [
     'product not found',

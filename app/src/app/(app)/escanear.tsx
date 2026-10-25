@@ -27,6 +27,7 @@ import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { esCodigoDeNoComida, normalizarGtin } from '@/shared/lib/gtin';
 import { margenSuperior } from '@/shared/lib/margen';
+import { nombreEsNoComida } from '@/shared/lib/no-comida';
 import { tomarGuardado } from '@/shared/lib/ultimo-guardado';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -155,7 +156,11 @@ export default function Escanear() {
         // 1. Lo que esta nevera ya conoce: lectura normal, sin cuota.
         const privado = await buscarProductoPrivado(activa.id, codigo);
         if (!viva.current) return;
-        if (privado) return setEstado({ tipo: 'ficha', codigo, producto: privado });
+        if (privado) {
+          // Una ficha privada de antes de que se rechazara el tabaco: tampoco se ofrece.
+          if (nombreEsNoComida(privado.name)) return setEstado({ tipo: 'no_comida', codigo });
+          return setEstado({ tipo: 'ficha', codigo, producto: privado });
+        }
 
         // 2. El catálogo global, vía la Edge Function.
         const r = await buscarPorCodigo(codigo);
