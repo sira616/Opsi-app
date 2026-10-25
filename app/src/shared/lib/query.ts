@@ -84,28 +84,26 @@ export const queryKeys = {
     ['household', neveraId, 'invitaciones', 'enviadas'] as const,
 
   /**
-   * La lista de la compra. Cuelga de la nevera, como la lista de prioridad: sin su
-   * id, la lista de una nevera se serviría como la de otra durante el minuto que
-   * dura fresca. `lista` solo invalida las de TODAS las neveras (al guardar algo
-   * comprado, que puede venir de cualquiera).
+   * La lista de la compra (prefijo de TODO lo suyo): las listas, las líneas de cada una y las
+   * sugerencias. Las listas son de la cuenta (las individuales) o de una nevera (las
+   * compartidas) y una línea cambia lo que se ve en varias pantallas, así que al cambiar algo
+   * se invalida todo el prefijo, y al guardar algo comprado también.
    */
   lista: ['lista'] as const,
-  /**
-   * Sin `listaId` es el prefijo de TODO lo de esa nevera (las listas y las líneas de
-   * cada una), que es lo que se invalida al cambiar algo.
-   */
-  listaDe: (neveraId: string, listaId?: string) =>
-    (listaId ? ['lista', neveraId, listaId] : ['lista', neveraId]) as readonly string[],
-  /** Las listas de una nevera (sus nombres), no las líneas. */
-  listasDe: (neveraId: string) => ['lista', neveraId, 'listas'] as const,
+  /** Las listas que la persona puede usar (sus nombres y tipos), no las líneas. */
+  listas: ['lista', 'listas'] as const,
+  /** Las líneas de UNA lista. Se piden por el id de la lista, que ya es de una sola nevera o de la cuenta. */
+  lineasDe: (listaId: string) => ['lista', 'lineas', listaId] as const,
+  /** Lo último que se agotó en una nevera, para volver a apuntarlo con un toque. */
+  sugerenciasDe: (neveraId: string) => ['lista', 'sugerencias', neveraId] as const,
   linea: (id: string) => ['lista', 'linea', id] as const,
 
   /** Todo lo de Premium (prefijo): al añadir algo, «tus productos» y «lo que más gastas» cambian. */
   premium: ['premium'] as const,
   /** Lo que más se gasta en una nevera (premium): el resumen (pocos) o la lista entera. */
   masUsados: (neveraId: string, limite: number) => ['premium', 'mas-usados', neveraId, limite] as const,
-  /** Lo que ya has añadido a una nevera, sin repetidos (premium). */
-  productosConocidos: (neveraId: string) => ['premium', 'productos', neveraId] as const,
+  /** Lo que ya has añadido, sin repetidos y de todas tus neveras (premium). */
+  productosConocidos: ['premium', 'productos'] as const,
 
   settings: ['settings'] as const,
   correo: ['cuenta', 'correo'] as const,

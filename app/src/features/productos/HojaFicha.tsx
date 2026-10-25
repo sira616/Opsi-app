@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { Barcode, PencilSimple } from 'phosphor-react-native';
 
 import type { Nevera } from '@/api/household';
+import type { ListaDestino } from '@/api/lista';
 import type { ProductoConocido } from '@/api/premium';
 import { CargandoListas, ElegirListas, useListasElegidas } from '@/features/lista/ElegirListas';
 import { ElegirNevera } from '@/features/neveras/ElegirNevera';
@@ -26,8 +27,8 @@ type Props = {
   activaId: string;
   /** Guardarlo en la nevera elegida: el padre cierra esta hoja y abre la rápida. */
   onGuardar: (producto: ProductoConocido, neveraId: string) => void;
-  /** Apuntarlo en las listas elegidas de la nevera elegida. Si falla, lanza. */
-  onApuntar: (producto: ProductoConocido, neveraId: string, listaIds: string[]) => Promise<void>;
+  /** Apuntarlo en las listas elegidas (individuales o de cualquier nevera). Si falla, lanza. */
+  onApuntar: (producto: ProductoConocido, listas: ListaDestino[]) => Promise<void>;
   onClose: () => void;
 };
 
@@ -44,10 +45,11 @@ export function describirOrigen(p: ProductoConocido): string {
  * Sin recuentos (cuántas veces se ha comprado, cuánto hay): esto es un almacén de lo
  * registrado, no un historial. Lo que no se sabe (el código de algo escrito a mano) no sale.
  *
- * Dos acciones, y las dos pueden ir a **otra nevera** que la que se está mirando: si hay
- * más de una, se elige adónde. Para apuntarlo la hoja pasa a elegir la lista (o las listas)
- * sin abrir otra encima: en iOS dos hojas a la vez no se presentan. Con los ingredientes
- * pasa lo mismo: se enseñan en esta misma hoja, y solo de un producto de Open Food Facts
+ * Dos acciones. Guardarlo puede ir a **otra nevera** que la que se está mirando: si hay más
+ * de una, se elige adónde. Apuntarlo no depende de la nevera: las listas son de la cuenta, y
+ * se elige entre TODAS (individuales y compartidas de cualquier nevera); la hoja pasa a
+ * elegir la lista (o las listas) sin abrir otra encima: en iOS dos hojas a la vez no se
+ * presentan. Con los ingredientes pasa lo mismo: se enseñan en esta misma hoja, y solo de un producto de Open Food Facts
  * (en uno escrito a mano no hay nada que consultar y no se pinta ningún hueco). Y con la
  * nutrición también: «Ver nutrición» sustituye el contenido, con su «Atrás», en vez de abrir
  * otra hoja encima.
@@ -56,7 +58,7 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
   const styles = useStyles();
   const c = useTheme();
   const [destino, setDestino] = useState(activaId);
-  const { listas, elegidas, alternar, cargando, error: errorListas } = useListasElegidas(destino);
+  const { listas, elegidas, destinos, alternar, cargando, error: errorListas } = useListasElegidas(destino);
   const [eligiendo, setEligiendo] = useState(false);
   const [apuntando, setApuntando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,11 +69,11 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
   const variasNeveras = neveras.length > 1;
   const nombreDestino = neveras.find((n) => n.id === destino)?.name ?? '';
 
-  async function apuntar(ids: string[]) {
+  async function apuntar(donde: ListaDestino[]) {
     setApuntando(true);
     setError(null);
     try {
-      await onApuntar(p, destino, ids);
+      await onApuntar(p, donde);
     } catch (caught) {
       setError(describeDbError(caught));
       setApuntando(false);
@@ -126,12 +128,14 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
       {eligiendo ? (
         <>
           {cargando ? <CargandoListas /> : null}
-          {variasListas ? <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} /> : null}
+          {variasListas ? (
+            <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} neveras={neveras} />
+          ) : null}
           <ErrorNote message={error ?? errorListas} />
           <View style={styles.botones}>
             <Button
               label={elegidas.length > 1 ? `Apuntarlo en ${elegidas.length} listas` : 'Apuntarlo'}
-              onPress={() => void apuntar(elegidas)}
+              onPress={() => void apuntar(destinos)}
               loading={apuntando}
               disabled={cargando || elegidas.length === 0}
             />
@@ -175,7 +179,7 @@ export function HojaFicha({ producto: p, neveras, activaId, onGuardar, onApuntar
               label="Apuntarlo en la lista"
               variant="quiet"
               // Con una sola lista no hay nada que elegir: se apunta en ella directamente.
-              onPress={() => (variasListas ? setEligiendo(true) : void apuntar(elegidas))}
+              onPress={() => (variasListas ? setEligiendo(true) : void apuntar(destinos))}
               loading={apuntando}
               disabled={cargando}
             />

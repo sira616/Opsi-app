@@ -9,7 +9,6 @@ import { CaretLeft, Lock, MagnifyingGlass, Star } from 'phosphor-react-native';
 import { fetchProductosConocidos, type ProductoConocido } from '@/api/premium';
 import { fetchSettings } from '@/api/settings';
 import { Nota } from '@/features/ajustes/ui';
-import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { FilaNutricion, type EstadoNutricion } from '@/features/nutricion/FilaNutricion';
 import { esFalloDePlan, useNutricionDeLista } from '@/features/nutricion/useNutricion';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -30,8 +29,8 @@ import { fonts, makeStyles, radius, space, touchTarget, useTheme, useType } from
  * LISTAR NO GASTA CUOTA: la nutrición se lee de lo que ya está guardado. Renovar una ficha
  * antigua en Open Food Facts es cosa del detalle, cuando la persona abre un producto.
  *
- * Los productos son los mismos que enseña «Tus productos» de la nevera activa, con la misma
- * consulta. Lo que se leyó de Open Food Facts vive solo en la caché en memoria: no se guarda
+ * Los productos son los mismos que enseña «Tus productos» (los de tu cuenta, de todas tus
+ * neveras), con la misma consulta. Lo que se leyó de Open Food Facts vive solo en la caché en memoria: no se guarda
  * en ningún disco.
  */
 export default function NutricionLista() {
@@ -39,7 +38,6 @@ export default function NutricionLista() {
   const t = useType();
   const c = useTheme();
   const router = useRouter();
-  const { neveras, activa } = useNeveraActual();
 
   const [busca, setBusca] = useState('');
 
@@ -47,8 +45,8 @@ export default function NutricionLista() {
   const premium = settings.data?.plan === 'premium';
 
   const conocidos = useQuery({
-    queryKey: queryKeys.productosConocidos(activa.id),
-    queryFn: () => fetchProductosConocidos(activa.id),
+    queryKey: queryKeys.productosConocidos,
+    queryFn: fetchProductosConocidos,
     enabled: premium,
   });
 
@@ -84,7 +82,6 @@ export default function NutricionLista() {
           <Text style={t.title}>Nutrición</Text>
           <Star size={24} color={c.brandBright} weight="fill" />
         </View>
-        {premium && neveras.length > 1 ? <Text style={t.bodySmall}>{activa.name}</Text> : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -125,7 +122,7 @@ export default function NutricionLista() {
               <View style={styles.vacio}>
                 <Text style={styles.vacioTitulo}>Ni una etiqueta que leer</Text>
                 <Text style={t.bodySmall}>
-                  Escanea algo y guárdalo en {activa.name}. Aquí verás su Nutri-Score y su grupo NOVA.
+                  Escanea algo y guárdalo en tu nevera. Aquí verás su Nutri-Score y su grupo NOVA.
                 </Text>
                 <Pressable accessibilityRole="button" onPress={() => router.push('/alta')} style={styles.vacioBoton}>
                   <Text style={styles.vacioBotonTexto}>Añadir alimento</Text>

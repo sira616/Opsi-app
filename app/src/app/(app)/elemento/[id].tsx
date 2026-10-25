@@ -16,7 +16,7 @@ import {
 } from 'phosphor-react-native';
 
 import { actions, fetchItem, type ItemDetail } from '@/api/inventory';
-import { agregarLinea, agregarLineaEnListas } from '@/api/lista';
+import { agregarLinea, fetchListas, type ListaDestino } from '@/api/lista';
 import { fetchSettings } from '@/api/settings';
 import { AvisoCongelar } from '@/features/elemento/AvisoCongelar';
 import { FichaProducto } from '@/features/elemento/FichaProducto';
@@ -24,6 +24,8 @@ import { HojaUsar } from '@/features/elemento/HojaUsar';
 import { Historial } from '@/features/elemento/Historial';
 import { HojaApuntar, type ResultadoApuntar } from '@/features/elemento/HojaApuntar';
 import { SaludElemento } from '@/features/elemento/SaludElemento';
+import { listaPorDefecto } from '@/features/lista/listas';
+import { productoDelElementoParaLista } from '@/features/productos/destino';
 import { TarjetaFecha } from '@/features/elemento/TarjetaFecha';
 import { IconoComida } from '@/shared/lib/iconos-comida';
 import { describeDesde } from '@/shared/lib/dates';
@@ -135,11 +137,16 @@ export default function Detalle() {
     // El elemento recién agotado, tal como se cargó: su nombre y lo que traía no cambian.
     const e = item.data;
     if (!e) return false;
+    // Las listas son de la cuenta: la de siempre es la compartida de la nevera de este alimento
+    // o, si no hay, la individual principal.
+    const listas = await queryClient.fetchQuery({ queryKey: queryKeys.listas, queryFn: fetchListas });
+    const lista = listaPorDefecto(listas, e.household_id);
+    if (!lista) throw new Error('No tienes ninguna lista donde apuntarlo.');
     const nuevo = await agregarLinea({
-      householdId: e.household_id,
+      lista,
       name: e.name,
       origen,
-      productId: e.product_id,
+      productId: productoDelElementoParaLista(e, lista),
       cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
     });
     await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
@@ -147,19 +154,21 @@ export default function Detalle() {
   }
 
   /** Apunta lo que se ha acabado en las listas elegidas, y dice en cuántas era nuevo. */
-  async function apuntarEnListas(listaIds: string[]): Promise<void> {
+  async function apuntarEnListas(listas: ListaDestino[]): Promise<void> {
     const e = item.data;
     if (!e) return;
-    const resultados = await agregarLineaEnListas(
-      {
-        householdId: e.household_id,
-        name: e.name,
-        origen: 'manual',
-        productId: e.product_id,
-        cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
-      },
-      listaIds,
-    );
+    const resultados: boolean[] = [];
+    for (const lista of listas) {
+      resultados.push(
+        await agregarLinea({
+          lista,
+          name: e.name,
+          origen: 'manual',
+          productId: productoDelElementoParaLista(e, lista),
+          cantidad: { unitFamily: e.unit_family, displayUnit: e.display_unit, quantity: e.initial_quantity },
+        }),
+      );
+    }
     await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
     setLista({
       paso: 'hecho',

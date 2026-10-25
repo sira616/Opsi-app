@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import type { ItemDetail } from '@/api/inventory';
+import type { ListaDestino } from '@/api/lista';
 import { CargandoListas, ElegirListas, useListasElegidas } from '@/features/lista/ElegirListas';
+import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { Button } from '@/shared/ui/Button';
 import { ErrorNote } from '@/shared/ui/ErrorNote';
@@ -17,21 +19,23 @@ type Props = {
   /** Si ya se apuntó, lo que pasó; si no, se pregunta. */
   resultado: ResultadoApuntar | null;
   /** Apunta en las listas elegidas. Si falla, lanza: el error se enseña aquí. */
-  onApuntar: (listaIds: string[]) => Promise<void>;
+  onApuntar: (listas: ListaDestino[]) => Promise<void>;
   onClose: () => void;
 };
 
 /**
  * «Se te ha acabado X»: apuntarlo en la lista, o en las listas, que se elijan.
  *
- * Con una sola lista no hay nada que elegir y se pregunta como siempre; con varias
- * salen todas con su casilla y la principal marcada, de modo que quien no toca nada
- * apunta donde siempre. Apuntar AÑADE la línea a cada lista elegida: no es una
+ * Con una sola lista no hay nada que elegir y se pregunta como siempre; con varias salen
+ * todas las de la cuenta (individuales y compartidas de cualquier nevera) con su casilla y la
+ * de siempre marcada —la compartida de la nevera de este alimento o, si no hay, la individual
+ * principal—, de modo que quien no toca nada apunta donde siempre. Apuntar AÑADE la línea a cada lista elegida: no es una
  * recomendación (eso son las sugerencias de «Se te acabó», dentro de la lista).
  */
 export function HojaApuntar({ item, resultado, onApuntar, onClose }: Props) {
   const styles = useStyles();
-  const { listas, elegidas, alternar, cargando, error: errorListas } = useListasElegidas(item.household_id);
+  const { neveras } = useNeveraActual();
+  const { listas, elegidas, destinos, alternar, cargando, error: errorListas } = useListasElegidas(item.household_id);
   const [apuntando, setApuntando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +45,7 @@ export function HojaApuntar({ item, resultado, onApuntar, onClose }: Props) {
     setApuntando(true);
     setError(null);
     try {
-      await onApuntar(elegidas);
+      await onApuntar(destinos);
     } catch (caught) {
       setError(describeDbError(caught));
     } finally {
@@ -74,7 +78,9 @@ export function HojaApuntar({ item, resultado, onApuntar, onClose }: Props) {
       ) : (
         <>
           {cargando ? <CargandoListas /> : null}
-          {variasListas ? <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} /> : null}
+          {variasListas ? (
+            <ElegirListas listas={listas} elegidas={elegidas} onAlternar={alternar} neveras={neveras} />
+          ) : null}
           <ErrorNote message={error ?? errorListas} />
           <View style={styles.botones}>
             <Button

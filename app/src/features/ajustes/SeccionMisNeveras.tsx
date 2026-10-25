@@ -30,7 +30,7 @@ export function SeccionMisNeveras() {
   const router = useRouter();
   const t = useType();
   const { neveras } = useNeveraActual();
-  const { limite, enElMaximo, hayCompartidas } = useLimiteNeveras();
+  const { limite, enElMaximo, hayCompartidas, plan } = useLimiteNeveras();
   const [explicarTope, setExplicarTope] = useState(false);
 
   const recibidas = useQuery({
@@ -74,7 +74,7 @@ export function SeccionMisNeveras() {
         */}
         <Accion label="Crear nevera compartida" onPress={crear} />
         {explicarTope && limite !== null ? (
-          <Nota alerta tono="aviso" texto={textoTope(limite, hayCompartidas)} />
+          <Nota alerta tono="aviso" texto={textoTope(limite, hayCompartidas, plan ?? undefined)} />
         ) : null}
       </Bloque>
     </Section>

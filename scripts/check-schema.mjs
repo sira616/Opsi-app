@@ -392,9 +392,16 @@ async function main() {
       values ('${hhA}', 'Leche entera', 'volume', 'l', 1000, 1000,
               current_date + 7, 'best_before', 'package', '${USER_A}');
     `);
+    // Las neveras no traen lista: A crea una compartida en la suya y apunta ahí.
+    const lista = (
+      await db.query(`
+        insert into public.shopping_lists (household_id, name, kind)
+        values ('${hhA}', 'La compra', 'shared') returning id;
+      `)
+    ).rows[0].id;
     await db.query(`
-      insert into public.shopping_list_items (household_id, name, created_by)
-      values ('${hhA}', 'Huevos', '${USER_A}');
+      insert into public.shopping_list_items (household_id, list_id, name, created_by)
+      values ('${hhA}', '${lista}', 'Huevos', '${USER_A}');
     `);
     await db.query(`
       insert into public.inventory_events (household_id, user_id, type)

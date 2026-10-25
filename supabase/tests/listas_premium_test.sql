@@ -1,13 +1,17 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Varias listas de la compra, el plan y lo que más gastas
+-- Listas de la compra individuales y compartidas, el plan y lo que más gastas
 --
 -- 20261017100000 añade `shopping_lists`, el plan y el color de `user_settings`, y
--- `most_used_products`. Aquí se prueba que:
+-- `most_used_products`; 20261028100000 cambia el modelo de las listas. Aquí se prueba que:
 --
---   · cada nevera tiene su lista desde que nace, y siempre queda una;
---   · el plan básico llega a 3 listas, premium a 10, y no se salta desde el cliente;
---   · una línea cae en la primera lista si no se elige, y nunca en la de otra nevera;
---   · el plan no lo escribe el cliente, y los colores son de premium;
+--   · la cuenta nace con su lista individual y las neveras NACEN SIN LISTA;
+--   · el plan básico llega a 1 compartida + 1 individual, premium a 5 de cualquier tipo, y el
+--     tope es por cuenta (lo que creó esa persona), no por nevera;
+--   · una lista individual no cuelga de ninguna nevera y solo la ve su dueña/o; una compartida es
+--     de una nevera y la ven sus miembros;
+--   · una línea nunca cae en una lista de otra nevera, y de las individuales siempre queda una;
+--   · el plan no lo escribe el cliente, los colores son de premium y el plan fija cuántas neveras
+--     puede tener una cuenta (2 / 5);
 --   · lo que más gastas es premium, y no deja ver una nevera ajena.
 --
 --   npm run db:test
@@ -18,6 +22,24 @@ begin;
 create extension if not exists pgtap with schema extensions;
 
 select no_plan();
+
+-- Devuelve «SQLSTATE/pista» de lo que lance la sentencia, o «sin error».
+create function public.zz_error_de(p_sql text)
+returns text
+language plpgsql
+as $$
+declare
+  v_hint text;
+begin
+  execute p_sql;
+  return 'sin error';
+exception when others then
+  get stacked diagnostics v_hint = pg_exception_hint;
+  return sqlstate || '/' || coalesce(v_hint, '');
+end;
+$$;
+
+grant execute on function public.zz_error_de(text) to authenticated, anon, service_role;
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
@@ -40,70 +62,104 @@ select set_config('opsi.priv_bruno',
     where m.user_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222'::uuid), true);
 
 -- ══════════════════════════════════════════════════════════════════════════
--- A · Cada nevera nace con su lista
+-- A · La cuenta nace con su lista; la nevera, no
 -- ══════════════════════════════════════════════════════════════════════════
 
 select is(
   (select count(*) from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid),
-  1::bigint,
-  'la nevera de Ana nació con una lista'
+  0::bigint,
+  'la nevera de Ana nació sin lista'
 );
 
 select is(
-  (select name from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid),
+  (select count(*) from public.shopping_lists
+    where kind = 'personal' and owner_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'),
+  1::bigint,
+  'pero la cuenta de Ana nació con una lista individual...'
+);
+
+select is(
+  (select name from public.shopping_lists
+    where kind = 'personal' and owner_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'),
   'La compra',
-  'y se llama «La compra»'
+  '...que se llama «La compra»'
+);
+
+select is(
+  (select household_id from public.shopping_lists
+    where kind = 'personal' and owner_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'),
+  null,
+  'y no cuelga de ninguna nevera'
 );
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaa1111-aaaa-4aaa-8aaa-aaaa11111111","role":"authenticated"}';
 
-select set_config('opsi.lista_ana',
-  (select id::text from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid), true);
+select set_config('opsi.ind_ana',
+  (select id::text from public.shopping_lists where kind = 'personal'), true);
 
 -- ══════════════════════════════════════════════════════════════════════════
--- B · El plan básico: hasta 3, la primera incluida
+-- B · El plan básico: 1 compartida + 1 individual
 -- ══════════════════════════════════════════════════════════════════════════
 
 select is(public.my_plan(), 'basic', 'Ana empieza en el plan básico');
 
+select is(
+  public.zz_error_de($$insert into public.shopping_lists (name, kind) values ('Otra mía', 'personal')$$),
+  'P0001/listas_limite_individual',
+  'una segunda individual se rechaza en el plan básico, con su pista'
+);
+
 select lives_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, '  Fiesta  ')$$,
-  'se crea una segunda lista'
+  $$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_ana')::uuid, '  Fiesta  ', 'shared')$$,
+  'se crea la compartida'
 );
 
 select is(
-  (select name from public.shopping_lists
-    where household_id = current_setting('opsi.priv_ana')::uuid and name like 'Fiesta%'),
+  (select name from public.shopping_lists where kind = 'shared'),
   'Fiesta',
   'el nombre se guarda sin espacios sobrantes'
 );
 
-select lives_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, 'Cumple')$$,
-  'y una tercera'
-);
-
-select throws_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, 'Una más')$$,
-  'P0001', null,
-  'la cuarta se rechaza en el plan básico'
+select is(
+  public.zz_error_de($$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_ana')::uuid, 'Cumple', 'shared')$$),
+  'P0001/listas_limite_compartida',
+  'una segunda compartida se rechaza en el plan básico, con su pista'
 );
 
 select is(
-  (select created_by from public.shopping_lists where name = 'Cumple'),
+  (select created_by from public.shopping_lists where name = 'Fiesta'),
   'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'::uuid,
   'quién la creó lo pone el servidor'
 );
 
+select is(
+  (select owner_id from public.shopping_lists where name = 'La compra'),
+  'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'::uuid,
+  'y la dueña de la individual, también'
+);
+
 select throws_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_bruno')::uuid, 'Colada')$$,
+  $$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_bruno')::uuid, 'Colada', 'shared')$$,
   '42501', null,
-  'no se crea una lista en la nevera de otra persona'
+  'no se crea una compartida en la nevera de otra persona'
+);
+
+select throws_ok(
+  $$insert into public.shopping_lists (household_id, name, kind, owner_id)
+    values (null, 'Suplanto', 'personal', 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222')$$,
+  '42501', null,
+  'ni se elige de quién es una individual: el permiso de columna no deja ni intentarlo'
+);
+
+select throws_ok(
+  $$insert into public.shopping_lists (household_id, name, kind)
+    values (null, 'Sin tipo', 'otra')$$,
+  '42501', null,
+  'un tipo inventado no entra: la RLS solo conoce los dos'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -111,19 +167,19 @@ select throws_ok(
 -- ══════════════════════════════════════════════════════════════════════════
 
 select throws_ok(
-  $$update public.shopping_lists set name = '   ' where name = 'Cumple'$$,
+  $$update public.shopping_lists set name = '   ' where name = 'Fiesta'$$,
   '23514', null,
   'un nombre vacío se rechaza'
 );
 
 select throws_ok(
-  $$update public.shopping_lists set name = repeat('a', 41) where name = 'Cumple'$$,
+  $$update public.shopping_lists set name = repeat('a', 41) where name = 'Fiesta'$$,
   '23514', null,
   'y uno de más de 40 caracteres'
 );
 
 select lives_ok(
-  $$update public.shopping_lists set name = ' Cumpleaños ' where name = 'Cumple'$$,
+  $$update public.shopping_lists set name = ' Cumpleaños ' where name = 'Fiesta'$$,
   'se renombra'
 );
 
@@ -139,54 +195,59 @@ select throws_ok(
   'una lista no cambia de nevera: el permiso es solo del nombre'
 );
 
+select throws_ok(
+  $$update public.shopping_lists set kind = 'personal' where name = 'Cumpleaños'$$,
+  '42501', null,
+  'ni de tipo'
+);
+
 -- ══════════════════════════════════════════════════════════════════════════
 -- D · Las líneas caen en su lista
 -- ══════════════════════════════════════════════════════════════════════════
 
-select lives_ok(
-  $$insert into public.shopping_list_items (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, 'Leche')$$,
-  'una línea sin lista se apunta'
-);
-
-select is(
-  (select list_id from public.shopping_list_items where name = 'Leche'),
-  current_setting('opsi.lista_ana')::uuid,
-  'y va a la primera lista de la nevera'
-);
-
-select set_config('opsi.lista_fiesta',
-  (select id::text from public.shopping_lists where name = 'Fiesta'), true);
+select set_config('opsi.lista_cumple',
+  (select id::text from public.shopping_lists where name = 'Cumpleaños'), true);
 
 select lives_ok(
-  $$insert into public.shopping_list_items (household_id, name, list_id)
-    values (current_setting('opsi.priv_ana')::uuid, 'Globos', current_setting('opsi.lista_fiesta')::uuid)$$,
-  'una línea con lista se apunta en ESA lista'
+  $$insert into public.shopping_list_items (household_id, list_id, name)
+    values (current_setting('opsi.priv_ana')::uuid, current_setting('opsi.lista_cumple')::uuid, 'Globos')$$,
+  'una línea se apunta en su lista compartida, con la nevera de la lista'
 );
 
 select lives_ok(
-  $$update public.shopping_list_items set list_id = current_setting('opsi.lista_fiesta')::uuid where name = 'Leche'$$,
-  'una línea pasa a otra lista de la misma nevera'
+  $$insert into public.shopping_list_items (household_id, list_id, name)
+    values (null, current_setting('opsi.ind_ana')::uuid, 'Leche')$$,
+  'y otra en su lista individual, sin nevera'
+);
+
+select throws_ok(
+  $$update public.shopping_list_items set list_id = current_setting('opsi.ind_ana')::uuid where name = 'Globos'$$,
+  'P0002', null,
+  'una línea de una lista compartida no se mueve a una individual: no tiene nevera'
+);
+
+select throws_ok(
+  $$update public.shopping_list_items set list_id = current_setting('opsi.lista_cumple')::uuid where name = 'Leche'$$,
+  'P0002', null,
+  'ni al revés'
 );
 
 -- La lista de Bruno, vista por quien administra: Ana no la ve y no puede usarla.
 reset role;
-select set_config('opsi.lista_bruno',
-  (select id::text from public.shopping_lists where household_id = current_setting('opsi.priv_bruno')::uuid), true);
+with nueva as (
+  insert into public.shopping_lists (household_id, name, kind)
+  values (current_setting('opsi.priv_bruno')::uuid, 'Compra de Bruno', 'shared')
+  returning id
+)
+select set_config('opsi.lista_bruno', (select id::text from nueva), true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaa1111-aaaa-4aaa-8aaa-aaaa11111111","role":"authenticated"}';
 
 select throws_ok(
-  $$insert into public.shopping_list_items (household_id, name, list_id)
-    values (current_setting('opsi.priv_ana')::uuid, 'Colada', current_setting('opsi.lista_bruno')::uuid)$$,
-  'P0002', null,
+  $$insert into public.shopping_list_items (household_id, list_id, name)
+    values (current_setting('opsi.priv_ana')::uuid, current_setting('opsi.lista_bruno')::uuid, 'Colada')$$,
+  '42501', null,
   'una línea de mi nevera no cuelga de la lista de otra nevera'
-);
-
-select throws_ok(
-  $$update public.shopping_list_items set list_id = current_setting('opsi.lista_bruno')::uuid where name = 'Globos'$$,
-  'P0002', null,
-  'ni se mueve a ella'
 );
 
 select is(
@@ -196,29 +257,30 @@ select is(
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
--- E · Borrar: siempre queda una, y las líneas se van con su lista
+-- E · Borrar: las líneas se van con su lista, y siempre queda una individual
 -- ══════════════════════════════════════════════════════════════════════════
 
 select lives_ok(
-  $$delete from public.shopping_lists where id = current_setting('opsi.lista_fiesta')::uuid$$,
-  'se borra una lista'
+  $$delete from public.shopping_lists where id = current_setting('opsi.lista_cumple')::uuid$$,
+  'se borra una compartida (no hace falta que quede ninguna)'
 );
 
 select is(
-  (select count(*) from public.shopping_list_items where name in ('Leche', 'Globos')),
+  (select count(*) from public.shopping_list_items where name = 'Globos'),
   0::bigint,
   'y sus líneas con ella'
 );
 
-select lives_ok(
-  $$delete from public.shopping_lists where name = 'Cumpleaños'$$,
-  'se borra otra'
+select is(
+  public.zz_error_de($$delete from public.shopping_lists where id = current_setting('opsi.ind_ana')::uuid$$),
+  'P0001/lista_ultima',
+  'la última individual no se borra'
 );
 
-select throws_ok(
-  $$delete from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid$$,
-  'P0001', null,
-  'la última no se borra'
+select is(
+  (select count(*) from public.shopping_list_items where name = 'Leche'),
+  1::bigint,
+  'y sus líneas siguen donde estaban'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -242,6 +304,12 @@ select lives_ok(
   'el verde lo puede tener cualquiera'
 );
 
+select is(
+  (select household_limit::integer from public.user_settings),
+  2,
+  'en el plan básico caben 2 neveras (la privada incluida)'
+);
+
 -- ══════════════════════════════════════════════════════════════════════════
 -- G · Premium
 -- ══════════════════════════════════════════════════════════════════════════
@@ -252,6 +320,12 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaa1111-aaaa-4aaa-8aaa-aaaa11111111","role":"authenticated"}';
 
 select is(public.my_plan(), 'premium', 'con el plan premium...');
+
+select is(
+  (select household_limit::integer from public.user_settings),
+  5,
+  '...caben 5 neveras'
+);
 
 select lives_ok(
   $$update public.user_settings set accent = 'blue'$$,
@@ -275,23 +349,76 @@ select throws_ok(
   '...y el blanco, que no es de ninguna, ya no existe'
 );
 
+-- Ana tiene 1 individual. Premium: 5 de cualquier tipo, no «5 de cada».
 select lives_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    select current_setting('opsi.priv_ana')::uuid, 'L' || g from generate_series(1, 9) g$$,
-  'se llega a 10 listas'
+  $$insert into public.shopping_lists (household_id, name, kind)
+    select current_setting('opsi.priv_ana')::uuid, 'C' || g, 'shared' from generate_series(1, 2) g$$,
+  'caben dos compartidas más...'
+);
+
+select lives_ok(
+  $$insert into public.shopping_lists (name, kind)
+    select 'I' || g, 'personal' from generate_series(1, 2) g$$,
+  '...y otras dos individuales (la nevera no tiene que ver)'
 );
 
 select is(
-  (select count(*) from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid),
-  10::bigint,
-  'exactamente 10'
+  (select count(*) from public.shopping_lists
+    where owner_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111' or created_by = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'),
+  5::bigint,
+  'exactamente 5 en total'
+);
+
+select is(
+  public.zz_error_de($$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_ana')::uuid, 'La sexta', 'shared')$$),
+  'P0001/listas_maximo',
+  'y la sexta no cabe ni en premium, sea del tipo que sea'
+);
+
+select is(
+  public.zz_error_de($$insert into public.shopping_lists (name, kind) values ('La sexta mía', 'personal')$$),
+  'P0001/listas_maximo',
+  '(tampoco una individual)'
+);
+
+-- Una individual no cuelga de ninguna nevera aunque el cliente mande una.
+select lives_ok(
+  $$delete from public.shopping_lists where name = 'I2'$$,
+  'se borra una individual (queda más de una)'
+);
+
+select lives_ok(
+  $$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_bruno')::uuid, 'Con nevera ajena', 'personal')$$,
+  'una individual con una nevera mandada por el cliente no falla...'
+);
+
+select is(
+  (select household_id from public.shopping_lists where name = 'Con nevera ajena'),
+  null,
+  '...pero se pisa: no cuelga de ninguna'
+);
+
+-- Mover una línea entre dos compartidas de la misma nevera.
+select set_config('opsi.c1', (select id::text from public.shopping_lists where name = 'C1'), true);
+select set_config('opsi.c2', (select id::text from public.shopping_lists where name = 'C2'), true);
+
+select lives_ok(
+  $$insert into public.shopping_list_items (household_id, list_id, name)
+    values (current_setting('opsi.priv_ana')::uuid, current_setting('opsi.c1')::uuid, 'Globos')$$,
+  'una línea en la compartida C1'
+);
+
+select lives_ok(
+  $$update public.shopping_list_items set list_id = current_setting('opsi.c2')::uuid where name = 'Globos'$$,
+  'pasa a otra compartida de la misma nevera'
 );
 
 select throws_ok(
-  $$insert into public.shopping_lists (household_id, name)
-    values (current_setting('opsi.priv_ana')::uuid, 'La 11')$$,
-  'P0001', null,
-  'y la 11 no cabe ni en premium'
+  $$update public.shopping_list_items set list_id = current_setting('opsi.lista_bruno')::uuid where name = 'Globos'$$,
+  'P0002', null,
+  'pero no a la de otra nevera'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -355,7 +482,7 @@ select throws_ok(
   'pero no 201'
 );
 
--- Bruno, aunque sea premium, no ve la nevera de Ana.
+-- Bruno, aunque sea premium, no ve la nevera de Ana ni sus listas.
 reset role;
 update public.user_settings set plan = 'premium' where user_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222';
 set local role authenticated;
@@ -370,7 +497,13 @@ select is(
 select is(
   (select count(*) from public.shopping_lists where household_id = current_setting('opsi.priv_ana')::uuid),
   0::bigint,
-  'y sus listas no se ven'
+  'y sus listas compartidas no se ven'
+);
+
+select is(
+  (select count(*) from public.shopping_lists where owner_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'),
+  0::bigint,
+  'ni sus listas individuales'
 );
 
 -- Y alguien en el plan básico no pasa de la puerta.
@@ -379,21 +512,38 @@ update public.user_settings set plan = 'basic' where user_id = 'bbbb2222-bbbb-4b
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"bbbb2222-bbbb-4bbb-8bbb-bbbb22222222","role":"authenticated"}';
 
+select is(
+  (select household_limit::integer from public.user_settings),
+  2,
+  'al volver al plan básico, el tope de neveras vuelve a 2'
+);
+
 select throws_ok(
   $$select * from public.most_used_products(current_setting('opsi.priv_bruno')::uuid)$$,
   '42501', null,
   'en el plan básico lo que más gastas es de premium'
 );
 
-select throws_ok(
-  $$delete from public.shopping_lists where household_id = current_setting('opsi.priv_bruno')::uuid$$,
-  'P0001', null,
-  'y a Bruno tampoco se le deja borrar su única lista'
+select is(
+  public.zz_error_de($$delete from public.shopping_lists where kind = 'personal'$$),
+  'P0001/lista_ultima',
+  'y a Bruno tampoco se le deja borrar su única individual'
+);
+
+select lives_ok(
+  $$delete from public.shopping_lists where id = current_setting('opsi.lista_bruno')::uuid$$,
+  'pero su compartida sí, que ya no necesita'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
--- I · Una nevera que se borra se lleva sus listas, sin que la regla de «queda una» estorbe
+-- I · Lo que se va con una nevera y con una cuenta, sin que la regla de «queda una» estorbe
 -- ══════════════════════════════════════════════════════════════════════════
+
+select lives_ok(
+  $$insert into public.shopping_lists (household_id, name, kind)
+    values (current_setting('opsi.priv_bruno')::uuid, 'Otra de Bruno', 'shared')$$,
+  'Bruno crea otra compartida en su nevera'
+);
 
 reset role;
 
@@ -405,12 +555,48 @@ select lives_ok(
 select is(
   (select count(*) from public.shopping_lists where household_id = current_setting('opsi.priv_bruno')::uuid),
   0::bigint,
-  'y sus listas se fueron con ella'
+  'y sus listas compartidas se fueron con ella'
+);
+
+select is(
+  (select count(*) from public.shopping_lists where owner_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222'),
+  1::bigint,
+  'las individuales de Bruno no: son de su cuenta'
+);
+
+select lives_ok(
+  $$delete from auth.users where id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222'$$,
+  'borrar la cuenta entera funciona aunque sea su última individual'
+);
+
+select is(
+  (select count(*) from public.shopping_lists where owner_id = 'bbbb2222-bbbb-4bbb-8bbb-bbbb22222222'),
+  0::bigint,
+  'y sus listas individuales se fueron con ella'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- J · Permisos
 -- ══════════════════════════════════════════════════════════════════════════
+
+select ok(
+  has_column_privilege('authenticated', 'public.shopping_lists', 'kind', 'INSERT')
+    and has_column_privilege('authenticated', 'public.shopping_lists', 'household_id', 'INSERT')
+    and has_column_privilege('authenticated', 'public.shopping_lists', 'name', 'INSERT')
+    and not has_column_privilege('authenticated', 'public.shopping_lists', 'owner_id', 'INSERT')
+    and not has_column_privilege('authenticated', 'public.shopping_lists', 'created_by', 'INSERT')
+    and has_column_privilege('authenticated', 'public.shopping_lists', 'name', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.shopping_lists', 'kind', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.shopping_lists', 'owner_id', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.shopping_lists', 'household_id', 'UPDATE'),
+  'al crear se elige el tipo, la nevera y el nombre; al editar, solo el nombre'
+);
+
+select ok(
+  not has_function_privilege('authenticated', 'public.check_shopping_list()', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'public.sync_household_limit()', 'EXECUTE'),
+  'los triggers no los ejecuta nadie a mano'
+);
 
 set local role anon;
 

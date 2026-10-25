@@ -281,14 +281,14 @@ isOneToOne: false
                   ]
                 },"shopping_list_items": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"display_unit": Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id": string,"is_purchased": boolean,"list_id": string,"name": string,"product_id": string | null,"purchased_at": string | null,"quantity": number | null,"source": string,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
+                    "created_at": string,"created_by": string | null,"display_unit": Database["public"]['Enums']["measurement_unit"] | null,"household_id": string | null,"id": string,"is_purchased": boolean,"list_id": string,"name": string,"product_id": string | null,"purchased_at": string | null,"quantity": number | null,"source": string,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id": string,"id"?: string,"is_purchased"?: boolean,"list_id": string,"name": string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id"?: string | null,"id"?: string,"is_purchased"?: boolean,"list_id": string,"name": string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id"?: string,"id"?: string,"is_purchased"?: boolean,"list_id"?: string,"name"?: string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"display_unit"?: Database["public"]['Enums']["measurement_unit"] | null,"household_id"?: string | null,"id"?: string,"is_purchased"?: boolean,"list_id"?: string,"name"?: string,"product_id"?: string | null,"purchased_at"?: string | null,"quantity"?: number | null,"source"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -313,14 +313,14 @@ isOneToOne: false
                   ]
                 },"shopping_lists": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"household_id": string,"id": string,"name": string,"updated_at": string
+                    "created_at": string,"created_by": string | null,"household_id": string | null,"id": string,"kind": string,"name": string,"owner_id": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"household_id": string,"id"?: string,"name": string,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"household_id"?: string | null,"id"?: string,"kind"?: string,"name": string,"owner_id"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"household_id"?: string,"id"?: string,"name"?: string,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"household_id"?: string | null,"id"?: string,"kind"?: string,"name"?: string,"owner_id"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -378,7 +378,7 @@ isOneToOne: false
           Views: {
             "inventory_with_priority": {
                   Row: {
-                    "category": Database["public"]['Enums']["food_category"] | null,"closed_out_at": string | null,"created_at": string | null,"created_by": string | null,"date_from_label": string | null,"date_from_opening": string | null,"date_from_thaw": string | null,"date_kind": Database["public"]['Enums']["date_kind"] | null,"date_source": Database["public"]['Enums']["date_source"] | null,"days_left": number | null,"display_unit": Database["public"]['Enums']["measurement_unit"] | null,"effective_date_reason": Database["public"]['Enums']["effective_date_reason"] | null,"effective_date_source": Database["public"]['Enums']["date_source"] | null,"effective_limit_date": string | null,"frozen_at": string | null,"frozen_days": number | null,"household_id": string | null,"id": string | null,"initial_quantity": number | null,"limit_date": string | null,"location": Database["public"]['Enums']["storage_location"] | null,"name": string | null,"notes": string | null,"opened_at": string | null,"priority": Database["public"]['Enums']["priority_group"] | null,"product_id": string | null,"remaining_quantity": number | null,"state": Database["public"]['Enums']["item_state"] | null,"thawed_at": string | null,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string | null
+                    "category": Database["public"]['Enums']["food_category"],"closed_out_at": string | null,"created_at": string,"created_by": string | null,"date_from_label": string | null,"date_from_opening": string | null,"date_from_thaw": string | null,"date_kind": Database["public"]['Enums']["date_kind"] | null,"date_source": Database["public"]['Enums']["date_source"] | null,"days_left": number | null,"display_unit": Database["public"]['Enums']["measurement_unit"],"effective_date_reason": Database["public"]['Enums']["effective_date_reason"] | null,"effective_date_source": Database["public"]['Enums']["date_source"] | null,"effective_limit_date": string | null,"frozen_at": string | null,"frozen_days": number,"household_id": string,"id": string,"initial_quantity": number,"limit_date": string | null,"location": Database["public"]['Enums']["storage_location"],"name": string,"notes": string | null,"opened_at": string | null,"priority": Database["public"]['Enums']["priority_group"] | null,"product_id": string | null,"remaining_quantity": number,"state": Database["public"]['Enums']["item_state"],"thawed_at": string | null,"unit_family": Database["public"]['Enums']["unit_family"],"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -626,8 +626,8 @@ isOneToOne: false
             }[]
                            },
 "my_known_products":
-{ Args: { "p_household_id": string,"p_limit"?: number }; Returns: {
-              "barcode": string,"brand": string,"category": Database["public"]['Enums']["food_category"],"data_source": string,"display_unit": Database["public"]['Enums']["measurement_unit"],"first_added_at": string,"in_stock": number,"last_added_at": string,"product_id": string,"product_name": string,"quantity": number,"times_added": number,"unit_family": Database["public"]['Enums']["unit_family"]
+{ Args: { "p_household_id"?: string,"p_limit"?: number }; Returns: {
+              "barcode": string,"brand": string,"category": Database["public"]['Enums']["food_category"],"data_source": string,"display_unit": Database["public"]['Enums']["measurement_unit"],"first_added_at": string,"household_id": string,"in_stock": number,"last_added_at": string,"product_id": string,"product_name": string,"quantity": number,"times_added": number,"unit_family": Database["public"]['Enums']["unit_family"]
             }[]
                            },
 "my_pending_invitations":
@@ -754,7 +754,7 @@ isOneToOne: false
             }[]
                            },
 "stock_from_list":
-{ Args: { "p_category"?: Database["public"]['Enums']["food_category"],"p_date_kind"?: Database["public"]['Enums']["date_kind"],"p_date_source"?: Database["public"]['Enums']["date_source"],"p_display_unit": Database["public"]['Enums']["measurement_unit"],"p_limit_date"?: string,"p_list_item_id": string,"p_location"?: Database["public"]['Enums']["storage_location"],"p_name": string,"p_notes"?: string,"p_product_id"?: string,"p_quantity": number,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
+{ Args: { "p_category"?: Database["public"]['Enums']["food_category"],"p_date_kind"?: Database["public"]['Enums']["date_kind"],"p_date_source"?: Database["public"]['Enums']["date_source"],"p_display_unit": Database["public"]['Enums']["measurement_unit"],"p_household_id"?: string,"p_limit_date"?: string,"p_list_item_id": string,"p_location"?: Database["public"]['Enums']["storage_location"],"p_name": string,"p_notes"?: string,"p_product_id"?: string,"p_quantity": number,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
               "category": Database["public"]['Enums']["food_category"],
 "closed_out_at": string | null,
 "created_at": string,

@@ -86,8 +86,8 @@ export default function Premium() {
   });
 
   const conocidos = useQuery({
-    queryKey: queryKeys.productosConocidos(activa.id),
-    queryFn: () => fetchProductosConocidos(activa.id),
+    queryKey: queryKeys.productosConocidos,
+    queryFn: fetchProductosConocidos,
     enabled: premium,
   });
 
@@ -263,7 +263,7 @@ export default function Premium() {
             <Widget
               icono={ListChecks}
               titulo="Listas de la compra"
-              resumen={premium ? 'Hasta 10 por nevera' : 'Hasta 3 por nevera. Con Premium, más'}
+              resumen={premium ? 'Hasta 5, individuales o compartidas' : 'Una individual y una compartida. Con Premium, hasta 5'}
               onPress={() => router.push('/lista')}
             />
           </View>
