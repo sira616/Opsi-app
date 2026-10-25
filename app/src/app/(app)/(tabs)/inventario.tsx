@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Nevera } from '@/api/household';
 import { fetchPriorityList, type PriorityGroup, type PriorityItem } from '@/api/inventory';
 import { fetchSaludProductos } from '@/api/salud';
+import { HojaAnadir } from '@/features/alta/HojaAnadir';
 import { PopupAvisos } from '@/features/avisos/PopupAvisos';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { AvisoInvitaciones } from '@/features/neveras/AvisoInvitaciones';
@@ -25,7 +26,7 @@ import {
 } from '@/shared/ui/FiltroInventario';
 import { ItemRow } from '@/shared/ui/ItemRow';
 import { queryKeys } from '@/shared/lib/query';
-import { Barcode, BowlFood, Carrot, ChatCircleDots, Confetti, Egg } from 'phosphor-react-native';
+import { BowlFood, Carrot, ChatCircleDots, Confetti, Egg } from 'phosphor-react-native';
 import { tabBarClearance,makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
@@ -63,7 +64,6 @@ function Inventario({ nevera }: { nevera: Nevera }) {
   const styles = useStyles();
   const t = useType();
   const c = useTheme();
-  const router = useRouter();
 
   // La clave lleva el id de la nevera: sin él, la caché de una nevera se serviría
   // como la de otra durante el minuto que dura fresca.
@@ -73,6 +73,7 @@ function Inventario({ nevera }: { nevera: Nevera }) {
   });
 
   const [filtro, setFiltro] = useState<Filtro>(FILTRO_VACIO);
+  const [anadiendo, setAnadiendo] = useState(false);
 
   // ── Lo que la persona evita, cruzado con la lista ──────────────────────
   // UNA consulta por todos los productos distintos de la lista, no una por fila, y solo si
@@ -134,20 +135,15 @@ function Inventario({ nevera }: { nevera: Nevera }) {
               <ChatCircleDots size={22} color={c.inkMuted} weight="duotone" />
             </Pressable>
           </Link>
-          <Link href="/escanear" asChild>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Escanear un código de barras"
-              style={styles.escanear}
-            >
-              <Barcode size={22} color={c.brandInk} weight="bold" />
-            </Pressable>
-          </Link>
-          <Link href="/alta" asChild>
-            <Pressable accessibilityRole="button" accessibilityLabel="Añadir alimento" style={styles.add}>
-              <Text style={styles.addIcon}>+</Text>
-            </Pressable>
-          </Link>
+          {/* Escanear y añadir a mano, en una sola hoja: un botón menos en la cabecera. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Añadir producto"
+            onPress={() => setAnadiendo(true)}
+            style={styles.add}
+          >
+            <Text style={styles.addIcon}>+</Text>
+          </Pressable>
         </View>
         <Text style={t.title}>Consumir primero</Text>
         <Text style={t.bodySmall}>
@@ -227,10 +223,10 @@ function Inventario({ nevera }: { nevera: Nevera }) {
             </Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push('/alta')}
+              onPress={() => setAnadiendo(true)}
               style={styles.emptyButton}
             >
-              <Text style={styles.emptyButtonText}>Añadir alimento</Text>
+              <Text style={styles.emptyButtonText}>Añadir producto</Text>
             </Pressable>
           </View>
         ) : null}
@@ -278,6 +274,7 @@ function Inventario({ nevera }: { nevera: Nevera }) {
 
       </ScrollView>
       {/* El aviso de «para hoy»: una vez al día y solo si hay algo que vence pronto. */}
+      <HojaAnadir visible={anadiendo} onClose={() => setAnadiendo(false)} />
       <PopupAvisos items={todos} householdId={nevera.id} listo={!isPending && !error} />
     </SafeAreaView>
   );
@@ -303,16 +300,6 @@ const useStyles = makeStyles((c) => ({
     height: touchTarget,
     borderRadius: radius.pill,
     backgroundColor: c.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // El gemelo del «+», en tono suave: escanear es la forma rápida de añadir y no
-  // debe pesar más que el botón principal.
-  escanear: {
-    width: touchTarget,
-    height: touchTarget,
-    borderRadius: radius.pill,
-    backgroundColor: c.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

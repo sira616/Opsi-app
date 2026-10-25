@@ -1286,6 +1286,18 @@ la región y la retención siguen pendientes y son un 🔴 antes de producción;
 
 **Lo que NO se comprobó:** la app en un móvil con Expo Go SDK 58 ni los gestos y pantallas con React Native 0.88. Si se usa una *development build* (`expo-dev-client`), hay que **crear una nueva** tras la subida.
 
+### D-53 · El chat es de Premium, botón único para añadir y ingredientes sin duplicar · 2026-10-25
+
+Tres arreglos que se piden juntos tras probar la 0.5.0 en el móvil (el cuarto, las listas por cuenta, es [D-54](#d-54--listas-individuales-y-compartidas-productos-y-neveras-por-cuenta--2026-10-25)).
+
+**El chat de Opsi es de Premium.** Hasta ahora lo usaba cualquiera con sesión (D-48 lo dejó abierto «hasta decidir»). Se decide en el **servidor**, como todo lo premium: `use_chat_quota()` (migración `20261027100000`) mira `my_plan()` lo primero y rechaza con `42501` y pista `premium` **sin gastar ni apuntar cuota**; `opsi-chat` lo traduce a **403 `solo_premium`** antes de llamar al modelo (que es lo que cuesta) y la app lo reconoce (`ErrorSoloPremium`). La pantalla del chat enseña un candado con «Ver Opsi Premium ⭐» al plan básico, el widget del panel Premium lleva candado como los demás, y en el aviso «Para hoy» la acción **«Hacer una receta»** solo sale con Premium (a quien no lo tiene se le enseña el aviso sin una acción que acaba en un candado). El botón del chat en la cabecera del Inicio se queda: lleva a esa pantalla, que lo explica. Si la consulta del plan falla, se deja pasar al chat y manda el servidor: un fallo de red no es «eres básico».
+
+**Un solo botón «Añadir producto» en el Inicio.** Escanear y añadir a mano eran dos botones sueltos en la cabecera. Ahora hay uno (el «+», con ese nombre para el lector de pantalla) que abre una hoja (`features/alta/HojaAnadir.tsx`) con **«Escanear producto»** y **«Añadir a mano»**, cada uno en su botón. También lo usa el botón de «nevera vacía». Está en el **Inicio**, que lo ve todo el mundo; no es de «Tus productos», que es Premium. Cada botón cierra la hoja y abre su pantalla 300 ms después (en iOS, un `Modal` que baja y una pantalla que sube a la vez no se presentan).
+
+**«Ver ingredientes» ya no sale dos veces.** En la pantalla de un producto con aviso de alérgenos salía junto al aviso (`SaludElemento`) y otra vez más abajo en la ficha (`FichaProducto`). Ahora la ficha pregunta a `useIngredientesEnAviso` y se lo calla si el aviso ya lo ofrece; sin aviso sigue saliendo en la ficha, como siempre.
+
+**Verificado aquí:** `cuota_chat_test.sql` (26: el plan básico recibe `42501/premium` y no gasta nada; con Premium pregunta), `test:funciones` **178** (403 `solo_premium`, y que «permitido» gana a esa marca), `tsc` y `eslint`. **Sin verificar:** las pantallas en un móvil.
+
 ## 3. Convenciones
 
 ### Ramas

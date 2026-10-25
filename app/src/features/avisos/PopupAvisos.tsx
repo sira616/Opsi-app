@@ -1,9 +1,10 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { actions, type PriorityItem } from '@/api/inventory';
+import { fetchSettings } from '@/api/settings';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { hoyIso } from '@/shared/lib/calendario';
 import { recomendarCongelar } from '@/shared/lib/congelar';
@@ -32,8 +33,9 @@ type Props = {
  *
  *   · **Congelarlo** hace la acción de verdad (`freeze_item`, con su evento) y quita el
  *     aviso. Congelar se deshace descongelando, así que no pide confirmación.
- *   · **Hacer una receta** abre el chat con la pregunta ya escrita (sin enviarla). El chat
- *     todavía no contesta (la IA no está conectada), y lo dice él, no este pop-up.
+ *   · **Hacer una receta** abre el chat con la pregunta ya escrita (sin enviarla). Solo sale con
+ *     Opsi Premium ⭐: el chat es de pago, y a quien no lo tiene se le enseña el aviso sin esa
+ *     acción en vez de un botón que acaba en un candado.
  *   · **Ahora no** lo cierra. Salga o no, hoy no vuelve: el día se anota al ENSEÑARLO, no al
  *     cerrarlo, para que cerrar la app con el aviso abierto tampoco lo repita.
  *
@@ -46,6 +48,10 @@ export function PopupAvisos({ items, householdId, listo }: Props) {
   const c = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  // El chat es de Premium: la receta solo se ofrece a quien puede usarla. Mientras no se sabe el
+  // plan no se ofrece (mejor un botón que llega un momento después que uno que da un candado).
+  const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+  const conChat = settings.data?.plan === 'premium';
 
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [visible, setVisible] = useState(false);
@@ -133,12 +139,14 @@ export function PopupAvisos({ items, householdId, listo }: Props) {
                 disabled={congelando !== null}
               />
             ) : null}
-            <Button
-              label="Hacer una receta"
-              variant={a.tipo === 'congelar' ? 'quiet' : 'primary'}
-              onPress={() => receta(a)}
-              disabled={congelando !== null}
-            />
+            {conChat ? (
+              <Button
+                label="Hacer una receta"
+                variant={a.tipo === 'congelar' ? 'quiet' : 'primary'}
+                onPress={() => receta(a)}
+                disabled={congelando !== null}
+              />
+            ) : null}
           </View>
         </View>
       ))}

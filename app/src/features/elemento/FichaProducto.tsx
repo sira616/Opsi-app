@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, Text, View } from 'react-native';
 
 import { fetchProducto, type ItemDetail, type ProductoCatalogo } from '@/api/inventory';
+import { useIngredientesEnAviso } from '@/features/elemento/SaludElemento';
 import { FRESCURA_FICHA_MS } from '@/features/salud/useSalud';
 import { AccesoIngredientes } from '@/features/salud/Ingredientes';
 import { describeDbError } from '@/shared/lib/db-errors';
@@ -32,6 +33,8 @@ export function FichaProducto({ item }: { item: ItemDetail }) {
   const c = useTheme();
   const productId = item.product_id;
   const [fotoRota, setFotoRota] = useState(false);
+  // Con un aviso de salud, «Ver ingredientes» ya sale junto al aviso: no se repite aquí.
+  const ingredientesEnAviso = useIngredientesEnAviso(item);
 
   const consulta = useQuery({
     // Clave del producto, no del elemento: la comparten el aviso de salud, el alta y la
@@ -109,7 +112,9 @@ export function FichaProducto({ item }: { item: ItemDetail }) {
 
       <Text style={styles.procedencia}>{describeProcedencia(producto.data_source)}</Text>
 
-      {producto.salud.deOff && producto.barcode ? <AccesoIngredientes productoId={productId} /> : null}
+      {producto.salud.deOff && producto.barcode && !ingredientesEnAviso ? (
+        <AccesoIngredientes productoId={productId} />
+      ) : null}
     </View>
   );
 }
