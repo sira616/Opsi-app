@@ -50,10 +50,9 @@ import {
  *
  * Todo lo premium lo decide el SERVIDOR: el color solo lo guarda el trigger de
  * `user_settings` si el plan lo permite, y `most_used_products`, `my_known_products` y
- * `nutrition_of_products` rechazan a quien no lo tiene. Esta pantalla enseña candados en
- * vez de botones que van a fallar, y esa es toda su parte; si alguien se saltara los
- * candados, el servidor diría que no igual. El chat NO está bloqueado: todavía no hay nada
- * que cobrar ni limitar.
+ * `nutrition_of_products` rechazan a quien no lo tiene, y `use_chat_quota` (el chat) también.
+ * Esta pantalla enseña candados en vez de botones que van a fallar, y esa es toda su parte;
+ * si alguien se saltara los candados, el servidor diría que no igual.
  *
  * Es una pestaña de la barra, donde antes estaba el chat de Opsi (que ahora vive como una
  * pantalla propia y se abre desde la nevera y desde aquí).
@@ -87,8 +86,8 @@ export default function Premium() {
   });
 
   const conocidos = useQuery({
-    queryKey: queryKeys.productosConocidos(activa.id),
-    queryFn: () => fetchProductosConocidos(activa.id),
+    queryKey: queryKeys.productosConocidos,
+    queryFn: fetchProductosConocidos,
     enabled: premium,
   });
 
@@ -113,7 +112,7 @@ export default function Premium() {
   }
 
   /** Un widget de Premium: sin el plan no abre nada y lo dice; con él, va a su pantalla. */
-  function abrir(ruta: '/productos' | '/gastos' | '/nutricion') {
+  function abrir(ruta: '/chat' | '/productos' | '/gastos' | '/nutricion') {
     if (!premium) {
       setAviso('Eso es de Opsi Premium ⭐.');
       return;
@@ -174,7 +173,8 @@ export default function Premium() {
               icono={ChatCircleDots}
               titulo="Chat de Opsi"
               resumen="Pregúntale qué cenar o qué gastar primero"
-              onPress={() => router.push('/chat')}
+              bloqueado={!premium}
+              onPress={() => abrir('/chat')}
             />
             <Widget
               ancho
@@ -263,7 +263,7 @@ export default function Premium() {
             <Widget
               icono={ListChecks}
               titulo="Listas de la compra"
-              resumen={premium ? 'Hasta 10 por nevera' : 'Hasta 3 por nevera. Con Premium, más'}
+              resumen={premium ? 'Hasta 5, individuales o compartidas' : 'Una individual y una compartida. Con Premium, hasta 5'}
               onPress={() => router.push('/lista')}
             />
           </View>

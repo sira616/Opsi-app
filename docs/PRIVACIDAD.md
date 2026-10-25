@@ -18,7 +18,8 @@
 | Dato | Para qué | Quién lo ve |
 |---|---|---|
 | **Cuenta:** nombre de usuario, contraseña (guardada cifrada, nunca en claro) y, si lo añades, un correo | Entrar y recuperar la cuenta | Solo tú |
-| **Tu nevera:** lo que guardas, cantidades, fechas, historial de cada cosa, listas de la compra | Decirte qué gastar primero | Tú y **las personas con las que compartes esa nevera** |
+| **Tu nevera:** lo que guardas, cantidades, fechas, historial de cada cosa y las listas de la compra **compartidas** de esa nevera | Decirte qué gastar primero | Tú y **las personas con las que compartes esa nevera** |
+| **Tus listas de la compra individuales** | Apuntar lo que quieres comprar, desde cualquiera de tus neveras | **Solo tú**, nunca quien comparte nevera contigo |
 | **Ajustes:** zona horaria, hora del resumen, color, listas por omisión | Que la app funcione a tu manera | Solo tú |
 | **Cuándo usas el chat** (solo la fecha y hora de cada mensaje, **nunca lo que escribes**) | Poner un límite de mensajes por persona, porque cada uno cuesta | Solo tú: nadie, ni tú, lo lee a mano; solo lo cuenta el servidor. Se borra a los dos días y con la cuenta |
 | **Alérgenos e intolerancias** que marcas (**dato de salud**) | Marcarte en tu nevera lo que lleve eso | **Solo tú**, nunca quien comparte nevera contigo |

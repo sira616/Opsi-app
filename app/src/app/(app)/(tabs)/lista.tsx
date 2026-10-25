@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -38,6 +38,7 @@ import {
 } from '@/api/lista';
 import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
 import { fetchSettings } from '@/api/settings';
+import { listasDeLaNevera } from '@/features/lista/listas';
 import { SelectorListas } from '@/features/lista/SelectorListas';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { PildoraNevera } from '@/features/neveras/PildoraNevera';
@@ -64,7 +65,7 @@ import {
 } from '@/shared/theme/tokens';
 
 /**
- * La lista de la compra de la nevera activa.
+ * La lista de la compra: tus listas individuales y las compartidas de la nevera activa.
  *
  * Como «Consumir primero», la pantalla de verdad está en `ListaDe` y esta cáscara
  * solo le da la nevera con `key` por su id: al cambiar de nevera se monta de cero y
@@ -112,24 +113,26 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
   const [compradasAbiertas, setCompradasAbiertas] = useState(false);
   const [listaElegida, setListaElegida] = useState<string | null>(null);
 
-  // Las listas de la nevera, y cuál se está mirando: la elegida si sigue existiendo y,
-  // si no (se acaba de borrar, o aún no se ha elegido), la principal.
-  const listas = useQuery({
-    queryKey: queryKeys.listasDe(nevera.id),
-    queryFn: () => fetchListas(nevera.id),
-  });
+  // Las listas son de la cuenta (las individuales) o de una nevera (las compartidas): se piden
+  // todas y aquí se enseñan las individuales y las compartidas de ESTA nevera. La que se mira es la
+  // elegida si sigue existiendo y, si no (se acaba de borrar, o aún no se ha elegido), la primera.
+  const listas = useQuery({ queryKey: queryKeys.listas, queryFn: fetchListas });
   const ajustes = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
-  const listaId =
-    listas.data?.find((l) => l.id === listaElegida)?.id ?? listas.data?.[0]?.id ?? null;
+  const deLaNevera = useMemo(
+    () => listasDeLaNevera(listas.data ?? [], nevera.id),
+    [listas.data, nevera.id],
+  );
+  const listaActiva = deLaNevera.find((l) => l.id === listaElegida) ?? deLaNevera[0] ?? null;
+  const listaId = listaActiva?.id ?? null;
 
   const lista = useQuery({
-    queryKey: queryKeys.listaDe(nevera.id, listaId ?? ''),
-    queryFn: () => fetchLista(nevera.id, listaId as string),
+    queryKey: queryKeys.lineasDe(listaId ?? ''),
+    queryFn: () => fetchLista(listaId as string),
     enabled: listaId !== null,
   });
-  // Cuelga de la clave de la lista: cualquier cambio de la lista las refresca a las dos.
+  // Cuelga del prefijo de la lista: cualquier cambio las refresca a las dos.
   const sugeridas = useQuery({
-    queryKey: [...queryKeys.listaDe(nevera.id), 'sugerencias'],
+    queryKey: queryKeys.sugerenciasDe(nevera.id),
     queryFn: () => fetchSugerencias(nevera.id),
   });
 
@@ -153,26 +156,26 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
     mutationFn: (accion: () => Promise<unknown>) => accion(),
     async onSuccess() {
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.listaDe(nevera.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
     },
     onError: (caught: unknown) => setError(describeDbError(caught)),
   });
 
   function apuntar() {
     const nombre = texto.trim();
-    if (!nombre || cambiar.isPending) return;
+    if (!nombre || cambiar.isPending || !listaActiva) return;
     cambiar.mutate(
-      () => agregarLinea({ householdId: nevera.id, listaId: listaId ?? undefined, name: nombre }),
+      () => agregarLinea({ lista: listaActiva, name: nombre }),
       // El campo se vacía solo cuando salió bien: si falla, lo escrito se queda.
       { onSuccess: () => setTexto('') },
     );
   }
 
   function repetir(s: Sugerencia) {
+    if (!listaActiva) return;
     cambiar.mutate(() =>
       agregarLinea({
-        householdId: nevera.id,
-        listaId: listaId ?? undefined,
+        lista: listaActiva,
         name: s.name,
         productId: s.product_id,
         cantidad: { unitFamily: s.unit_family, displayUnit: s.display_unit, quantity: s.initial_quantity },
@@ -192,8 +195,9 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
 
         {listas.data && listaId ? (
           <SelectorListas
-            householdId={nevera.id}
-            listas={listas.data}
+            listas={deLaNevera}
+            todas={listas.data}
+            nevera={nevera}
             activaId={listaId}
             onElegir={setListaElegida}
             plan={ajustes.data?.plan ?? 'basic'}
@@ -311,7 +315,11 @@ function ListaDe({ nevera }: { nevera: Nevera }) {
               <ShoppingCart size={30} color={c.brand} weight="duotone" />
             </View>
             <Text style={styles.vacioTitulo}>La lista está vacía</Text>
-            <Text style={t.bodySmall}>Lo que apuntes aquí lo ven todas las personas de esta nevera.</Text>
+            <Text style={t.bodySmall}>
+              {listaActiva?.kind === 'shared'
+                ? `Lo que apuntes aquí lo ven todas las personas de ${nevera.name}.`
+                : 'Esta lista es solo tuya, y sirve en todas tus neveras.'}
+            </Text>
           </View>
         ) : null}
 

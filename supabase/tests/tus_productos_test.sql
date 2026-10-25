@@ -214,6 +214,73 @@ select is(
 );
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- C bis · Tus productos son de la cuenta: sin nevera, los de todas las tuyas
+-- ══════════════════════════════════════════════════════════════════════════
+
+reset role;
+with piso as (
+  insert into public.households (name, kind, icon, member_limit)
+  values ('Piso', 'shared', 'house', 5)
+  returning id
+)
+insert into public.household_members (household_id, user_id, role)
+select piso.id, 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111', 'owner' from piso;
+select set_config('opsi.piso',
+  (select m.household_id::text from public.household_members m
+    where m.user_id = 'aaaa1111-aaaa-4aaa-8aaa-aaaa11111111'::uuid
+      and m.household_id <> current_setting('opsi.priv_ana')::uuid), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaa1111-aaaa-4aaa-8aaa-aaaa11111111","role":"authenticated"}';
+
+select lives_ok($$select public.create_item(p_household_id => current_setting('opsi.piso')::uuid,
+  p_name => 'Arroz', p_unit_family => 'mass', p_display_unit => 'g', p_quantity => 500)$$,
+  'Ana añade un arroz en el piso');
+
+select is(
+  (select count(*) from public.my_known_products()),
+  4::bigint,
+  'sin decir nevera salen los productos de las dos: lo de la privada y el arroz del piso'
+);
+
+select is(
+  (select count(*) from public.my_known_products(current_setting('opsi.priv_ana')::uuid)),
+  3::bigint,
+  'con la privada, solo lo de la privada'
+);
+
+select is(
+  (select product_name from public.my_known_products(current_setting('opsi.piso')::uuid)),
+  'Arroz',
+  'y con el piso, solo el arroz'
+);
+
+select is(
+  (select household_id from public.my_known_products() where product_name = 'Arroz'),
+  current_setting('opsi.piso')::uuid,
+  'cada producto dice en qué nevera lo añadiste la última vez: el arroz, en el piso...'
+);
+
+select is(
+  (select household_id from public.my_known_products() where product_name = 'Pan'),
+  current_setting('opsi.priv_ana')::uuid,
+  '...y el pan, en la privada'
+);
+
+select is(
+  (select in_stock from public.my_known_products() where product_name = 'Arroz'),
+  1,
+  'lo que hay ahora cuenta todas las neveras'
+);
+
+set local request.jwt.claims = '{"sub":"bbbb2222-bbbb-4bbb-8bbb-bbbb22222222","role":"authenticated"}';
+
+select is(
+  (select count(*) from public.my_known_products()),
+  0::bigint,
+  'Bruno, sin nevera, tampoco ve nada de lo de Ana'
+);
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- D · Entradas descabelladas y permisos
 -- ══════════════════════════════════════════════════════════════════════════
 

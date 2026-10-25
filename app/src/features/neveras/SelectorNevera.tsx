@@ -61,7 +61,7 @@ export function SelectorNevera() {
   const c = useTheme();
   const router = useRouter();
   const { neveras, activa, cambiar } = useNeveraActual();
-  const { limite, enElMaximo, hayCompartidas } = useLimiteNeveras();
+  const { limite, enElMaximo, hayCompartidas, plan } = useLimiteNeveras();
   const [explicarTope, setExplicarTope] = useState(false);
 
   function elegir(id: string) {
@@ -164,7 +164,7 @@ export function SelectorNevera() {
         </Pressable>
 
         {enElMaximo && explicarTope && limite !== null ? (
-          <Nota alerta tono="aviso" texto={textoTope(limite, hayCompartidas)} />
+          <Nota alerta tono="aviso" texto={textoTope(limite, hayCompartidas, plan ?? undefined)} />
         ) : null}
       </ScrollView>
     </SafeAreaView>

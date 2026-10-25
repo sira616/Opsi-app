@@ -15,12 +15,20 @@ import { paraEnviar, type Mensaje } from './mensajes';
  *
  * Si algo falla se lanza el error y la pantalla dice que no ha podido contestar: aquí no se
  * inventa una respuesta. Si la persona ha llegado al límite de mensajes (la cuota del servidor, 429)
- * se lanza `ErrorLimiteChat` con lo que falta, y la pantalla se lo dice.
+ * se lanza `ErrorLimiteChat` con lo que falta, y la pantalla se lo dice. Si no tiene Opsi Premium
+ * (403, el chat es de pago), `ErrorSoloPremium`.
  */
 /** La persona ha gastado su cuota de mensajes: `esperaS` es lo que falta para poder volver a preguntar. */
 export class ErrorLimiteChat extends Error {
   constructor(readonly esperaS: number) {
     super('limite_de_mensajes');
+  }
+}
+
+/** El chat es de Opsi Premium ⭐ y esta persona no lo tiene: el servidor contestó 403. */
+export class ErrorSoloPremium extends Error {
+  constructor() {
+    super('solo_premium');
   }
 }
 
@@ -40,6 +48,9 @@ export async function responder(conversacion: readonly Mensaje[]): Promise<strin
     body: { mensajes: paraEnviar(conversacion) },
   });
   if (error) {
+    if ((error as { context?: { status?: unknown } } | null)?.context?.status === 403) {
+      throw new ErrorSoloPremium();
+    }
     const espera = await esperaDelLimite(error);
     if (espera !== null) throw new ErrorLimiteChat(espera);
     throw error;

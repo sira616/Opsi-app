@@ -205,9 +205,16 @@ try {
   // comprar», las dos darían de alta el elemento y el inventario tendría el zumo
   // por duplicado.
   console.log('\n  Dos personas marcan como comprada la misma línea de la lista');
+  // Las neveras no traen lista: se cuelga la línea de una compartida creada para la prueba.
+  const listaR = await psql(`
+    insert into public.shopping_lists (household_id, name, kind)
+    values ('${nevera}', 'carrera-lista', 'shared')
+    returning id;
+  `);
+  const lista = listaR.salida.split('\n')[0].trim();
   const lineaR = await psql(`
-    insert into public.shopping_list_items (household_id, name, unit_family, display_unit, quantity)
-    values ('${nevera}', 'carrera-lista', 'volume', 'l', 1000)
+    insert into public.shopping_list_items (household_id, list_id, name, unit_family, display_unit, quantity)
+    values ('${nevera}', '${lista}', 'carrera-lista', 'volume', 'l', 1000)
     returning id;
   `);
   const linea = lineaR.salida.split('\n')[0].trim();
@@ -221,6 +228,23 @@ try {
   );
   const duplicados = await psql(`select count(*) from public.inventory_items where name = 'carrera-zumo';`);
   comprobar('un solo elemento en el inventario', Number(duplicados.salida) === 1, `elementos: ${duplicados.salida}`);
+
+  // ── F · Dos altas de una lista compartida a la vez, con el tope del plan básico en 1 ──
+  // Sin el candado por persona de `check_shopping_list`, las dos contarían «0 compartidas», las dos
+  // pasarían el tope y la cuenta acabaría con dos (un doble toque en «Crear lista»).
+  console.log('\n  Dos altas a la vez de una lista compartida (el plan básico llega a una)');
+  await psql(`delete from public.shopping_lists where name like 'carrera-tope-%';`);
+  const alta = (n) =>
+    `insert into public.shopping_lists (household_id, name, kind) values ('${nevera}', 'carrera-tope-${n}', 'shared');`;
+  const resF = await carrera(alta(1), alta(2));
+  comprobar('la primera entra', resF.primera.codigo === 0, resF.primera.error);
+  comprobar(
+    'la segunda recibe el aviso del tope, no se cuela',
+    resF.segunda.codigo !== 0 && /plan básico puedes tener 1 lista compartida/.test(resF.segunda.error),
+    `respuesta: ${resF.segunda.error || resF.segunda.salida || '(nada)'}`,
+  );
+  const listasTope = await psql(`select count(*) from public.shopping_lists where name like 'carrera-tope-%';`);
+  comprobar('queda una sola lista', Number(listasTope.salida) === 1, `listas: ${listasTope.salida}`);
 
   // ── C · La cuota del escáner, gastada desde dos sesiones a la vez ─────────
   // Treinta consultas por minuto. Si el contador se leyera y luego se escribiera,
@@ -263,6 +287,8 @@ try {
   // confirme y solo caben cinco.
   console.log('\n  Dos sesiones de la misma persona gastan a la vez la cuota del chat (20 por hora): 15 mensajes cada una');
   await psql(`delete from public.chat_usage where user_id = '${USUARIO}';`);
+  // El chat es de Premium: con el plan básico la función rechaza antes de contar nada.
+  await psql(`update public.user_settings set plan = 'premium' where user_id = '${USUARIO}';`);
   const quince =
     `select count(*) filter (where (t.q).allowed) || '/' || count(*) ` +
     `from (select public.use_chat_quota() as q from generate_series(1, 15)) as t;`;

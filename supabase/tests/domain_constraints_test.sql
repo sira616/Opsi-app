@@ -251,21 +251,29 @@ select throws_ok(
 );
 
 -- ── Lista de la compra ────────────────────────────────────────────────────
+-- Las neveras ya no traen lista: se crea una compartida para colgar las líneas.
+
+with nueva as (
+  insert into public.shopping_lists (household_id, name, kind)
+  values (current_setting('opsi.household')::uuid, 'La compra', 'shared')
+  returning id
+)
+select set_config('opsi.lista', (select id::text from nueva), false);
 
 select lives_ok(
   format(
-    $$insert into public.shopping_list_items (household_id, name)
-      values (%L, 'Papel de cocina')$$,
-    current_setting('opsi.household')
+    $$insert into public.shopping_list_items (household_id, list_id, name)
+      values (%L, %L, 'Papel de cocina')$$,
+    current_setting('opsi.household'), current_setting('opsi.lista')
   ),
   'una linea de la lista sin cantidad se acepta'
 );
 
 select throws_ok(
   format(
-    $$insert into public.shopping_list_items (household_id, name, quantity)
-      values (%L, 'Arroz', 1000)$$,
-    current_setting('opsi.household')
+    $$insert into public.shopping_list_items (household_id, list_id, name, quantity)
+      values (%L, %L, 'Arroz', 1000)$$,
+    current_setting('opsi.household'), current_setting('opsi.lista')
   ),
   '23514',
   null,
@@ -274,9 +282,9 @@ select throws_ok(
 
 select throws_ok(
   format(
-    $$insert into public.shopping_list_items (household_id, name, is_purchased)
-      values (%L, 'Arroz', true)$$,
-    current_setting('opsi.household')
+    $$insert into public.shopping_list_items (household_id, list_id, name, is_purchased)
+      values (%L, %L, 'Arroz', true)$$,
+    current_setting('opsi.household'), current_setting('opsi.lista')
   ),
   '23514',
   null,

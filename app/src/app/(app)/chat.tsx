@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,8 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CaretLeft, ChatCircleDots, PaperPlaneRight } from 'phosphor-react-native';
+import { CaretLeft, ChatCircleDots, Lock, PaperPlaneRight } from 'phosphor-react-native';
 
+import { fetchSettings } from '@/api/settings';
 import { Nota } from '@/features/ajustes/ui';
 import {
   MAX_LONGITUD_MENSAJE,
@@ -23,7 +26,9 @@ import {
   puedeEnviar,
   type Mensaje,
 } from '@/features/chat/mensajes';
-import { ErrorLimiteChat, responder } from '@/features/chat/responder';
+import { ErrorLimiteChat, ErrorSoloPremium, responder } from '@/features/chat/responder';
+import { queryKeys } from '@/shared/lib/query';
+import { Button } from '@/shared/ui/Button';
 import { fonts, makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
 
 /**
@@ -41,7 +46,9 @@ import { fonts, makeStyles, radius, space, touchTarget, useTheme, useType } from
  * recomendaciones («hacer una receta con esto») para empezar la pregunta. Es un parámetro de
  * ruta, o sea entrada de fuera, y se limpia antes de usarlo (`borradorDeRuta`).
  *
- * El chat no es de Premium ni lleva candado: aún no hay nada que cobrar ni limitar.
+ * El chat es de Opsi Premium ⭐. Con el plan básico la pantalla enseña un candado en vez de la
+ * conversación; el que manda es el servidor (`opsi-chat` contesta 403 `solo_premium` sin gastar
+ * nada), y esto solo evita enseñar un cuadro de escribir que no va a funcionar.
  */
 export default function Chat() {
   const styles = useStyles();
@@ -49,6 +56,8 @@ export default function Chat() {
   const c = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ mensaje?: string | string[] }>();
+
+  const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
 
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [texto, setTexto] = useState(() => borradorDeRuta(params.mensaje));
@@ -71,7 +80,9 @@ export default function Chat() {
       respuesta =
         caught instanceof ErrorLimiteChat
           ? avisoDeLimite(caught.esperaS)
-          : 'No he podido contestar. Prueba otra vez.';
+          : caught instanceof ErrorSoloPremium
+            ? 'El chat es de Opsi Premium ⭐.'
+            : 'No he podido contestar. Prueba otra vez.';
     }
     setMensajes((actuales) => [...actuales, { id: nuevoId(), de: 'opsi', texto: respuesta }]);
     setRespondiendo(false);
@@ -80,26 +91,56 @@ export default function Chat() {
   const vacia = mensajes.length === 0;
   const puede = puedeEnviar(texto) && !respondiendo;
 
+  const cabecera = (
+    <View style={styles.cabecera}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Volver"
+        onPress={() => (router.canGoBack() ? router.back() : router.replace('/inventario'))}
+        hitSlop={8}
+        style={styles.volver}
+      >
+        <CaretLeft size={20} color={c.inkMuted} weight="bold" />
+      </Pressable>
+      <View style={styles.avatar}>
+        <ChatCircleDots size={24} color={c.brand} weight="duotone" />
+      </View>
+      <View style={styles.cabeceraTexto}>
+        <Text style={t.title}>Opsi</Text>
+        <Text style={t.bodySmall}>Pregúntame por tu nevera</Text>
+      </View>
+    </View>
+  );
+
+  // Sin saber el plan no se enseña ni el chat ni el candado. Si la consulta falla se deja pasar al
+  // chat: quien decide es el servidor, y un fallo de red no es «eres básico».
+  if (settings.isPending) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        {cabecera}
+        <ActivityIndicator color={c.brand} />
+      </SafeAreaView>
+    );
+  }
+
+  if (settings.data?.plan === 'basic') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        {cabecera}
+        <View style={styles.bloqueo}>
+          <Lock size={22} color={c.inkMuted} weight="duotone" />
+          <Text style={styles.bloqueoTexto}>
+            El chat de Opsi es de Opsi Premium ⭐. Con él puedes preguntarle qué cenar o qué gastar primero.
+          </Text>
+          <Button label="Ver Opsi Premium ⭐" onPress={() => router.navigate('/premium')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.cabecera}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/inventario'))}
-          hitSlop={8}
-          style={styles.volver}
-        >
-          <CaretLeft size={20} color={c.inkMuted} weight="bold" />
-        </Pressable>
-        <View style={styles.avatar}>
-          <ChatCircleDots size={24} color={c.brand} weight="duotone" />
-        </View>
-        <View style={styles.cabeceraTexto}>
-          <Text style={t.title}>Opsi</Text>
-          <Text style={t.bodySmall}>Pregúntame por tu nevera</Text>
-        </View>
-      </View>
+      {cabecera}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -198,6 +239,16 @@ const useStyles = makeStyles((c) => ({
   },
   cabeceraTexto: { flex: 1, minWidth: 0 },
   cuerpo: { flex: 1 },
+  bloqueo: {
+    gap: space.md,
+    marginHorizontal: space.xl,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  bloqueoTexto: { fontSize: 14.5, lineHeight: 21, color: c.inkMuted },
   conversacion: { paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.md },
 
   sugerencias: { gap: space.sm, paddingTop: space.sm },

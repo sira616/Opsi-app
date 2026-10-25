@@ -372,8 +372,9 @@ export type NewItem = {
   /**
    * La línea de la lista de la compra de la que sale. Con ella, dar de alta y
    * marcar la línea como comprada es UNA transacción del servidor
-   * (`stock_from_list`): o pasan las dos cosas o ninguna. La nevera sale de la
-   * línea; `householdId` se manda igualmente y el servidor no lo usa.
+   * (`stock_from_list`): o pasan las dos cosas o ninguna. En una lista compartida la nevera
+   * sale de la línea (y `householdId` tiene que ser esa misma, o el servidor lo rechaza); en
+   * una individual la línea no tiene nevera y es `householdId` la que dice adónde va.
    */
   listaId?: string | null;
 };
@@ -402,7 +403,11 @@ export async function createItem(item: NewItem): Promise<void> {
   };
 
   const { error } = item.listaId
-    ? await supabase.rpc('stock_from_list', { p_list_item_id: item.listaId, ...datos })
+    ? await supabase.rpc('stock_from_list', {
+        p_list_item_id: item.listaId,
+        p_household_id: item.householdId,
+        ...datos,
+      })
     : await supabase.rpc('create_item', { p_household_id: item.householdId, ...datos });
 
   if (error) throw error;

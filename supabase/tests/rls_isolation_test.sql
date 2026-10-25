@@ -151,8 +151,17 @@ values
   (current_setting('opsi.ana_household')::uuid, 'Leche entera', 'volume', 'l', 1000, 1000,
    current_date + 7, 'best_before', 'package', current_setting('opsi.ana')::uuid);
 
-insert into public.shopping_list_items (household_id, name, created_by)
-values (current_setting('opsi.ana_household')::uuid, 'Huevos', current_setting('opsi.ana')::uuid);
+-- Las neveras no traen lista: Ana crea una compartida en la suya y apunta ahí.
+with nueva as (
+  insert into public.shopping_lists (household_id, name, kind)
+  values (current_setting('opsi.ana_household')::uuid, 'La compra', 'shared')
+  returning id
+)
+select set_config('opsi.ana_lista', (select id::text from nueva), false);
+
+insert into public.shopping_list_items (household_id, list_id, name, created_by)
+values (current_setting('opsi.ana_household')::uuid, current_setting('opsi.ana_lista')::uuid,
+        'Huevos', current_setting('opsi.ana')::uuid);
 
 insert into public.inventory_events (household_id, user_id, type)
 values (current_setting('opsi.ana_household')::uuid, current_setting('opsi.ana')::uuid, 'created');
@@ -189,6 +198,16 @@ select is(
 );
 
 select is(
+  (select count(*) from public.shopping_lists where kind = 'shared'), 0::bigint,
+  'Bruno NO ve las listas compartidas de Ana'
+);
+
+select is(
+  (select count(*) from public.shopping_lists where kind = 'personal'), 1::bigint,
+  'y de las individuales solo ve la suya'
+);
+
+select is(
   (select count(*) from public.households), 1::bigint,
   'Bruno solo ve su propio hogar'
 );
@@ -215,6 +234,17 @@ select throws_ok(
   '42501',
   null,
   'Bruno NO puede insertar en el hogar de Ana'
+);
+
+select throws_ok(
+  format(
+    $$insert into public.shopping_list_items (household_id, list_id, name)
+      values (%L, %L, 'Intruso')$$,
+    current_setting('opsi.ana_household'), current_setting('opsi.ana_lista')
+  ),
+  '42501',
+  null,
+  'Bruno NO puede apuntar nada en la lista compartida de Ana'
 );
 
 -- Un UPDATE o un DELETE bloqueados por RLS no lanzan error: simplemente no

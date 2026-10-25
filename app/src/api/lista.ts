@@ -6,15 +6,17 @@
  *
  * ── Qué decide el servidor y qué la app ───────────────────────────────────
  *
- * La tabla es de la nevera y la RLS deja a sus miembros leerla y escribirla. Lo que
- * la RLS no dice lo impone un trigger (`check_shopping_item`): que `auto_restock`
- * solo entre si la persona lo encendió, que `created_by` sea quien escribe, que el
- * producto sea global o de la misma nevera y que haya un tope por nevera. Aquí no
- * se repite nada de eso: los errores del servidor ya vienen en español y se enseñan
- * tal cual (ver `db-errors.ts`).
+ * Las listas (`shopping_lists`) son de la CUENTA o de una NEVERA: una lista individual es de
+ * quien la crea y se usa desde cualquier nevera; una compartida cuelga de una nevera y la
+ * ven todos sus miembros. La RLS reparte quién ve qué y devuelve, en una sola consulta, todas
+ * las que la persona puede usar. Lo que la RLS no dice lo impone un trigger
+ * (`check_shopping_item`): que `auto_restock` solo entre si la persona lo encendió, que
+ * `created_by` sea quien escribe, que la nevera de la línea sea la de su lista y que el
+ * producto sea global o de esa nevera. Aquí no se repite nada de eso: los errores del
+ * servidor ya vienen en español y se enseñan tal cual (ver `db-errors.ts`).
  *
- * Una nevera tiene varias listas (`shopping_lists`): cada línea cuelga de una. El tope
- * —3 en el plan básico— lo impone el servidor, y su mensaje se enseña tal cual.
+ * Cada línea cuelga de una lista. El tope de listas es POR CUENTA (básico: 1 compartida y
+ * 1 individual; premium: 5) y lo impone el servidor; su mensaje se enseña tal cual.
  *
  * Una sola cosa va por función y no por la tabla: pasar de «comprado» a inventario
  * (`stock_from_list`, desde `createItem` con `listaId`), porque son dos escrituras
@@ -30,29 +32,49 @@ type Fila = Database['public']['Tables']['shopping_list_items']['Row'];
 /** De dónde salió la línea. `auto_restock` solo existe si la persona lo encendió. */
 export type OrigenLinea = 'manual' | 'auto_restock' | 'chat';
 
-/** Una lista de la compra de una nevera. */
+/** `personal` = individual, de la cuenta; `shared` = compartida, de una nevera. */
+export type TipoLista = 'personal' | 'shared';
+
+/**
+ * Una lista de la compra. `household_id` es la nevera de una compartida y NULL en una
+ * individual (que no cuelga de ninguna). `created_by` sirve para contar cuántas ha creado
+ * la persona y saber si todavía caben más.
+ */
 export type Lista = Pick<
   Database['public']['Tables']['shopping_lists']['Row'],
-  'id' | 'household_id' | 'name' | 'created_at'
->;
+  'id' | 'household_id' | 'name' | 'created_at' | 'created_by'
+> & { kind: TipoLista };
 
-/** Las listas de UNA nevera, la más antigua primero (es la «principal»). */
-export async function fetchListas(householdId: string): Promise<Lista[]> {
+/**
+ * TODAS las listas que la persona puede usar: sus individuales y las compartidas de cada una
+ * de sus neveras, la más antigua primero. Quien las enseña filtra las de la nevera que mira
+ * (`listasDeLaNevera`); quien elige dónde apuntar algo las enseña todas.
+ */
+export async function fetchListas(): Promise<Lista[]> {
   const { data, error } = await supabase
     .from('shopping_lists')
-    .select('id, household_id, name, created_at')
-    .eq('household_id', householdId)
+    .select('id, household_id, name, created_at, created_by, kind')
     .order('created_at', { ascending: true })
     .order('id', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Lista[];
 }
 
-/** Crea una lista y devuelve su id. El servidor impone el tope del plan. */
-export async function crearLista(householdId: string, nombre: string): Promise<string> {
+/**
+ * Crea una lista y devuelve su id. Una compartida necesita la nevera; una individual no (si se
+ * manda, el servidor la ignora). El servidor impone el tope por cuenta.
+ */
+export async function crearLista(
+  nueva: { tipo: 'personal' } | { tipo: 'shared'; householdId: string },
+  nombre: string,
+): Promise<string> {
   const { data, error } = await supabase
     .from('shopping_lists')
-    .insert({ household_id: householdId, name: nombre.trim() })
+    .insert({
+      kind: nueva.tipo,
+      household_id: nueva.tipo === 'shared' ? nueva.householdId : null,
+      name: nombre.trim(),
+    })
     .select('id')
     .single();
   if (error) throw error;
@@ -84,18 +106,16 @@ const CAMPOS =
   'purchased_at, source, created_at';
 
 /**
- * Una lista de UNA nevera: primero lo que falta (lo último apuntado, arriba) y
- * después lo ya comprado (lo último comprado, arriba).
+ * Una lista: primero lo que falta (lo último apuntado, arriba) y después lo ya comprado (lo
+ * último comprado, arriba).
  *
- * Lleva el id de la nevera por la misma razón que `fetchPriorityList`: la RLS
- * devuelve las líneas de TODAS las neveras de la persona, y sin filtrar la lista
- * del piso se mezclaría con la de casa.
+ * Se pide por el id de la LISTA, que ya es de una sola nevera o de la cuenta: la RLS devuelve
+ * las líneas de todas las listas de la persona, y es este filtro el que separa una de otra.
  */
-export async function fetchLista(householdId: string, listaId: string): Promise<LineaLista[]> {
+export async function fetchLista(listaId: string): Promise<LineaLista[]> {
   const { data, error } = await supabase
     .from('shopping_list_items')
     .select(CAMPOS)
-    .eq('household_id', householdId)
     .eq('list_id', listaId)
     .order('is_purchased', { ascending: true })
     .order('created_at', { ascending: false })
@@ -123,10 +143,15 @@ export async function fetchLinea(id: string): Promise<LineaLista | null> {
   return (data ?? null) as unknown as LineaLista | null;
 }
 
+/** Adónde se apunta: basta el id de la lista y su nevera (NULL si es individual). */
+export type ListaDestino = Pick<Lista, 'id' | 'household_id'>;
+
 export type NuevaLinea = {
-  householdId: string;
-  /** En qué lista. Sin ella, la principal de la nevera (la más antigua). */
-  listaId?: string;
+  /**
+   * En qué lista. La nevera de la línea es la de su lista: en una compartida, la suya; en una
+   * individual, ninguna. El servidor exige que coincidan, así que no se elige aparte.
+   */
+  lista: ListaDestino;
   name: string;
   origen?: OrigenLinea;
   productId?: string | null;
@@ -146,13 +171,11 @@ export type NuevaLinea = {
  */
 export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
   const nombre = nueva.name.trim();
-  const listaId = nueva.listaId ?? (await fetchListas(nueva.householdId))[0]?.id;
-  if (!listaId) throw new Error('Esta nevera no tiene ninguna lista.');
+  const { id: listaId, household_id: householdId } = nueva.lista;
 
   const { data: existentes, error: errorLectura } = await supabase
     .from('shopping_list_items')
     .select('id, name, product_id')
-    .eq('household_id', nueva.householdId)
     .eq('list_id', listaId)
     .eq('is_purchased', false)
     .limit(400);
@@ -166,7 +189,7 @@ export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
   if (yaEsta) return false;
 
   const { error } = await supabase.from('shopping_list_items').insert({
-    household_id: nueva.householdId,
+    household_id: householdId,
     list_id: listaId,
     name: nombre,
     source: nueva.origen ?? 'manual',
@@ -180,19 +203,19 @@ export async function agregarLinea(nueva: NuevaLinea): Promise<boolean> {
 }
 
 /**
- * Apunta lo mismo en VARIAS listas de una nevera, una por una.
+ * Apunta lo mismo en VARIAS listas, una por una (pueden ser individuales y de distintas neveras).
  *
  * Devuelve, por lista, `true` si se apuntó y `false` si ya estaba pendiente allí. Si una
  * falla (el servidor rechaza, se cae la red), las anteriores ya quedaron apuntadas y la
  * excepción sale tal cual: es lo que se puede decir con verdad. Sin listas, no hace nada.
  */
 export async function agregarLineaEnListas(
-  nueva: Omit<NuevaLinea, 'listaId'>,
-  listaIds: string[],
+  nueva: Omit<NuevaLinea, 'lista'>,
+  listas: ListaDestino[],
 ): Promise<boolean[]> {
   const resultados: boolean[] = [];
-  for (const listaId of listaIds) {
-    resultados.push(await agregarLinea({ ...nueva, listaId }));
+  for (const lista of listas) {
+    resultados.push(await agregarLinea({ ...nueva, lista }));
   }
   return resultados;
 }

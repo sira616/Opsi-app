@@ -94,6 +94,11 @@ const dependencias: DependenciasChat = {
    */
   async cuota(token) {
     const { data, error } = await clienteDe(token).rpc('use_chat_quota');
+    // El chat es de Premium y lo dice la base de datos: 42501 con la pista `premium`. Cualquier
+    // otro error sigue siendo «no se puede comprobar» y la petición no sigue.
+    if (error && error.code === '42501' && error.hint === 'premium') {
+      return { permitido: false, esperaS: 0, soloPremium: true };
+    }
     if (error) throw error;
     const fila = (Array.isArray(data) ? data[0] : data) as { allowed?: unknown; wait_s?: unknown } | null;
     if (!fila || typeof fila.allowed !== 'boolean') throw new Error('respuesta de cuota no válida');

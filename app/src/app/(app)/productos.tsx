@@ -6,13 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Barcode, CaretLeft, Lock, MagnifyingGlass, PencilSimple, Star } from 'phosphor-react-native';
 
-import { agregarLineaEnListas } from '@/api/lista';
+import { agregarLinea, type ListaDestino } from '@/api/lista';
 import { fetchProductosConocidos, type ProductoConocido } from '@/api/premium';
 import { fetchSettings } from '@/api/settings';
 import { HojaAltaRapida } from '@/features/alta/HojaAltaRapida';
 import { Nota } from '@/features/ajustes/ui';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
-import { productoParaNevera } from '@/features/productos/destino';
+import { productoParaLista, productoParaNevera } from '@/features/productos/destino';
 import { HojaFicha } from '@/features/productos/HojaFicha';
 import { describeDbError } from '@/shared/lib/db-errors';
 import { IconoComida } from '@/shared/lib/iconos-comida';
@@ -29,7 +29,8 @@ type Filtro = 'todos' | 'escaneados' | 'a_mano';
  * Distingue lo **escaneado** (tiene código de barras y ficha de catálogo) de lo **añadido
  * a mano** (solo un nombre), con un filtro y una etiqueta en cada fila. Tocar uno abre su
  * ficha —de dónde sale, su código, su pasillo y su cantidad— desde la que se guarda en una
- * nevera (la que se elija) o se apunta en una o en varias listas. No cuenta nada: ni cuántas
+ * nevera (la que se elija) o se apunta en una o en varias listas (las de la cuenta: individuales
+ * y compartidas de cualquier nevera). No cuenta nada: ni cuántas
  * veces se ha comprado ni cuánto hay ahora; para eso está el inventario de la nevera.
  *
  * Es de Premium ⭐ y lo comprueba el servidor (`my_known_products`); aquí el candado solo
@@ -56,8 +57,8 @@ export default function Productos() {
   const premium = settings.data?.plan === 'premium';
 
   const consulta = useQuery({
-    queryKey: queryKeys.productosConocidos(activa.id),
-    queryFn: () => fetchProductosConocidos(activa.id),
+    queryKey: queryKeys.productosConocidos,
+    queryFn: fetchProductosConocidos,
     enabled: premium,
   });
 
@@ -74,17 +75,23 @@ export default function Productos() {
   );
 
   const apuntar = useMutation({
-    mutationFn: ({ p, neveraId, listaIds }: { p: ProductoConocido; neveraId: string; listaIds: string[] }) =>
-      agregarLineaEnListas(
-        {
-          householdId: neveraId,
-          name: p.nombre,
-          productId: productoParaNevera(p, neveraId, activa.id),
-          cantidad: { unitFamily: p.unitFamily, displayUnit: p.displayUnit, quantity: p.cantidad },
-        },
-        listaIds,
-      ),
-    async onSuccess(resultados, { p, neveraId }) {
+    mutationFn: async ({ p, listas }: { p: ProductoConocido; listas: ListaDestino[] }) => {
+      // El producto que se enlaza depende de la lista: en una compartida, de su nevera; en una
+      // individual, de la ficha que la persona ya ve.
+      const resultados: boolean[] = [];
+      for (const lista of listas) {
+        resultados.push(
+          await agregarLinea({
+            lista,
+            name: p.nombre,
+            productId: productoParaLista(p, lista),
+            cantidad: { unitFamily: p.unitFamily, displayUnit: p.displayUnit, quantity: p.cantidad },
+          }),
+        );
+      }
+      return resultados;
+    },
+    async onSuccess(resultados, { p }) {
       setError(null);
       const nuevas = resultados.filter(Boolean).length;
       setResultado(
@@ -95,7 +102,7 @@ export default function Productos() {
             : `${p.nombre}: apuntado en ${nuevas} ${nuevas === 1 ? 'lista' : 'listas'}.`,
       );
       setElegido(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.listaDe(neveraId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.lista });
     },
   });
 
@@ -115,7 +122,6 @@ export default function Productos() {
           <Text style={t.title}>Tus productos</Text>
           <Star size={24} color={c.brandBright} weight="fill" />
         </View>
-        {premium && neveras.length > 1 ? <Text style={t.bodySmall}>{activa.name}</Text> : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -159,7 +165,7 @@ export default function Productos() {
             {consulta.error ? <ErrorNote message={describeDbError(consulta.error)} /> : null}
 
             {!consulta.isPending && !consulta.error && todos.length === 0 ? (
-              <Text style={styles.texto}>Aquí aparecerán los productos que guardes en {activa.name}.</Text>
+              <Text style={styles.texto}>Aquí aparecerán los productos que guardes en tus neveras.</Text>
             ) : null}
             {todos.length > 0 && visibles.length === 0 ? (
               <Text style={styles.texto}>No hay nada que coincida.</Text>
@@ -212,8 +218,8 @@ export default function Productos() {
           neveras={neveras}
           activaId={activa.id}
           onClose={() => setElegido(null)}
-          onApuntar={async (p, neveraId, listaIds) => {
-            await apuntar.mutateAsync({ p, neveraId, listaIds });
+          onApuntar={async (p, listas) => {
+            await apuntar.mutateAsync({ p, listas });
           }}
           onGuardar={(p, neveraId) => {
             setElegido(null);
@@ -230,13 +236,13 @@ export default function Productos() {
           onClose={() => setRapida(null)}
           nombre={rapida.p.nombre}
           marca={rapida.p.marca}
-          productoId={productoParaNevera(rapida.p, rapida.neveraId, activa.id)}
+          productoId={productoParaNevera(rapida.p, rapida.neveraId)}
           unitFamily={rapida.p.unitFamily}
           netQuantity={rapida.p.cantidad}
           neveraId={rapida.neveraId}
           onEditar={(e) => {
             const { p, neveraId } = rapida;
-            const productoId = productoParaNevera(p, neveraId, activa.id);
+            const productoId = productoParaNevera(p, neveraId);
             setRapida(null);
             router.push({
               pathname: '/alta',

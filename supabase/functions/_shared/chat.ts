@@ -8,12 +8,14 @@
  *   3. la conversación es válida       → forma, longitudes y que acabe en un mensaje de la persona
  *   4. bucle con el modelo             → como mucho `MAX_RONDAS` idas y vueltas con herramientas
  *
- *   3 bis. la cuota de la persona      → después de validar (un cuerpo malo no gasta cuota) y ANTES
- *                                        de llamar al modelo (que es lo que cuesta). Si no se puede
- *                                        comprobar, NO se contesta: gastar sin límite es peor que fallar.
+ *   3 bis. el plan y la cuota          → después de validar (un cuerpo malo no gasta cuota) y ANTES
+ *                                        de llamar al modelo (que es lo que cuesta). El chat es de
+ *                                        Premium: quien no lo es recibe 403 `solo_premium` sin gastar
+ *                                        nada (lo decide `use_chat_quota` en la base de datos). Si no
+ *                                        se puede comprobar, NO se contesta: gastar sin límite es peor
+ *                                        que fallar.
  *
- * Lo que NO se hace aquí y está en PENDIENTES: el registro del consentimiento de privacidad y
- * decidir si el chat es de Premium.
+ * Lo que NO se hace aquí y está en PENDIENTES: el registro del consentimiento de privacidad.
  */
 
 import { ErrorArgumentos, HERRAMIENTAS, type AccesoDatos, type Herramienta } from './herramientas.ts';
@@ -51,8 +53,13 @@ Reglas que no se discuten:
 
 export type Sesion = { id: string };
 
-/** El resultado de pedir un mensaje a la cuota de la persona. */
-export type Cuota = { permitido: boolean; esperaS: number };
+/**
+ * El resultado de pedir un mensaje a la cuota de la persona.
+ *
+ * `soloPremium` es que el servidor rechazó a esa persona por no tener Opsi Premium ⭐: el chat es
+ * de pago y eso se decide en la base de datos, no aquí. En ese caso `esperaS` no significa nada.
+ */
+export type Cuota = { permitido: boolean; esperaS: number; soloPremium?: boolean };
 
 export type DependenciasChat = {
   verificarUsuario(token: string): Promise<Sesion | null>;
@@ -138,6 +145,10 @@ export async function manejar(req: Request, dep: DependenciasChat): Promise<Resp
   } catch {
     dep.log({ evento: 'opsi-chat', ok: false, fallo: 'cuota_no_comprobable' });
     return json(503, { error: 'cuota_no_comprobable' });
+  }
+  if (!cuota.permitido && cuota.soloPremium === true) {
+    dep.log({ evento: 'opsi-chat', ok: false, fallo: 'solo_premium' });
+    return json(403, { error: 'solo_premium' });
   }
   if (!cuota.permitido) {
     const espera = Math.max(1, Math.ceil(cuota.esperaS));

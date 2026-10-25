@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import type { Nevera } from '@/api/household';
-import { fetchSettings } from '@/api/settings';
+import { fetchSettings, type Plan } from '@/api/settings';
 import { queryKeys } from '@/shared/lib/query';
 import { useNeveraActual } from './NeveraActiva';
 
@@ -26,11 +26,19 @@ export function describirNevera(nevera: Nevera): string {
  * el futuro no es cosa de esta pantalla. Si hay una compartida de la que salir,
  * se dice, porque es lo único que la persona puede hacer ahora mismo.
  */
-export function textoTope(limite: number, hayCompartidas: boolean): string {
+export function textoTope(limite: number, hayCompartidas: boolean, plan?: Plan): string {
   const neveras = limite === 1 ? 'nevera' : 'neveras';
   const base = `Tu plan por ahora llega a ${limite} ${neveras}, la tuya incluida.`;
-  return hayCompartidas ? `${base} Para crear otra, sal antes de una compartida.` : base;
+  // El plan básico puede subir: se dice cuánto, que es lo que aclara por qué no caben más.
+  const conPremium = plan === 'basic' ? `${base} Con Opsi Premium ⭐ llegas a ${TOPE_NEVERAS_PREMIUM}.` : base;
+  return hayCompartidas ? `${conPremium} Para crear otra, sal antes de una compartida.` : conPremium;
 }
+
+/**
+ * Cuántas neveras da Premium. El número de verdad lo fija el servidor (el trigger
+ * `sync_household_limit` pone `household_limit` al cambiar el plan); este solo sirve para decirlo.
+ */
+const TOPE_NEVERAS_PREMIUM = 5;
 
 export type LimiteNeveras = {
   /**
@@ -46,14 +54,16 @@ export type LimiteNeveras = {
   enElMaximo: boolean;
   /** Si tengo alguna compartida de la que poder salir para hacer sitio. */
   hayCompartidas: boolean;
+  /** El plan, para poder decir que con Premium caben más. Null mientras no se sabe. */
+  plan: Plan | null;
 };
 
 /**
  * El tope de neveras, leído del servidor.
  *
  * El número viene de `user_settings.household_limit` y el cliente ni lo escribe
- * ni lo supone: hoy vale 2, y quien lo suba lo hace con un UPDATE, sin tocar la
- * app. La comprobación de verdad la hace el servidor al crear y al aceptar; esto
+ * ni lo supone: vale 2 en el plan básico y 5 en premium (lo fija el servidor al cambiar el
+ * plan), sin tocar la app. La comprobación de verdad la hace el servidor al crear y al aceptar; esto
  * solo sirve para no ofrecer lo que se sabe que va a fallar y para poder decir
  * cuánto es.
  *
@@ -69,5 +79,6 @@ export function useLimiteNeveras(): LimiteNeveras {
     limite,
     enElMaximo: limite !== null && neveras.length >= limite,
     hayCompartidas: neveras.some((n) => n.kind === 'shared'),
+    plan: ajustes.data?.plan ?? null,
   };
 }

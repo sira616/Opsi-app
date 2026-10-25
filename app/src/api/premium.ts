@@ -72,22 +72,27 @@ export type ProductoConocido = {
   displayUnit: MeasurementUnit;
   /** Lo que traía la última vez, en unidad base. */
   cantidad: number;
+  /**
+   * La nevera en la que se añadió la última vez. Hace falta para saber si una ficha privada
+   * de esa nevera se puede enlazar al guardarlo en otra (`productoParaNevera`).
+   */
+  neveraId: string | null;
 };
 
 /**
- * Lo que ha añadido ESTA persona a una nevera, sin repetidos y por orden alfabético.
+ * Lo que ha añadido ESTA persona, en todas sus neveras, sin repetidos y por orden alfabético.
  *
- * No hay una tabla de «productos guardados»: sale de los elementos que ya añadió (ver
- * `my_known_products`), así que no hay nada que mantener al día. Lo que se escaneó y nunca
- * se guardó no aparece.
+ * Tus productos son de la cuenta, no de la nevera que se esté mirando. No hay una tabla de
+ * «productos guardados»: sale de los elementos que ya añadió (ver `my_known_products`), así
+ * que no hay nada que mantener al día. Lo que se escaneó y nunca se guardó no aparece.
  */
-export async function fetchProductosConocidos(householdId: string): Promise<ProductoConocido[]> {
+export async function fetchProductosConocidos(): Promise<ProductoConocido[]> {
   const { data, error } = await supabase.rpc('my_known_products', {
-    p_household_id: householdId,
     p_limit: 200,
   });
   if (error) throw error;
   const productos: ProductoConocido[] = ((data ?? []) as FilaConocido[]).map((fila) => ({
+    neveraId: fila.household_id,
     productoId: fila.product_id,
     nombre: fila.product_name,
     marca: fila.brand,

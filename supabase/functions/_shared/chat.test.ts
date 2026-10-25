@@ -313,6 +313,25 @@ test('la espera que se dice es de al menos 1 segundo, aunque la cuota diga 0 o a
   }
 });
 
+test('el chat es de Premium: sin el plan, 403 solo_premium, y ni el modelo ni los datos se tocan', async () => {
+  const { cliente, vistos } = modeloGuion([{ texto: 'no debería llegar', llamadas: [] }]);
+  const dep = dependencias(cliente, { cuota: async () => ({ permitido: false, esperaS: 0, soloPremium: true }) });
+  const res = await manejar(peticion(PREGUNTA), dep);
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get('retry-after'), null, 'no es una espera: no hay nada que esperar');
+  assert.deepEqual(await res.json(), { error: 'solo_premium' });
+  assert.equal(vistos.length, 0, 'el modelo es lo que cuesta: no se llama');
+  assert.deepEqual(dep.datos.llamadas, []);
+  assert.deepEqual(dep.logs.at(-1), { evento: 'opsi-chat', ok: false, fallo: 'solo_premium' });
+});
+
+test('«solo_premium» solo vale si la cuota NO deja pasar: permitido gana a cualquier otra marca', async () => {
+  const { cliente } = modeloGuion([{ texto: 'Hola.', llamadas: [] }]);
+  const dep = dependencias(cliente, { cuota: async () => ({ permitido: true, esperaS: 0, soloPremium: true }) });
+  const res = await manejar(peticion(PREGUNTA), dep);
+  assert.equal(res.status, 200);
+});
+
 test('si no se puede comprobar la cuota NO se contesta (falla cerrado): 503', async () => {
   const { cliente, vistos } = modeloGuion([{ texto: 'no debería llegar', llamadas: [] }]);
   const dep = dependencias(cliente, {

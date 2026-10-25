@@ -6,7 +6,7 @@
 > Sirve para dos cosas: recordar **qué se decidió y por qué**, y ser el material en bruto
 > del que saldrá el **README final** cuando el MVP esté presentable.
 >
-> Última actualización: **2026-10-24** (sesión 45)
+> Última actualización: **2026-10-25** (sesión 46)
 
 ---
 
@@ -61,8 +61,8 @@ fase 2 (el escáner), y antes de ella lo que dice la sección 7 de `PENDIENTES.m
 | Esquema | **39 migraciones**, RLS en todas las tablas, privilegios por defecto cerrados ([D-22](#d-22--los-privilegios-por-defecto-nacen-cerrados--2026-09-25)) |
 | Neveras | Privada (nunca se comparte) + compartidas. Límite de **2 neveras por persona** (`household_limit`, que el cliente no escribe), 5 personas por compartida. Se invita por nombre de usuario; aceptar añade |
 | Auth | Usuario y contraseña. El alta solo admite correo sintético y el nombre sale del correo ([D-23](#d-23--el-alta-solo-admite-usuarios-de-opsi--2026-09-25)) |
-| Tests | **19 ficheros pgTAP, 899 tests** contra pgTAP real · `db:check`: **1119 comprobaciones** en PGlite · `test:app`: **256**, la lógica de calendario, el destino de un producto, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 17, con dos sesiones a la vez · `test:funciones`: **176** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
-| App | Expo SDK 58 (React Native 0.88, React 19.3) · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
+| Tests | **19 ficheros pgTAP, 960 tests** contra pgTAP real · `db:check`: **1182 comprobaciones** en PGlite · `test:app`: **269**, la lógica de calendario, el destino de un producto, los topes de las listas, los alérgenos, cuándo recomendar congelar y la lectura de la nutrición · `db:carreras`: 20, con dos sesiones a la vez · `test:funciones`: **178** · `fn:check`: **25**, en el runtime de Edge Functions de verdad |
+| App | Expo SDK 58 (React Native 0.88, React 19.3) · listas individuales y compartidas · chat de Premium · pestañas con barra flotante · inicio con selector de nevera y aviso de invitaciones · Ajustes en 8 secciones · alta con modo «días» · detalle con conservación orientativa e historial |
 | Auditoría | `docs/internal/AUDITORIA-2026-09-24.md` (602 líneas, con pruebas contra el entorno local) |
 
 ### Verificado vs. no verificado
@@ -1285,6 +1285,45 @@ la región y la retención siguen pendientes y son un 🔴 antes de producción;
 **Qué se comprobó:** `tsc`, `eslint`, `test:app` 256, `test:funciones` 176, `db:check` 1119, `check:audit` (las dos exenciones vigentes) y el empaquetado de Metro para Android e iOS con Hermes (≈10 MB cada uno); el servidor de desarrollo arranca y sirve el paquete web.
 
 **Lo que NO se comprobó:** la app en un móvil con Expo Go SDK 58 ni los gestos y pantallas con React Native 0.88. Si se usa una *development build* (`expo-dev-client`), hay que **crear una nueva** tras la subida.
+
+### D-53 · El chat es de Premium, botón único para añadir y ingredientes sin duplicar · 2026-10-25
+
+Tres arreglos que se piden juntos tras probar la 0.5.0 en el móvil (el cuarto, las listas por cuenta, es [D-54](#d-54--listas-individuales-y-compartidas-productos-y-neveras-por-cuenta--2026-10-25)).
+
+**El chat de Opsi es de Premium.** Hasta ahora lo usaba cualquiera con sesión (D-48 lo dejó abierto «hasta decidir»). Se decide en el **servidor**, como todo lo premium: `use_chat_quota()` (migración `20261027100000`) mira `my_plan()` lo primero y rechaza con `42501` y pista `premium` **sin gastar ni apuntar cuota**; `opsi-chat` lo traduce a **403 `solo_premium`** antes de llamar al modelo (que es lo que cuesta) y la app lo reconoce (`ErrorSoloPremium`). La pantalla del chat enseña un candado con «Ver Opsi Premium ⭐» al plan básico, el widget del panel Premium lleva candado como los demás, y en el aviso «Para hoy» la acción **«Hacer una receta»** solo sale con Premium (a quien no lo tiene se le enseña el aviso sin una acción que acaba en un candado). El botón del chat en la cabecera del Inicio se queda: lleva a esa pantalla, que lo explica. Si la consulta del plan falla, se deja pasar al chat y manda el servidor: un fallo de red no es «eres básico».
+
+**Un solo botón «Añadir producto» en el Inicio.** Escanear y añadir a mano eran dos botones sueltos en la cabecera. Ahora hay uno (el «+», con ese nombre para el lector de pantalla) que abre una hoja (`features/alta/HojaAnadir.tsx`) con **«Escanear producto»** y **«Añadir a mano»**, cada uno en su botón. También lo usa el botón de «nevera vacía». Está en el **Inicio**, que lo ve todo el mundo; no es de «Tus productos», que es Premium. Cada botón cierra la hoja y abre su pantalla 300 ms después (en iOS, un `Modal` que baja y una pantalla que sube a la vez no se presentan).
+
+**«Ver ingredientes» ya no sale dos veces.** En la pantalla de un producto con aviso de alérgenos salía junto al aviso (`SaludElemento`) y otra vez más abajo en la ficha (`FichaProducto`). Ahora la ficha pregunta a `useIngredientesEnAviso` y se lo calla si el aviso ya lo ofrece; sin aviso sigue saliendo en la ficha, como siempre.
+
+**Verificado aquí:** `cuota_chat_test.sql` (26: el plan básico recibe `42501/premium` y no gasta nada; con Premium pregunta), `test:funciones` **178** (403 `solo_premium`, y que «permitido» gana a esa marca), `tsc` y `eslint`. **Sin verificar:** las pantallas en un móvil.
+
+### D-54 · Listas individuales y compartidas; productos y neveras por cuenta · 2026-10-25
+
+**Lo que se pidió:** «los productos y las listas son por cuenta, no por nevera». Y, al elegir cómo, la propia petición lo concretó: no tiene sentido que una nevera compartida tenga hasta cinco listas «de todos»; al crear una lista se elige **individual o compartida**, con un tope **por cuenta**.
+
+**El modelo** (migración `20261028100000_listas_por_cuenta.sql`):
+
+| | Individual | Compartida |
+|---|---|---|
+| De quién es | De la cuenta (`owner_id`), **sin nevera** | De una nevera (`household_id`) |
+| Quién la ve | Solo su dueña/o | Todos los miembros de esa nevera |
+| Dónde se usa | Desde cualquier nevera | En su nevera |
+
+- **Topes por cuenta**, contando lo que ha creado esa persona: **básico, 1 compartida + 1 individual** (2 en total); **premium, 5 en total** de cualquier tipo. Lo impone el trigger de `shopping_lists`, con una pista distinta para cada caso (`listas_limite_compartida`, `listas_limite_individual`, `listas_maximo`), y la app repite los topes solo para no ofrecer lo que va a fallar (`features/lista/listas.ts`, con tests).
+- **Las neveras nacen sin lista** (se quita `create_default_list`), y **la cuenta nace con su individual «La compra»** (`handle_new_user`). De las individuales siempre queda una: la última no se borra, salvo en el borrado en cascada de la cuenta (se detecta con `pg_trigger_depth()`, no con el orden en que se borran las filas, que no está definido).
+- **Las líneas heredan la visibilidad de su lista** (RLS con `exists` sobre `shopping_lists`, que ya filtra por RLS). La nevera de la línea es la de su lista y ninguna si es individual; el servidor exige que coincidan. El tope de 300 líneas pasa de «por nevera» a «por lista».
+- **Pasar lo comprado al inventario** (`stock_from_list`): en una lista compartida, a la nevera de la lista; en una individual hay que decir a cuál (`p_household_id`). Un producto privado de otra nevera no se enlaza: se guarda por el nombre.
+- **Tus productos son de la cuenta**: `my_known_products` sin nevera junta lo que has añadido tú en todas las tuyas, y dice en qué nevera lo añadiste la última vez (hace falta para saber si una ficha privada se puede enlazar al guardarlo en otra). La pantalla de Tus productos y la de Nutrición dejan de nombrar «la nevera activa».
+- **Neveras por cuenta según el plan**: básico 2, premium 5 (la privada cuenta). `household_limit` ya existía y ya valía 2 para todos; ahora lo fija un trigger al cambiar el plan (`sync_household_limit`), así que `npm run dev:plan` lo mueve solo. Los textos del tope de neveras dicen que Premium llega a 5.
+
+**Lo que ya existía se conserva.** Las listas de una nevera compartida siguen siendo compartidas, con sus líneas, aunque pasen del tope nuevo: no se borra nada, solo deja de dejar crear más. Las de una nevera **privada** (que solo veía una persona) pasan a individuales de esa persona, con sus líneas. En la base local eran dos «La compra» vacías; la conversión se probó además con datos sintéticos (una lista con líneas en una privada y otra en una compartida) dentro de una transacción que se deshizo.
+
+**En la app:** en la pestaña **Lista** salen tus individuales y las compartidas de la nevera activa (las compartidas, con el icono de personas); «Nueva lista» pide el tipo (la compartida se apaga en una nevera de una sola persona, porque no se comparte con nadie). Al **apuntar** algo desde Tus productos o desde un alimento que se acaba, salen **todas** tus listas con su tipo, y la de siempre marcada: la primera compartida de la nevera de la que sale lo apuntado y, si no hay, la individual principal. Lo que se apunta solo (si se encendió) va a esa misma.
+
+**Se aprendió:** (1) el `WITH CHECK` de la RLS corre **después** de los triggers `BEFORE`, así que el trigger de topes tapaba el `42501` de crear una compartida en una nevera ajena con un aviso de «llegaste al tope» (el napkin ya lo decía); ahora no mira nada si quien escribe no es de esa nevera y deja hablar a la RLS. (2) Un tipo inventado en `kind` lo para la RLS (`42501`) antes que el `CHECK`. (3) `household_limit` es `smallint`: `is(smallint, integer)` no existe en pgTAP, hay que castear.
+
+**Lo que NO se ha hecho:** el cupo que ve la app cuenta las compartidas que creó la persona *y que todavía ve* (si salió de una nevera, esa compartida ya no cuenta, ni para el servidor ni para la app); no hay forma de **pasar** una lista de individual a compartida ni al revés (se crea de nuevo); y no se ha probado en un móvil.
 
 ## 3. Convenciones
 
@@ -2634,3 +2673,11 @@ en la lista de columnas. El test «caben 20» pasaba por casualidad y el «el 21
 **Verificado aquí:** `expo-doctor` 20/20, `tsc`, `eslint`, `test:app` **256**, `test:funciones` **176**, `db:check` **1119**, `check:audit`, empaquetado de Android e iOS.
 
 **Sin verificar:** la app en un móvil con Expo Go SDK 58.
+
+### 2026-10-25 (sesión 46) · Chat de Premium, botón único para añadir, ingredientes sin duplicar y listas por cuenta
+
+**Hecho** ([D-53](#d-53--el-chat-es-de-premium-botón-único-para-añadir-y-ingredientes-sin-duplicar--2026-10-25) y [D-54](#d-54--listas-individuales-y-compartidas-productos-y-neveras-por-cuenta--2026-10-25)): el chat pasa a ser de Premium (decidido en el servidor); escanear y añadir a mano son un solo botón en el Inicio; «Ver ingredientes» ya no sale dos veces; y las listas de la compra pasan a ser **individuales** (de la cuenta) o **compartidas** (de una nevera), con tope por cuenta (básico 1 + 1, premium 5), neveras sin lista de nacimiento, «Tus productos» de toda la cuenta y tope de neveras por plan (2 / 5).
+
+**Verificado aquí:** pgTAP real **960** (en esta sesión: `cuota_chat` con el plan, `listas_premium` y `lista_compra` reescritos para el modelo nuevo, `rls_isolation`, `domain_constraints` y `tus_productos` ampliados), `db:check` **1182**, `db:carreras` **20** (nueva: dos altas de una lista compartida a la vez, solo entra una; y la de la cuota del chat sube antes la cuenta de prueba a Premium), `test:app` **269**, `test:funciones` **178**, `tsc` y `eslint`. La conversión de las listas que ya existían se probó con datos sintéticos en una transacción que se deshizo.
+
+**Sin verificar:** las pantallas nuevas en un móvil (la hoja «Añadir producto», el selector de listas con sus dos tipos, el candado del chat) y el navegador integrado se cuelga con la web de Expo, así que tampoco se vieron ahí.

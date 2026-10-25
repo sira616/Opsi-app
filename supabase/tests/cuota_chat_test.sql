@@ -9,6 +9,8 @@
 --   · Nadie toca la tabla a mano (ni `authenticated`, ni `anon`, ni `service_role`), y solo
 --     quien tiene sesión llama a la función: anon, no; sin sesión, 28000.
 --   · Lo viejo se limpia, y todo se va con la cuenta.
+--   · El chat es de Premium (20261027100000): quien tiene el plan básico recibe 42501 con pista
+--     `premium` y no gasta ni apunta nada.
 --
 --   npm run db:test
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -18,6 +20,24 @@ begin;
 create extension if not exists pgtap with schema extensions;
 
 select no_plan();
+
+-- Devuelve «SQLSTATE/pista» de lo que lance la sentencia, o «sin error».
+create function public.zz_error_de(p_sql text)
+returns text
+language plpgsql
+as $$
+declare
+  v_hint text;
+begin
+  execute p_sql;
+  return 'sin error';
+exception when others then
+  get stacked diagnostics v_hint = pg_exception_hint;
+  return sqlstate || '/' || coalesce(v_hint, '');
+end;
+$$;
+
+grant execute on function public.zz_error_de(text) to authenticated, anon, service_role;
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
@@ -32,7 +52,18 @@ values
   ('00000000-0000-0000-0000-000000000000', '4c4c0003-cccc-4ccc-8ccc-ccccccccccc3',
    'authenticated', 'authenticated', 'kira@usuarios.opsi.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-0000-0000-000000000000', '4d4d0004-dddd-4ddd-8ddd-ddddddddddd4',
-   'authenticated', 'authenticated', 'leo@usuarios.opsi.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
+   'authenticated', 'authenticated', 'leo@usuarios.opsi.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-0000-0000-000000000000', '4e4e0005-eeee-4eee-8eee-eeeeeeeeeee5',
+   'authenticated', 'authenticated', 'mia@usuarios.opsi.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
+
+-- El chat es de Premium: Inés, Jon, Kira y Leo lo son; Mía se queda en el plan básico.
+update public.user_settings set plan = 'premium'
+ where user_id in (
+   '4a4a0001-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+   '4b4b0002-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+   '4c4c0003-cccc-4ccc-8ccc-ccccccccccc3',
+   '4d4d0004-dddd-4ddd-8ddd-ddddddddddd4'
+ );
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- A · Permisos
@@ -236,6 +267,40 @@ select is(
   0::bigint,
   'al borrar la cuenta se va su uso con ella'
 );
+
+-- ══════════════════════════════════════════════════════════════�
+-- F · El chat es de Premium
+-- ══════════════════════════════════════════════════════════════�
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"4e4e0005-eeee-4eee-8eee-eeeeeeeeeee5","role":"authenticated"}';
+
+select is(public.my_plan(), 'basic', 'Mía está en el plan básico');
+
+-- La Edge Function reconoce «es de Premium» por el par código + pista, no por el texto.
+select is(
+  public.zz_error_de($$select * from public.use_chat_quota()$$),
+  '42501/premium',
+  'con el plan básico el chat se rechaza con 42501 y la pista premium'
+);
+
+reset role;
+
+select is(
+  (select count(*) from public.chat_usage where user_id = '4e4e0005-eeee-4eee-8eee-eeeeeeeeeee5'),
+  0::bigint,
+  'lo rechazado no gasta ni apunta nada de cuota'
+);
+
+-- Se hace premium y ya puede: el plan lo decide el servidor, sin tocar nada más.
+update public.user_settings set plan = 'premium' where user_id = '4e4e0005-eeee-4eee-8eee-eeeeeeeeeee5';
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"4e4e0005-eeee-4eee-8eee-eeeeeeeeeee5","role":"authenticated"}';
+
+select is((select allowed from public.use_chat_quota()), true, 'con el plan premium, Mía pregunta');
+
+reset role;
 
 select * from finish();
 
