@@ -23,6 +23,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 
 import { manejar, type DependenciasChat } from '../_shared/chat.ts';
+import { gastarCuota } from '../_shared/cuota.ts';
 import type { AccesoDatos, FilaElemento, FilaInventario, FilaLista } from '../_shared/herramientas.ts';
 import { crearClienteOllama, leerConfigOllama } from '../_shared/modelo.ts';
 
@@ -102,18 +103,7 @@ const dependencias: DependenciasChat = {
    * Un mensaje de la cuota de ESTA persona. Va con su token (no hay clave de servicio): la función
    * `use_chat_quota` lee quién es de su sesión y apunta el uso en una tabla que nadie más toca.
    */
-  async cuota(token) {
-    const { data, error } = await clienteDe(token).rpc('use_chat_quota');
-    // El chat es de Premium y lo dice la base de datos: 42501 con la pista `premium`. Cualquier
-    // otro error sigue siendo «no se puede comprobar» y la petición no sigue.
-    if (error && error.code === '42501' && error.hint === 'premium') {
-      return { permitido: false, esperaS: 0, soloPremium: true };
-    }
-    if (error) throw error;
-    const fila = (Array.isArray(data) ? data[0] : data) as { allowed?: unknown; wait_s?: unknown } | null;
-    if (!fila || typeof fila.allowed !== 'boolean') throw new Error('respuesta de cuota no válida');
-    return { permitido: fila.allowed, esperaS: Number(fila.wait_s) || 0 };
-  },
+  cuota: (token) => gastarCuota(() => clienteDe(token).rpc('use_chat_quota')),
 
   modelo,
   log: (evento) => console.log(JSON.stringify(evento)),

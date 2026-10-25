@@ -423,6 +423,10 @@ verify_jwt = true
 enabled = true
 verify_jwt = true
 
+[functions.opsi-ticket]
+enabled = true
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
