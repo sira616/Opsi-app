@@ -23,7 +23,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 
 import { manejar, type DependenciasChat } from '../_shared/chat.ts';
-import type { AccesoDatos, FilaInventario, FilaLista } from '../_shared/herramientas.ts';
+import type { AccesoDatos, FilaElemento, FilaInventario, FilaLista } from '../_shared/herramientas.ts';
 import { crearClienteOllama, leerConfigOllama } from '../_shared/modelo.ts';
 
 const url = Deno.env.get('SUPABASE_URL');
@@ -63,7 +63,7 @@ const dependencias: DependenciasChat = {
         let q = db
           .from('inventory_with_priority')
           .select(
-            'name, state, location, unit_family, remaining_quantity, effective_limit_date, ' +
+            'id, name, state, location, unit_family, remaining_quantity, effective_limit_date, ' +
               'effective_date_source, days_left, priority',
           )
           .not('state', 'in', '(finished,discarded)')
@@ -74,6 +74,16 @@ const dependencias: DependenciasChat = {
         const { data, error } = await q;
         if (error) throw error;
         return (data ?? []) as unknown as FilaInventario[];
+      },
+      async elementos(ids) {
+        if (ids.length === 0) return [];
+        const { data, error } = await db
+          .from('inventory_with_priority')
+          .select('id, name, unit_family')
+          .in('id', ids)
+          .not('state', 'in', '(finished,discarded)');
+        if (error) throw error;
+        return (data ?? []) as unknown as FilaElemento[];
       },
       async listaCompra(limite) {
         const { data, error } = await db

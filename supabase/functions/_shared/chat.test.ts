@@ -34,10 +34,15 @@ function datosFalsos(): AccesoDatos & { llamadas: string[] } {
   const llamadas: string[] = [];
   return {
     llamadas,
+    async elementos(ids) {
+      llamadas.push(`elementos:${ids.length}`);
+      return [];
+    },
     async inventario(f) {
       llamadas.push(`inventario:${f.prioridad}:${f.limite}`);
       return [
         {
+          id: '11111111-1111-4111-8111-111111111111',
           name: 'Yogur natural',
           state: 'opened',
           location: 'fridge',
@@ -198,7 +203,7 @@ test('contesta sin herramientas si el modelo no las pide', async () => {
   assert.deepEqual(await res.json(), { respuesta: 'Pásate por la compra.' });
   // El primer mensaje es el de instrucciones y la persona viene después, nunca antes.
   assert.equal(vistos[0].mensajes[0].rol, 'system');
-  assert.equal(vistos[0].herramientas.length, 2);
+  assert.equal(vistos[0].herramientas.length, 6);
 });
 
 test('ejecuta la herramienta que pide el modelo y le devuelve el resultado como dato', async () => {
@@ -543,12 +548,8 @@ test('el chat no nombra las tablas de salud, perfil ni nutrición: lo que llega 
   for (const fuente of fuentes) assert.doesNotMatch(fuente, prohibidas);
   // Y lo que sí lee es exactamente esto.
   const consultas = [...fuentes[0].matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]).sort();
-  assert.deepEqual(consultas, ['inventory_with_priority', 'shopping_list_items']);
-});
-
-test('las herramientas del chat son exactamente dos y de solo lectura', async () => {
-  const { HERRAMIENTAS } = await import('./herramientas.ts');
-  assert.deepEqual(HERRAMIENTAS.map((h) => h.descripcion.nombre).sort(), ['ver_inventario', 'ver_lista_compra']);
+  // El inventario se pide dos veces (la lista y los elementos concretos de una propuesta): misma vista.
+  assert.deepEqual(consultas, ['inventory_with_priority', 'inventory_with_priority', 'shopping_list_items']);
 });
 
 // ── Ollama ────────────────────────────────────────────────────────────────

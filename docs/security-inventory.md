@@ -152,7 +152,7 @@ Una en código, el resto previstas. El modelo de amenazas de cada una está en [
 |---|---|---|---|---|
 | `lookup-barcode` | 2 | Usuario con sesión (verificado dentro de la función) | Código de barras (no es personal) | Código y tests; sin desplegar. **Al desplegar, la migración `20261024100000_nutricion` va ANTES** que esta versión: `buscarEnCatalogo` hace el embed `product_nutrition(nutrition_data_at)` en el camino crítico del escáner y, sin la tabla, todos los escaneos darían 500 |
 | `daily-digest` | 3 | Cron del servidor (`pg_cron`) | Hora y zona de cada persona | Sin diseñar |
-| `opsi-chat` | 5 | Usuario con sesión (verificado dentro de la función, con el token de la persona; **sin clave de servicio**) | Nombres, cantidades y fechas del inventario y la lista, y lo que se pregunta: **sale a un proveedor de IA** (hoy Ollama Cloud, en desarrollo). **No lee salud, perfil ni nutrición** | Código, tests y conectada a la app. **Solo lectura**, con cuota por persona (20/h, 100/día); sin desplegar. Modelo de amenazas: §10 |
+| `opsi-chat` | 5 | Usuario con sesión (verificado dentro de la función, con el token de la persona; **sin clave de servicio**) | Nombres, cantidades y fechas del inventario y la lista, y lo que se pregunta: **sale a un proveedor de IA** (hoy Ollama Cloud, en desarrollo). **No lee salud, perfil ni nutrición** | Código, tests y conectada a la app. **No escribe nada**: lee y **propone** (la persona confirma en la app y es la app quien ejecuta, con su sesión). Solo Premium, solo habla de cocina (puerta del tema) y con cuota por persona (20/h, 100/día); sin desplegar. Modelo de amenazas: §10 |
 | `parse-receipt` | 6 | Usuario con sesión | Fotos de tickets | Sin diseñar. Riesgo alto (PII) |
 
 ## Colas, workers y cron

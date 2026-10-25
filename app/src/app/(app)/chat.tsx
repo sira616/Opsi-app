@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CaretLeft, ChatCircleDots, Lock, PaperPlaneRight } from 'phosphor-react-native';
 
 import { fetchSettings } from '@/api/settings';
+import { useNeveraActual } from '@/features/neveras/NeveraActiva';
 import { Nota } from '@/features/ajustes/ui';
 import {
   MAX_LONGITUD_MENSAJE,
@@ -26,7 +27,11 @@ import {
   puedeEnviar,
   type Mensaje,
 } from '@/features/chat/mensajes';
-import { ErrorLimiteChat, ErrorSoloPremium, responder } from '@/features/chat/responder';
+import { ejecutarPropuesta } from '@/features/chat/ejecutar';
+import type { EstadoPropuesta, PropuestaChat } from '@/features/chat/propuestas';
+import { ErrorLimiteChat, ErrorSoloPremium, responder, type RespuestaChat } from '@/features/chat/responder';
+import { TarjetaPropuesta } from '@/features/chat/TarjetaPropuesta';
+import { describeDbError } from '@/shared/lib/db-errors';
 import { queryKeys } from '@/shared/lib/query';
 import { Button } from '@/shared/ui/Button';
 import { fonts, makeStyles, radius, space, touchTarget, useTheme, useType } from '@/shared/theme/tokens';
@@ -58,6 +63,10 @@ export default function Chat() {
   const params = useLocalSearchParams<{ mensaje?: string | string[] }>();
 
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: fetchSettings });
+  const queryClient = useQueryClient();
+  const { activa } = useNeveraActual();
+  // En qué punto está cada tarjeta de propuesta (por mensaje y posición). Solo vive en esta pantalla.
+  const [estados, setEstados] = useState<Record<string, EstadoPropuesta>>({});
 
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [texto, setTexto] = useState(() => borradorDeRuta(params.mensaje));
@@ -73,19 +82,45 @@ export default function Chat() {
     setMensajes(conversacion);
     setTexto('');
     setRespondiendo(true);
-    let respuesta: string;
+    let respuesta: RespuestaChat;
     try {
       respuesta = await responder(conversacion);
     } catch (caught) {
-      respuesta =
-        caught instanceof ErrorLimiteChat
-          ? avisoDeLimite(caught.esperaS)
-          : caught instanceof ErrorSoloPremium
-            ? 'El chat es de Opsi Premium ⭐.'
-            : 'No he podido contestar. Prueba otra vez.';
+      respuesta = {
+        propuestas: [],
+        texto:
+          caught instanceof ErrorLimiteChat
+            ? avisoDeLimite(caught.esperaS)
+            : caught instanceof ErrorSoloPremium
+              ? 'El chat es de Opsi Premium ⭐.'
+              : 'No he podido contestar. Prueba otra vez.',
+      };
     }
-    setMensajes((actuales) => [...actuales, { id: nuevoId(), de: 'opsi', texto: respuesta }]);
+    setMensajes((actuales) => [
+      ...actuales,
+      {
+        id: nuevoId(),
+        de: 'opsi',
+        texto: respuesta.texto,
+        ...(respuesta.propuestas.length > 0 ? { propuestas: respuesta.propuestas } : {}),
+      },
+    ]);
     setRespondiendo(false);
+  }
+
+  const ponerEstado = (clave: string, estado: EstadoPropuesta) =>
+    setEstados((actuales) => ({ ...actuales, [clave]: estado }));
+
+  /** El «Sí» de una tarjeta: es lo único que hace que el chat cambie algo, y solo una vez. */
+  async function confirmar(clave: string, propuesta: PropuestaChat) {
+    if (estados[clave]?.fase === 'ejecutando' || estados[clave]?.fase === 'hecha') return;
+    ponerEstado(clave, { fase: 'ejecutando' });
+    try {
+      const resumen = await ejecutarPropuesta(propuesta, { nevera: activa, queryClient });
+      ponerEstado(clave, { fase: 'hecha', resumen });
+    } catch (caught) {
+      ponerEstado(clave, { fase: 'error', mensaje: describeDbError(caught) });
+    }
   }
 
   const vacia = mensajes.length === 0;
@@ -177,16 +212,28 @@ export default function Chat() {
           ) : null}
 
           {mensajes.map((m) => (
-            <View
-              key={m.id}
-              style={[styles.burbuja, m.de === 'persona' ? styles.burbujaPersona : styles.burbujaOpsi]}
-            >
-              <Text
-                selectable
-                style={[styles.burbujaTexto, m.de === 'persona' && styles.burbujaTextoPersona]}
-              >
-                {m.texto}
-              </Text>
+            <View key={m.id} style={styles.mensaje}>
+              <View style={[styles.burbuja, m.de === 'persona' ? styles.burbujaPersona : styles.burbujaOpsi]}>
+                <Text
+                  selectable
+                  style={[styles.burbujaTexto, m.de === 'persona' && styles.burbujaTextoPersona]}
+                >
+                  {m.texto}
+                </Text>
+              </View>
+              {(m.propuestas ?? []).map((propuesta, i) => {
+                const clave = `${m.id}:${i}`;
+                return (
+                  <TarjetaPropuesta
+                    key={clave}
+                    propuesta={propuesta}
+                    estado={estados[clave] ?? { fase: 'pendiente' }}
+                    nevera={activa.name}
+                    onConfirmar={() => void confirmar(clave, propuesta)}
+                    onRechazar={() => ponerEstado(clave, { fase: 'rechazada' })}
+                  />
+                );
+              })}
             </View>
           ))}
         </ScrollView>
@@ -266,6 +313,8 @@ const useStyles = makeStyles((c) => ({
   sugerenciaTexto: { fontFamily: fonts.medium, fontSize: 14, color: c.ink },
   pulsado: { opacity: 0.7 },
 
+  // Una burbuja y, debajo, sus tarjetas de propuesta: el alineado lo sigue poniendo cada hijo.
+  mensaje: { gap: space.sm },
   burbuja: { maxWidth: '85%', paddingHorizontal: space.md + 2, paddingVertical: space.sm + 2, borderRadius: 18 },
   burbujaPersona: { alignSelf: 'flex-end', backgroundColor: c.brand, borderBottomRightRadius: 6 },
   burbujaOpsi: {
