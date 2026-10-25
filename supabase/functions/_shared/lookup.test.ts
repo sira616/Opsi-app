@@ -248,6 +248,21 @@ test('si OFF dice que es de otro tipo: «no es comida», y ni se guarda ni se an
   assert.equal(logs.at(-1)?.resultado, 'no_comida');
 });
 
+test('una ficha de tabaco que ya estaba en el catálogo tampoco se sirve: «no es comida», sin gastar OFF', async () => {
+  const tabaco: FilaCatalogo = { ...FILA, name: 'Tabaco de liar rubio' };
+  const { dep, llamadas, logs } = montar({
+    async buscarEnCatalogo() {
+      return tabaco;
+    },
+  });
+  const r = await manejar(peticion(), dep);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await leer(r), { found: false, barcode: CODIGO, not_food: true });
+  assert.equal(llamadas.consultarOff, 0);
+  assert.equal(llamadas.registrarFalta, 0);
+  assert.equal(logs.at(-1)?.resultado, 'no_comida_cache');
+});
+
 test('el veredicto de OFF manda sobre una ficha vieja del catálogo', async () => {
   const vieja: FilaCatalogo = { ...FILA, updated_at: new Date(AHORA - 40 * 86_400_000).toISOString() };
   const { dep } = montar({
