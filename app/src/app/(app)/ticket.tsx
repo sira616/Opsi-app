@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,13 +15,25 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Camera, Check, Lock, Plus, Receipt, X } from 'phosphor-react-native';
+import { Camera, Check, Lock, Plus, Receipt, Storefront, X } from 'phosphor-react-native';
 
 import { fetchPendientes, marcarComprada } from '@/api/lista';
+import { enlazarProducto, esErrorDeProducto, guardarAsociacion } from '@/api/marcas';
 import { fetchSettings } from '@/api/settings';
 import { leerTicket, mensajeDeTicket } from '@/api/ticket';
 import { ejecutarPropuesta } from '@/features/chat/ejecutar';
 import { useNeveraActual } from '@/features/neveras/NeveraActiva';
+import { BloqueMarca } from '@/features/ticket/BloqueMarca';
+import { HojaMarca } from '@/features/ticket/HojaMarca';
+import {
+  confirmarSugerida,
+  dejarSinIdentificar,
+  elegirCandidato,
+  escribirMarca,
+  paraAprender,
+  vinculoDe,
+} from '@/features/ticket/marcas';
+import { useResolucionMarcas } from '@/features/ticket/useResolucionMarcas';
 import {
   bloqueadaPorNombre,
   coincidencias,
@@ -78,6 +90,15 @@ export default function Ticket() {
   const camara = useRef<CameraView>(null);
   const [fase, setFase] = useState<Fase>('aviso');
   const [lineas, setLineas] = useState<LineaRevision[]>([]);
+  // Las filas de ahora mismo, SIN esperar a un render: las lee el buscador de marcas, que trabaja en segundo
+  // plano, y todo lo que las cambia pasa por `cambiarLineas` para que no haya dos versiones.
+  const lineasRef = useRef<LineaRevision[]>([]);
+  const cambiarLineas = useCallback((f: (actuales: LineaRevision[]) => LineaRevision[]) => {
+    lineasRef.current = f(lineasRef.current);
+    setLineas(lineasRef.current);
+  }, []);
+  const [filaDeMarca, setFilaDeMarca] = useState<string | null>(null);
+  const marcas = useResolucionMarcas({ neveraId: activa.id, leer: () => lineasRef.current, cambiar: cambiarLineas });
   const [error, setError] = useState<string | null>(null);
   const [tachar, setTachar] = useState(true);
   const [resumen, setResumen] = useState<string | null>(null);
@@ -96,11 +117,17 @@ export default function Ticket() {
 
   const leer = useMutation({
     mutationFn: (imagen: string) => leerTicket(imagen),
-    onSuccess(productos) {
+    onSuccess(ticket) {
       setError(null);
-      setLineas(lineasIniciales(productos));
-      setFase(productos.length === 0 ? 'aviso' : 'revisar');
-      if (productos.length === 0) setError('No he encontrado ningún producto en esa foto. Prueba con el ticket entero y buena luz.');
+      cambiarLineas(() => lineasIniciales(ticket.productos));
+      marcas.fijarTienda(ticket.tienda);
+      setFase(ticket.productos.length === 0 ? 'aviso' : 'revisar');
+      if (ticket.productos.length === 0) {
+        setError('No he encontrado ningún producto en esa foto. Prueba con el ticket entero y buena luz.');
+      } else {
+        // La revisión ya está a la vista; las marcas llegan después, por tandas, sin bloquear nada.
+        void marcas.iniciar();
+      }
     },
     onError(caught) {
       setError(mensajeDeTicket(caught));
@@ -137,12 +164,32 @@ export default function Ticket() {
   const guardar = useMutation({
     mutationFn: async () => {
       let guardadas = 0;
+      let recordadas = 0;
       try {
-        for (const { clave, linea } of pendientesDeGuardar(lineas)) {
-          await ejecutarPropuesta({ tipo: 'guardar', productos: [linea] }, { nevera: activa, queryClient, invalidar: false });
+        for (const { clave, linea, fila } of pendientesDeGuardar(lineasRef.current)) {
+          // Con qué producto del catálogo se enlaza lo elegido (sin duplicar ninguno). Si no se puede, se guarda
+          // igual, sin enlace: guardar el ticket nunca depende de esto.
+          let productoId = await enlazarProducto(vinculoDe(fila), activa.id, linea.nombre);
+          try {
+            await ejecutarPropuesta({ tipo: 'guardar', productos: [{ ...linea, productoId }] }, { nevera: activa, queryClient, invalidar: false });
+          } catch (e) {
+            // «Ese producto no es de esta nevera»: se guarda sin enlace en lugar de perder la línea.
+            if (productoId === null || !esErrorDeProducto(e)) throw e;
+            productoId = null;
+            await ejecutarPropuesta({ tipo: 'guardar', productos: [linea] }, { nevera: activa, queryClient, invalidar: false });
+          }
           // Cada una que entra se marca: si falla la siguiente, al reintentar no se repite.
           guardadas += 1;
-          setLineas((actuales) => actuales.map((l) => (l.clave === clave ? { ...l, guardada: true } : l)));
+          cambiarLineas((actuales) => actuales.map((l) => (l.clave === clave ? { ...l, guardada: true } : l)));
+          // Se recuerda SOLO lo que la persona confirmó, eligió o escribió a propósito, y nunca hace fallar el guardado.
+          for (const a of paraAprender([{ ...fila, guardada: true }], marcas.tiendaClave, new Map([[clave, productoId]]))) {
+            try {
+              await guardarAsociacion(a);
+              recordadas += 1;
+            } catch {
+              // No se pudo recordar: el producto ya está guardado, y eso es lo que importa.
+            }
+          }
         }
         let tachadas = 0;
         if (tachar) {
@@ -151,7 +198,7 @@ export default function Ticket() {
             tachadas += 1;
           }
         }
-        return { guardadas, tachadas };
+        return { guardadas, tachadas, recordadas };
       } finally {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(activa.id) }),
@@ -160,11 +207,12 @@ export default function Ticket() {
         ]);
       }
     },
-    onSuccess({ guardadas, tachadas }) {
+    onSuccess({ guardadas, tachadas, recordadas }) {
       setError(null);
       setResumen(
         `Guardado en ${activa.name}: ${guardadas} ${guardadas === 1 ? 'producto' : 'productos'}.` +
-          (tachadas > 0 ? ` Tachado de tus listas: ${tachadas}.` : ''),
+          (tachadas > 0 ? ` Tachado de tus listas: ${tachadas}.` : '') +
+          (recordadas > 0 ? ` Marcas recordadas para la próxima vez: ${recordadas}.` : ''),
       );
       setFase('hecho');
     },
@@ -172,15 +220,26 @@ export default function Ticket() {
   });
 
   const cambiar = (clave: string, cambios: Partial<LineaRevision>) =>
-    setLineas((actuales) => actuales.map((l) => (l.clave === clave ? { ...l, ...cambios } : l)));
+    cambiarLineas((actuales) => actuales.map((l) => (l.clave === clave ? { ...l, ...cambios } : l)));
 
   function otraLinea() {
     contador.current += 1;
-    setLineas((actuales) => [
+    cambiarLineas((actuales) => [
       ...actuales,
-      { clave: `n${contador.current}`, nombre: '', cantidad: '', unidad: 'unidades', incluir: true, comida: true },
+      // Una línea añadida a mano no se busca sola: tiene un botón para hacerlo cuando ya tenga nombre.
+      { clave: `n${contador.current}`, nombre: '', cantidad: '', unidad: 'unidades', incluir: true, comida: true, busqueda: 'no_aplica' },
     ]);
   }
+
+  /** Cierra la hoja de marca y hace lo que se haya elegido en ella. */
+  function enFila(accion: (actuales: LineaRevision[], clave: string) => LineaRevision[]) {
+    const clave = filaDeMarca;
+    setFilaDeMarca(null);
+    if (clave !== null) cambiarLineas((actuales) => accion(actuales, clave));
+  }
+
+  const filaAbierta = lineas.find((l) => l.clave === filaDeMarca) ?? null;
+  const buscandoMarcas = lineas.filter((l) => l.busqueda === 'buscando' || l.busqueda === 'pendiente').length;
 
   const cerrar = () => (router.canGoBack() ? router.back() : router.replace('/inventario'));
 
@@ -306,8 +365,35 @@ export default function Ticket() {
               No se guarda nada hasta que pulses el botón.
             </Text>
 
+            {marcas.tiendaVisible !== null ? (
+              <View style={styles.tienda}>
+                <Storefront size={16} color={c.inkMuted} weight="duotone" />
+                <Text style={styles.tiendaTexto} numberOfLines={1}>
+                  Tienda: {marcas.tiendaVisible}
+                </Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Quitar la tienda" onPress={marcas.quitarTienda} hitSlop={10}>
+                  <X size={14} color={c.inkMuted} weight="bold" />
+                </Pressable>
+              </View>
+            ) : null}
+            {buscandoMarcas > 0 || marcas.aviso !== null ? (
+              <View style={styles.progreso} accessibilityLiveRegion="polite">
+                {buscandoMarcas > 0 ? <ActivityIndicator size="small" color={c.inkMuted} /> : null}
+                <Text style={styles.progresoTexto}>
+                  {marcas.aviso ?? `Buscando marcas… (${buscandoMarcas} por mirar). Puedes revisar mientras tanto.`}
+                </Text>
+              </View>
+            ) : null}
+
             {lineas.map((l) => (
-              <FilaRevision key={l.clave} linea={l} onCambiar={(cambios) => cambiar(l.clave, cambios)} />
+              <FilaRevision
+                key={l.clave}
+                linea={l}
+                onCambiar={(cambios) => cambiar(l.clave, cambios)}
+                onConfirmarMarca={() => cambiarLineas((actuales) => confirmarSugerida(actuales, l.clave))}
+                onAbrirMarca={() => setFilaDeMarca(l.clave)}
+                onBuscarMarca={() => marcas.buscarUna(l.clave)}
+              />
             ))}
 
             <Pressable accessibilityRole="button" accessibilityLabel="Añadir una línea" onPress={otraLinea} style={styles.anadir}>
@@ -337,6 +423,21 @@ export default function Ticket() {
             <ErrorNote message={error} />
           </ScrollView>
 
+          <HojaMarca
+            // Una hoja por fila: lo que se escribió en una no se queda en el campo de la siguiente.
+            key={filaAbierta?.clave ?? 'cerrada'}
+            linea={filaAbierta}
+            onClose={() => setFilaDeMarca(null)}
+            onElegir={(candidato) => enFila((actuales, clave) => elegirCandidato(actuales, clave, candidato))}
+            onEscribir={(marca) => enFila((actuales, clave) => escribirMarca(actuales, clave, marca))}
+            onSinIdentificar={() => enFila((actuales, clave) => dejarSinIdentificar(actuales, clave))}
+            onBuscar={() => {
+              const clave = filaDeMarca;
+              setFilaDeMarca(null);
+              if (clave !== null) marcas.buscarUna(clave);
+            }}
+          />
+
           <SafeAreaView edges={['bottom']} style={styles.pie}>
             <Button
               label={
@@ -348,7 +449,15 @@ export default function Ticket() {
               loading={guardar.isPending}
               disabled={aGuardar.length === 0}
             />
-            <Button label="Hacer otra foto" variant="quiet" onPress={() => setFase('aviso')} disabled={guardar.isPending} />
+            <Button
+              label="Hacer otra foto"
+              variant="quiet"
+              onPress={() => {
+                marcas.cancelar();
+                setFase('aviso');
+              }}
+              disabled={guardar.isPending}
+            />
           </SafeAreaView>
         </KeyboardAvoidingView>
       ) : null}
@@ -367,13 +476,37 @@ export default function Ticket() {
   );
 }
 
-/** Una línea del ticket: casilla, nombre, cantidad y unidad, todo editable. */
+/** Cómo se dice por qué una línea no es un producto, para decírselo a la persona. */
+function textoNoProducto(motivo: string): string {
+  switch (motivo) {
+    case 'descuento':
+      return 'descuento';
+    case 'total':
+      return 'total o subtotal';
+    case 'impuesto':
+      return 'impuesto';
+    case 'pago':
+      return 'medio de pago';
+    case 'mensaje':
+      return 'mensaje del recibo';
+    default:
+      return 'importe suelto';
+  }
+}
+
+/** Una línea del ticket: casilla, nombre, cantidad, unidad y marca, todo editable. */
 function FilaRevision({
   linea,
   onCambiar,
+  onConfirmarMarca,
+  onAbrirMarca,
+  onBuscarMarca,
 }: {
   linea: LineaRevision;
   onCambiar: (cambios: Partial<LineaRevision>) => void;
+  onConfirmarMarca: () => void;
+  onAbrirMarca: () => void;
+  onBuscarMarca: () => void;
 }) {
   const styles = useStyles();
   const c = useTheme();
@@ -406,9 +539,22 @@ function FilaRevision({
           maxLength={80}
           style={styles.nombre}
         />
+        {/* Lo que decía el ticket, sin tocar: es la evidencia de la que sale todo lo demás. */}
+        {linea.texto !== undefined || linea.precio !== undefined ? (
+          <Text style={styles.nota} numberOfLines={1}>
+            Ticket: {[linea.texto, linea.precio !== undefined ? `${linea.precio.toFixed(2).replace('.', ',')} €` : null].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
         {guardada ? <Text style={styles.nota}>Guardado</Text> : null}
         {bloqueada ? <Text style={styles.nota}>Opsi solo guarda comida y bebida.</Text> : null}
         {!bloqueada && !guardada && !linea.comida ? <Text style={styles.nota}>No parece comida.</Text> : null}
+        {linea.avisoNoProducto !== undefined && !guardada ? (
+          <Text style={styles.nota}>Esto parece un {textoNoProducto(linea.avisoNoProducto)}, no un producto. Márcalo si me equivoco.</Text>
+        ) : null}
+        {/* La marca solo tiene sentido en lo que se come, y en una línea añadida a mano cuando ya tiene nombre. */}
+        {linea.comida && !bloqueada && !guardada && (linea.busqueda !== 'no_aplica' || linea.nombre.trim() !== '') ? (
+          <BloqueMarca linea={linea} onConfirmar={onConfirmarMarca} onAbrir={onAbrirMarca} onBuscar={onBuscarMarca} />
+        ) : null}
       </View>
 
       <TextInput
@@ -500,6 +646,10 @@ const useStyles = makeStyles((c) => ({
   },
   unidad: { minWidth: 40, minHeight: touchTarget - 8, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, backgroundColor: c.surfaceAlt, paddingHorizontal: 6 },
   unidadTexto: { fontFamily: fonts.semibold, fontSize: 13, color: c.inkMuted },
+  tienda: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: space.md, borderRadius: radius.pill, backgroundColor: c.surfaceAlt },
+  tiendaTexto: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 13, color: c.inkMuted },
+  progreso: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  progresoTexto: { flex: 1, fontSize: 12.5, lineHeight: 17, color: c.inkMuted },
   anadir: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: touchTarget, alignSelf: 'flex-start' },
   anadirTexto: { fontFamily: fonts.semibold, fontSize: 14, color: c.brandInk },
   tachar: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },

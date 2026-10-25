@@ -9,6 +9,7 @@ import { SeccionAspecto } from '@/features/ajustes/SeccionAspecto';
 import { SeccionAvisos } from '@/features/ajustes/SeccionAvisos';
 import { SeccionCuenta } from '@/features/ajustes/SeccionCuenta';
 import { SeccionListaCompra } from '@/features/ajustes/SeccionListaCompra';
+import { SeccionMarcas } from '@/features/ajustes/SeccionMarcas';
 import { SeccionPrivacidad } from '@/features/ajustes/SeccionPrivacidad';
 import { SeccionMisNeveras } from '@/features/ajustes/SeccionMisNeveras';
 import { SeccionSalud } from '@/features/ajustes/SeccionSalud';
@@ -101,6 +102,7 @@ export default function Ajustes() {
             <SeccionAvisos data={data} onPatch={patch} guardando={save.isPending} />
             <SeccionListaCompra data={data} onPatch={patch} guardando={save.isPending} />
             <SeccionSalud />
+            <SeccionMarcas />
             <SeccionMisNeveras />
             <SeccionCuenta username={data.username} />
           </>

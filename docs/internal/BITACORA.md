@@ -1373,6 +1373,42 @@ Dos límites, tras probar la 0.5.0: el chat contestó a historia y a quién es u
 - Las cantidades del ticket no distinguen un pack («yogur natural x4») de una unidad: la persona lo ajusta. Y los productos se guardan **sin fecha de caducidad**; salen en «Sin fecha».
 - Todos los tickets cuentan para la cuota de IA (20 por hora, 100 al día, compartida con el chat).
 
+### D-58 · Marcas en los tickets: proponer con pruebas, confirmar a propósito · 2026-10-25
+
+**Lo que se pidió:** que, tras leer las líneas de un ticket, Opsi identifique el producto y su **marca** aunque el ticket abrevie, reutilizando el escáner, el lector y la integración de Open Food Facts (OFF); con fuentes intercambiables (catálogos de supermercado solo si hay una vía legítima), un historial de lo que la persona confirma, una puntuación honesta (no una probabilidad), revisión en pantalla y **ninguna marca inventada**. Explicación completa, con las señales y los umbrales: [`docs/MARCAS.md`](../MARCAS.md).
+
+**Cómo funciona.**
+1. **`opsi-ticket`** (el lector) devuelve ahora además el **texto impreso** de cada línea (sin cantidad ni importe), el **importe** y la **tienda** de la cabecera, y deja fuera los subtotales, el IVA, los descuentos y el pago (`motivoNoProducto`, con cuidado de que «Total 0% natural» siga siendo un yogur). Todo lo anterior sigue igual: sin esos campos, la respuesta es la de siempre.
+2. **`opsi-marcas`** (nueva, sin IA, sin clave de servicio, sin escribir) recibe las líneas **por tandas de 8** y, por cada una: normaliza el texto (sin perder números, unidades ni palabras que separan productos), lee el **tamaño** del envase y un **EAN impreso** si es válido, y pregunta a las fuentes **en orden**: **historial → catálogo de Opsi → Open Food Facts → catálogos de supermercado**. En cuanto una decide con garantías no se gasta el cupo de las siguientes.
+3. **Puntúa** cada candidato con señales con nombre (`ean` +60, `historial` +70, nombre hasta +50, `marca_impresa` +15, `tamano` +15 / −40 si contradice, categoría +5 / −10, tienda +3…) y **decide con umbrales conservadores**: se asigna sola solo con evidencia directa, o con ≥ 70 puntos, ≥ 75 % de las palabras, **algo más que el nombre** y 15 puntos de margen sobre el segundo. Si no, enseña hasta 4 opciones. La marca **solo sale de un candidato real o de la persona**.
+4. **La pantalla de revisión** enseña, por fila: lo que decía el ticket, el nombre normalizado, la marca (o «Marca sin identificar»), un indicador discreto (**Fiable** / **Sugerida** / dudosa) y las acciones **confirmar, cambiar, elegir otra opción, escribir la marca, dejarla sin identificar o buscar otra vez**. Las marcas llegan después de la revisión, sin bloquearla, y lo que la persona decide mientras tanto **no se pisa**.
+5. **Guardar:** el elemento se enlaza con un producto del catálogo **sin duplicarlo** (el que ya está; el global por `lookup-barcode`, único por código; o uno privado por nombre y marca con `ensure_private_product`). Y solo lo que la persona **confirmó, eligió o escribió a propósito** se recuerda (`ticket_associations`).
+
+**Decisiones y por qué.**
+- **Un segundo paso aparte, no dentro del lector.** El cupo de OFF es de 10 búsquedas por minuto entre todas las personas: un ticket de 24 líneas no cabe de golpe, y bloquear la revisión esperándolo sería peor que dejarla a la vista y que las marcas lleguen. La app espera lo que dice el servidor (acotado) y pide lo pendiente; si falta mucho, deja de insistir y cada fila tiene «Buscar marca».
+- **Ninguna tabla de tickets ni de líneas.** Un ticket no se guarda (la foto tampoco): solo queda el elemento de inventario, enlazado al producto, y la asociación confirmada. La trazabilidad vive en la asociación (`source`, `match_score`, `confirmations`, `barcode`, `product_id`).
+- **El historial es de la persona, no de la nevera,** y solo se escribe por función y con una confirmación explícita. Se aplica a texto **idéntico** y, como prueba fuerte, en la **misma tienda**; en otra tienda es una pista que no suma para decidir.
+- **La clave de lo recordado sale del texto impreso,** no del nombre que reescribió el modelo; y se le quita el importe del final y la cantidad con la que abre la línea, que cambian de un día a otro y no distinguen ningún producto.
+- **Sin extensiones de Postgres ni índices nuevos:** la búsqueda en el catálogo es por palabras, sin acentos (`search_catalog`). Con decenas de miles de productos habría que poner trigramas.
+- **Caché de OFF en memoria de la instancia, no en una tabla:** escribir una caché global exige la clave de servicio o dejar que el cliente la escriba, y eso es envenenar lo que ven los demás.
+- **Un solo cliente de OFF:** `off-busqueda.ts` añade la búsqueda de texto al de `off.ts` (mismo User-Agent —ahora en `userAgentValido`, que usa también `lookup-barcode`—, mismos límites y filtros).
+- **Dos fuentes que son el mismo dato no son dos opiniones:** el catálogo de Opsi es una copia de OFF, así que coincidir con él no suma corroboración; solo suma un origen distinto (un catálogo de supermercado).
+
+**Verificado.**
+- **Funciones:** `test:funciones` pasa de 223 a **343** pruebas (núcleo del texto, resolutor con los escenarios pedidos, fuentes, búsqueda de OFF con respuestas simuladas, manejador, lector de tickets). Tipos limpios sobre los módulos nuevos.
+- **Base de datos:** `marcas_test.sql` (**76** pruebas pgTAP); `db:check` **1262**; `db:carreras` pasa de 20 a **27** (producto privado, cupo de OFF y confirmaciones pedidos a la vez por dos sesiones; **con una prueba de mutación**: sin el candado de `ensure_private_product` la comprobación FALLA, y la función se restauró idéntica).
+- **App:** `test:app` pasa de 297 a **333**; tipos y lint limpios; las dos pantallas nuevas (fila de marca y hoja de elección) vistas en el navegador, no en un móvil.
+- **De punta a punta contra el Supabase local y Open Food Facts de verdad,** con el ticket real de pruebas: el lector tardó ~6 s y las marcas ~2 min por el cupo (3 rondas); salieron **1 asignada sola** (`Bronchales`, escrita en el ticket), **10 con opciones** y **13 sin candidatos**; **0 elementos, 0 asociaciones y 0 productos** creados por las funciones. Y la persistencia: un producto del catálogo para dos tickets, lo confirmado se reconoce sin gastar OFF, en otra tienda no se asigna por el historial, la marca escrita a mano crea un único producto privado y se reutiliza, y corregir y borrar funcionan.
+
+**Lo que NO se ha hecho.**
+- **Ningún catálogo de supermercado:** no se encontró una fuente pública, documentada y con permiso de uso. La interfaz está lista y probada con una fuente de mentira; no se finge ninguna integración.
+- **No se ha medido la exactitud** con un conjunto etiquetado: los pesos y los umbrales son criterio de trabajo, y la puntuación **no es una probabilidad**. Con estos umbrales la mayoría de las líneas llegan como «sugerida» o «elige», no resueltas: es precisión por encima de cobertura.
+- **El límite del buscador de texto de OFF no está publicado:** su documentación fija 10 por minuto por IP para su API principal y se usa ese orden de magnitud. Hay que confirmarlo con ellos antes de abrirlo a personas reales (🟠 en PENDIENTES).
+- **Nada se ha visto en un móvil.**
+- Si hay dos copias de un mismo artículo (uno privado sin código y el global con código), no se unen: son productos distintos hasta que la persona escanee el código.
+
+**Una incidencia local, no del cambio:** `household_sharing_test.sql` (prueba 30) falla en esta base local porque la tabla `household_invite_attempts` conserva 2 filas de una prueba manual de hoy; con la tabla vacía (dentro de una transacción que se deshace) pasa. En una base nueva, como la de la CI, no ocurre.
+
 ## 3. Convenciones
 
 ### Ramas

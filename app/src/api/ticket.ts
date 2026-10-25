@@ -1,5 +1,5 @@
 import { supabase } from '@/shared/lib/supabase';
-import { leerProductosTicket, type ProductoTicket } from '@/features/ticket/lineas';
+import { leerProductosTicket, leerTiendaTicket, type TicketLeido } from '@/features/ticket/lineas';
 
 /**
  * El lector de tickets: la foto de un ticket de supermercado va a la Edge Function `opsi-ticket` y
@@ -51,8 +51,8 @@ async function detalleDe(error: unknown): Promise<{ estado: number | null; cuerp
   return { estado, cuerpo };
 }
 
-/** Manda la foto (JPEG en base64, sin `data:`) y devuelve los productos que se leen en ella. */
-export async function leerTicket(imagenBase64: string): Promise<ProductoTicket[]> {
+/** Manda la foto (JPEG en base64, sin `data:`) y devuelve los productos que se leen en ella y, si se lee, la tienda. */
+export async function leerTicket(imagenBase64: string): Promise<TicketLeido> {
   const { data, error } = await supabase.functions.invoke('opsi-ticket', { body: { imagen: imagenBase64 } });
   if (error) {
     const { estado, cuerpo } = await detalleDe(error);
@@ -65,7 +65,7 @@ export async function leerTicket(imagenBase64: string): Promise<ProductoTicket[]
     if (estado === 422) throw new ErrorTicket('ilegible');
     throw new ErrorTicket('otro');
   }
-  const productos = (data as { productos?: unknown } | null)?.productos;
-  if (!Array.isArray(productos)) throw new ErrorTicket('otro');
-  return leerProductosTicket(productos);
+  const cuerpo = data as { productos?: unknown; tienda?: unknown } | null;
+  if (!Array.isArray(cuerpo?.productos)) throw new ErrorTicket('otro');
+  return { productos: leerProductosTicket(cuerpo.productos), tienda: leerTiendaTicket(cuerpo.tienda) };
 }
