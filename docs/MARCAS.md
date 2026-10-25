@@ -14,7 +14,7 @@ enriquece. Es de Opsi Premium ⭐, como leer el ticket.
 | Busca, por cada línea, productos que podrían ser, y los puntúa con señales explicadas | Asignar una marca por la tienda, por la categoría o por un nombre genérico |
 | Asigna sola solo cuando hay un candidato claramente mejor **y** algo más que el nombre (tamaño, marca escrita…) | Presentar la puntuación como una probabilidad: no está calibrada |
 | Enseña las alternativas cuando duda, y deja «Marca sin identificar» como respuesta válida | Obligar a elegir una marca para guardar |
-| Recuerda lo que la persona confirma, elige o escribe (corregible y borrable) | Aprender de una sugerencia que la persona no tocó |
+| Recuerda lo que la persona confirma, elige o escribe (elegir otra cosa lo sustituye) | Aprender de una sugerencia que la persona no tocó |
 | Sigue funcionando si Open Food Facts falla o se queda sin cupo | Guardar el ticket, sus líneas o la foto |
 | Reutiliza el producto del catálogo si ya existe | Crear un producto duplicado cada vez que el artículo sale en un ticket nuevo |
 
@@ -121,7 +121,7 @@ Una ficha que identifica el producto pero **no trae marca** deja la marca `desco
 | La foto, el ticket entero, sus líneas | **En ningún sitio** | — |
 | El elemento de inventario, enlazado al producto del catálogo (`product_id`) | `inventory_items` (como siempre) | Los miembros de la nevera |
 | El producto, si es nuevo: global por `lookup-barcode` (una sola vez por código) o privado de la nevera por `ensure_private_product` (uno por nombre y marca) | `products` | Todos / la nevera |
-| Lo que la persona **confirmó, eligió o escribió**: texto de línea normalizado + tienda → nombre, marca, producto, origen y puntuación con la que se propuso | `ticket_associations` | **Solo la persona** (RLS). Se corrige y se borra en Ajustes → «Marcas que recuerdo» |
+| Lo que la persona **confirmó, eligió o escribió**: texto de línea normalizado + tienda → nombre, marca, producto, origen y puntuación con la que se propuso | `ticket_associations` | **Solo la persona** (RLS). **No hay pantalla para verlas ni borrarlas**: se decidió mantener la app sencilla; hay que resolverlo antes de abrirla (ver «Limitaciones») |
 
 Trazabilidad de una asociación: `source` (`history`·`catalog`·`off`·`supermarket`·`manual`), `match_score`,
 `confirmations` (una corrección vuelve a 1), `barcode` y `product_id` cuando existen. No hay una tabla de líneas
@@ -198,4 +198,8 @@ exactitud con un conjunto etiquetado**: esto es una comprobación de que funcion
 - **La búsqueda en el catálogo de Opsi** recorre la tabla; con decenas de miles de productos habría que añadir un
   índice de trigramas.
 - **Sin catálogos de supermercado** (ver arriba), la tienda solo sirve para ordenar y para acotar lo recordado.
+- **Lo recordado no se puede ver ni borrar desde la app.** La base de datos ya lo permite (la persona puede leer y
+  borrar las suyas, y corregirlas por función), pero no hay pantalla, y hoy tampoco hay borrado de cuenta. Elegir otra
+  opción en la revisión sustituye lo recordado, y se va con la cuenta, pero no es una vía de supresión. Pendiente antes de
+  producción (RGPD): ver [`PENDIENTES.md`](internal/PENDIENTES.md).
 - **Nada de la pantalla se ha visto en un móvil.**

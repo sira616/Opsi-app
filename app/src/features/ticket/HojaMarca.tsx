@@ -104,7 +104,7 @@ export function HojaMarca({ linea, onClose, onElegir, onEscribir, onSinIdentific
           />
         </View>
 
-        <Text style={styles.nota}>Solo recuerdo lo que eliges o escribes tú aquí. Puedes verlo y borrarlo en Ajustes.</Text>
+        <Text style={styles.nota}>Solo recuerdo lo que eliges o escribes tú aquí, para reconocerlo la próxima vez.</Text>
       </ScrollView>
     </HojaInferior>
   );

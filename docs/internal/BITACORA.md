@@ -1407,6 +1407,8 @@ Dos límites, tras probar la 0.5.0: el chat contestó a historia y a quién es u
 - **Nada se ha visto en un móvil.**
 - Si hay dos copias de un mismo artículo (uno privado sin código y el global con código), no se unen: son productos distintos hasta que la persona escanee el código.
 
+**Actualización (mismo día): se quita «Marcas que recuerdo» de Ajustes.** Para que el paso por la app sea lo más sencillo posible, la sección donde se veían, corregían y borraban las marcas recordadas ya no existe (ni sus funciones de la app). Lo que se recuerda no cambia: sigue siendo solo lo que la persona confirma, elige o escribe a propósito, y elegir otra opción en la revisión lo sustituye. La base de datos mantiene la política de borrado y `update_ticket_association`, que hoy no usa la app. **Consecuencia que queda abierta (🟠 en PENDIENTES):** esos datos dicen qué compra y dónde, y ahora no hay ninguna vía en la app para verlos ni borrarlos; habrá que ponerla antes de producción.
+
 **Una incidencia local, no del cambio:** `household_sharing_test.sql` (prueba 30) falla en esta base local porque la tabla `household_invite_attempts` conserva 2 filas de una prueba manual de hoy; con la tabla vacía (dentro de una transacción que se deshace) pasa. En una base nueva, como la de la CI, no ocurre.
 
 ## 3. Convenciones

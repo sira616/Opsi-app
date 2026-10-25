@@ -8,7 +8,7 @@
 -- Qué hay:
 --
 --   1. `ticket_associations`   lo que ESTA persona confirmó: «el texto de ticket X, en la tienda Y, es este
---                              producto de esta marca». Es suyo (se ve, se corrige y se borra) y solo se
+--                              producto de esta marca». Es suyo (la RLS le deja leer y borrar las suyas) y solo se
 --                              escribe por función, y solo tras una confirmación explícita en la pantalla.
 --   2. `ticket_associations_for`   las asociaciones de una tanda de líneas, sin enlazar a productos que la
 --                              nevera de destino no puede ver.
@@ -72,7 +72,7 @@ create table public.ticket_associations (
 
 comment on table public.ticket_associations is
   'Lo que una persona confirmó al revisar un ticket: texto de línea + tienda → producto y marca. Solo suyo, '
-  'solo por función y solo tras una confirmación explícita. Se ve, se corrige y se borra desde Ajustes.';
+  'solo por función y solo tras una confirmación explícita. La RLS deja a su dueña leer y borrar las suyas.';
 
 create index ticket_associations_user_line_idx on public.ticket_associations (user_id, line_key);
 

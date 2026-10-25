@@ -121,8 +121,6 @@ export const queryKeys = {
    * cambia con ella es si hace falta pedir las fichas (`enabled`), no lo que se pide.
    */
   preferenciasSalud: ['salud', 'preferencias'] as const,
-  /** Las marcas que Opsi recuerda de los tickets revisados (`ticket_associations`). */
-  asociaciones: ['ticket', 'asociaciones'] as const,
 
   /** El perfil personal (opcional, sensible): solo su dueña lo lee. Se vacía al cambiar de persona. */
   perfil: ['perfil'] as const,
