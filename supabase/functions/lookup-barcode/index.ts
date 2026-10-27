@@ -29,7 +29,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 
 import { aFilaCatalogo, aProducto, manejar, type Dependencias, type FilaCatalogo } from '../_shared/lookup.ts';
-import { consultarOff, payloadDeOrigen, userAgentValido, type ProductoOff } from '../_shared/off.ts';
+import { consultarOff, payloadDeOrigen, type ProductoOff } from '../_shared/off.ts';
 
 const url = Deno.env.get('SUPABASE_URL');
 const claveServicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -52,8 +52,9 @@ const admin = createClient(url, claveServicio, {
  * identificarse con un correo que no existe.
  */
 function leerUserAgent(): string | null {
-  const valor = userAgentValido(Deno.env.get('OFF_USER_AGENT'));
-  if (valor === null) {
+  const valor = Deno.env.get('OFF_USER_AGENT')?.trim() ?? '';
+  const valido = /^[\x20-\x7E]{8,200}$/.test(valor) && !/ejemplo\.com/i.test(valor);
+  if (!valido) {
     console.log(
       JSON.stringify({
         evento: 'lookup-barcode',

@@ -18,11 +18,7 @@ import { formatQuantity, toBase, type MeasurementUnit, type UnitFamily } from '.
 /** Las unidades que usa el servidor en las propuestas. */
 export type UnidadChat = 'unidades' | 'g' | 'kg' | 'ml' | 'l';
 
-/**
- * Una línea de una propuesta. `productoId` no viene nunca del servidor: lo pone la pantalla del ticket al
- * guardar, cuando la persona ya revisó con qué producto del catálogo se enlaza.
- */
-export type LineaChat = { nombre: string; cantidad: number | null; unidad: UnidadChat | null; productoId?: string | null };
+export type LineaChat = { nombre: string; cantidad: number | null; unidad: UnidadChat | null };
 export type ElementoChat = {
   id: string;
   nombre: string;

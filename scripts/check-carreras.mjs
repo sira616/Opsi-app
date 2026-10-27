@@ -101,14 +101,8 @@ async function limpiar() {
     delete from public.households
      where id in (select household_id from public.household_members where user_id = '${USUARIO}');
     delete from auth.users where id = '${USUARIO}';
-    delete from public.lookup_usage where clave like 'u:${USUARIO}:%' or clave like 'os:${USUARIO}:%';
+    delete from public.lookup_usage where clave like 'u:${USUARIO}:%';
   `);
-}
-
-/** Si faltan menos de 12 s para que cambie el minuto, se espera: los cupos por minuto no se parten a mitad de una carrera. */
-async function esperarInicioDeMinuto() {
-  const resto = 60_000 - (Date.now() % 60_000);
-  if (resto < 12_000) await dormir(resto + 500);
 }
 
 async function preparar() {
@@ -308,43 +302,6 @@ try {
   );
   const apuntadas = await psql(`select count(*) from public.chat_usage where user_id = '${USUARIO}';`);
   comprobar('quedan apuntados 20, no 30: ningún mensaje se coló', Number(apuntadas.salida) === 20, `apuntados: ${apuntadas.salida}`);
-
-  // ── G · El mismo producto privado desde dos sesiones (marcas en tickets) ──
-  // `ensure_private_product` busca y, si no está, crea. Sin el candado por nombre y marca, las dos sesiones
-  // no verían el producto de la otra (aún sin confirmar), y cada ticket crearía el suyo: un duplicado.
-  console.log('\n  Dos tickets a la vez con la misma marca escrita a mano: ¿uno o dos productos privados?');
-  await psql(`delete from public.products where household_id = '${nevera}';`);
-  const mismoProducto = `select public.ensure_private_product('${nevera}', 'Pan de pueblo', 'Horno de Lola');`;
-  const resG = await carrera(mismoProducto, mismoProducto);
-  const idsG = [resG.primera, resG.segunda].map((r) => (r.salida.split('\n').pop() ?? '').trim());
-  comprobar('las dos sesiones reciben el MISMO producto', idsG[0] !== '' && idsG[0] === idsG[1], `respuestas: ${idsG.join(' / ')} ${resG.primera.error || resG.segunda.error}`);
-  const productosG = await psql(`select count(*) from public.products where household_id = '${nevera}' and name = 'Pan de pueblo';`);
-  comprobar('y en la base de datos hay UNO, no dos', Number(productosG.salida) === 1, `hay: ${productosG.salida}`);
-
-  // ── H · El cupo de búsquedas hacia Open Food Facts, pedido a la vez ──
-  // 10 por minuto entre todas las personas. Dos sesiones piden 8 cada una: la primera se lleva 8 y la segunda,
-  // que espera a que la primera confirme, solo 2. Sin la fila del contador bloqueada, las dos verían 0 usadas
-  // y se concederían 16 contra un cupo de 10.
-  console.log('\n  Dos sesiones piden a la vez 8 búsquedas hacia Open Food Facts (caben 10 por minuto)');
-  await esperarInicioDeMinuto();
-  await psql(`delete from public.lookup_usage where clave = 'offs:m' or clave like 'os:${USUARIO}:%';`);
-  const ochoBusquedas = `select concedidas from public.consume_off_search(8);`;
-  const resH = await carrera(ochoBusquedas, ochoBusquedas);
-  const concedidasH = [resH.primera, resH.segunda].map((r) => Number((r.salida.split('\n').pop() ?? '').trim()));
-  comprobar('la primera se lleva sus 8', concedidasH[0] === 8, `respuesta: ${resH.primera.error || resH.primera.salida}`);
-  comprobar('la segunda solo 2: el cupo del minuto es de 10 entre todas', concedidasH[1] === 2, `respuesta: ${resH.segunda.error || resH.segunda.salida}`);
-  comprobar('en total 10, ni una más', concedidasH[0] + concedidasH[1] === 10, `suman: ${concedidasH[0] + concedidasH[1]}`);
-
-  // ── I · La misma marca confirmada desde dos sesiones ──
-  // Una sola asociación que cuenta dos confirmaciones, no dos asociaciones ni una confirmación perdida.
-  console.log('\n  Dos confirmaciones a la vez de la misma marca para el mismo texto de ticket');
-  await psql(`delete from public.ticket_associations where user_id = '${USUARIO}';`);
-  const confirmar = `select confirmations from public.confirm_ticket_association('leche entera 1l', 'mercadona', 'Leche entera', 'Pascual', null, null, null, null, 'manual', null);`;
-  const resI = await carrera(confirmar, confirmar);
-  const cuentasI = [resI.primera, resI.segunda].map((r) => Number((r.salida.split('\n').pop() ?? '').trim()));
-  comprobar('la primera cuenta 1 y la segunda 2', cuentasI[0] === 1 && cuentasI[1] === 2, `respuestas: ${cuentasI.join(' / ')} ${resI.primera.error || resI.segunda.error}`);
-  const filasI = await psql(`select count(*) || '/' || max(confirmations) from public.ticket_associations where user_id = '${USUARIO}';`);
-  comprobar('queda UNA asociación con 2 confirmaciones', filasI.salida === '1/2', `quedan: ${filasI.salida}`);
 } catch (error) {
   fallos.push('la comprobación terminó con un error');
   console.error(rojo(`\n${error.message}`));

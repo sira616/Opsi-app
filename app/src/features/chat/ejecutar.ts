@@ -59,7 +59,6 @@ export async function ejecutarPropuesta(
             dateKind: null,
             dateSource: null,
             category: categoria,
-            productId: l.productoId ?? null,
           });
         }
         return `Guardado en ${nevera.name}: ${p.productos.length} ${p.productos.length === 1 ? 'producto' : 'productos'}.`;

@@ -10,7 +10,6 @@
 
 import { borradorDeRuta } from '../chat/mensajes.ts';
 import type { LineaChat, UnidadChat } from '../chat/propuestas.ts';
-import type { MarcaDeLinea } from './marcas.ts';
 import { nombreEsNoComida } from '../../shared/lib/no-comida.ts';
 
 export type ProductoTicket = {
@@ -19,20 +18,10 @@ export type ProductoTicket = {
   unidad: UnidadChat | null;
   /** El modelo (o el nombre) dice que se come o se bebe. */
   comida: boolean;
-  /** La línea tal como está impresa, sin cantidad ni importe. Existe solo si el lector la dio. */
-  texto?: string;
-  /** El importe de la línea en euros. Existe solo si el lector lo dio. */
-  precio?: number;
 };
-
-/** Lo que el lector sacó de la foto: las líneas y, si se lee, la tienda de la cabecera. */
-export type TicketLeido = { productos: ProductoTicket[]; tienda: string | null };
 
 export const MAX_PRODUCTOS = 60;
 const MAX_NOMBRE = 80;
-const MAX_TEXTO = 120;
-const MAX_TIENDA = 60;
-const MAX_PRECIO = 10_000;
 const MAX_CANTIDAD = 1_000_000;
 const UNIDADES: readonly UnidadChat[] = ['unidades', 'g', 'kg', 'ml', 'l'];
 
@@ -53,28 +42,14 @@ export function leerProductosTicket(valor: unknown): ProductoTicket[] {
         ? crudo.cantidad
         : null;
     const unidad = UNIDADES.includes(crudo.unidad as UnidadChat) ? (crudo.unidad as UnidadChat) : null;
-    const linea: ProductoTicket = {
+    salida.push({
       nombre,
       cantidad: cantidad !== null && unidad !== null ? cantidad : null,
       unidad: cantidad !== null && unidad !== null ? unidad : null,
       comida: crudo.comida !== false && !nombreEsNoComida(nombre),
-    };
-    // La evidencia de origen solo si llega: un ticket leído por una versión anterior no la lleva, y no se inventa.
-    const texto = typeof crudo.texto === 'string' ? [...borradorDeRuta(crudo.texto).trim()].slice(0, MAX_TEXTO).join('').trim() : '';
-    if (texto !== '') linea.texto = texto;
-    if (typeof crudo.precio === 'number' && Number.isFinite(crudo.precio) && crudo.precio > 0 && crudo.precio <= MAX_PRECIO) {
-      linea.precio = Math.round(crudo.precio * 100) / 100;
-    }
-    salida.push(linea);
+    });
   }
   return salida;
-}
-
-/** La tienda de la cabecera tal como la leyó el lector, o null. */
-export function leerTiendaTicket(valor: unknown): string | null {
-  if (typeof valor !== 'string') return null;
-  const limpia = [...borradorDeRuta(valor).trim()].slice(0, MAX_TIENDA).join('').trim();
-  return limpia === '' ? null : limpia;
 }
 
 /** Una fila de la pantalla de revisión: todo lo que se puede cambiar, como texto o casilla. */
@@ -90,7 +65,7 @@ export type LineaRevision = {
   comida: boolean;
   /** Ya se guardó en esta pantalla: no se vuelve a guardar si hay que reintentar lo demás. */
   guardada?: boolean;
-} & MarcaDeLinea;
+};
 
 /** «1,5» o «1.5» → 1,5; lo que no es un número mayor que cero y razonable, null. */
 export function parsearCantidad(texto: string): number | null {
@@ -113,11 +88,6 @@ export function lineasIniciales(productos: readonly ProductoTicket[]): LineaRevi
     unidad: p.unidad ?? 'unidades',
     incluir: p.comida,
     comida: p.comida,
-    ...(p.texto !== undefined ? { texto: p.texto } : {}),
-    ...(p.precio !== undefined ? { precio: p.precio } : {}),
-    nombreOriginal: p.nombre,
-    // Lo que no parece comida no se busca: no tiene marca que buscar.
-    busqueda: p.comida ? 'pendiente' : 'no_aplica',
   }));
 }
 
@@ -139,15 +109,13 @@ export function paraGuardar(lineas: readonly LineaRevision[]): LineaChat[] {
  * Lo mismo, con la clave de la fila de la que sale cada cosa: sirve para ir marcando como guardadas
  * las filas una a una, y que un fallo a medias no obligue a repetir las que ya entraron.
  */
-export function pendientesDeGuardar(
-  lineas: readonly LineaRevision[],
-): { clave: string; linea: LineaChat; fila: LineaRevision }[] {
-  const salida: { clave: string; linea: LineaChat; fila: LineaRevision }[] = [];
+export function pendientesDeGuardar(lineas: readonly LineaRevision[]): { clave: string; linea: LineaChat }[] {
+  const salida: { clave: string; linea: LineaChat }[] = [];
   for (const l of lineas) {
     const nombre = [...l.nombre.trim()].slice(0, MAX_NOMBRE).join('');
     if (!l.incluir || l.guardada === true || nombre === '' || nombreEsNoComida(nombre)) continue;
     const cantidad = parsearCantidad(l.cantidad);
-    salida.push({ clave: l.clave, linea: { nombre, cantidad, unidad: cantidad !== null ? l.unidad : null }, fila: l });
+    salida.push({ clave: l.clave, linea: { nombre, cantidad, unidad: cantidad !== null ? l.unidad : null } });
   }
   return salida;
 }

@@ -331,26 +331,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"ticket_associations": {
-                  Row: {
-                    "barcode": string | null,"brand": string | null,"confirmations": number,"created_at": string,"id": string,"line_key": string,"match_score": number | null,"name": string,"net_quantity": number | null,"product_id": string | null,"source": string,"store_key": string,"unit_family": Database["public"]['Enums']["unit_family"] | null,"updated_at": string,"user_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "barcode"?: string | null,"brand"?: string | null,"confirmations"?: number,"created_at"?: string,"id"?: string,"line_key": string,"match_score"?: number | null,"name": string,"net_quantity"?: number | null,"product_id"?: string | null,"source": string,"store_key"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string,"user_id": string
-                  }
-                  Update: {
-                    "barcode"?: string | null,"brand"?: string | null,"confirmations"?: number,"created_at"?: string,"id"?: string,"line_key"?: string,"match_score"?: number | null,"name"?: string,"net_quantity"?: number | null,"product_id"?: string | null,"source"?: string,"store_key"?: string,"unit_family"?: Database["public"]['Enums']["unit_family"] | null,"updated_at"?: string,"user_id"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "ticket_associations_product_id_fkey"
-      columns: ["product_id"]
-isOneToOne: false
-      referencedRelation: "products"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"user_health_preferences": {
                   Row: {
                     "avoid": (string)[],"consent_version": number | null,"consented_at": string | null,"updated_at": string,"user_id": string
@@ -444,38 +424,9 @@ isOneToOne: false
 "check_household_name":
 { Args: { "p_name": string }; Returns: string
                            },
-"confirm_ticket_association":
-{ Args: { "p_barcode": string,"p_brand": string,"p_line_key": string,"p_match_score": number,"p_name": string,"p_net_quantity": number,"p_product_id": string,"p_source": string,"p_store_key": string,"p_unit_family": Database["public"]['Enums']["unit_family"] }; Returns: {
-              "barcode": string | null,
-"brand": string | null,
-"confirmations": number,
-"created_at": string,
-"id": string,
-"line_key": string,
-"match_score": number | null,
-"name": string,
-"net_quantity": number | null,
-"product_id": string | null,
-"source": string,
-"store_key": string,
-"unit_family": Database["public"]['Enums']["unit_family"] | null,
-"updated_at": string,
-"user_id": string
-            }
-                          SetofOptions: {
-        from: "*"
-        to: "ticket_associations"
-        isOneToOne: true
-        isSetofReturn: false
-      } },
 "consume_lookup_quota":
 { Args: { "p_user_id": string }; Returns: {
               "permitido": boolean,"reintentar_en": number
-            }[]
-                           },
-"consume_off_search":
-{ Args: { "p_n"?: number }; Returns: {
-              "concedidas": number,"reintentar_en": number
             }[]
                            },
 "consume_off_slot":
@@ -563,9 +514,6 @@ isOneToOne: false
       } },
 "dominio_sintetico":
 { Args: Record<PropertyKey, never>; Returns: string
-                           },
-"ensure_private_product":
-{ Args: { "p_brand": string,"p_household_id": string,"p_name": string }; Returns: string
                            },
 "expire_stale_invitations":
 { Args: { "p_household_id": string }; Returns: undefined
@@ -800,11 +748,6 @@ isOneToOne: false
 "require_shared_household_member":
 { Args: { "p_household_id": string,"p_lock"?: boolean }; Returns: Database["public"]['Enums']["household_role"]
                            },
-"search_catalog":
-{ Args: { "p_barcode"?: string,"p_household_id": string,"p_words": (string)[] }; Returns: {
-              "barcode": string,"brand": string,"categories_tags": (string)[],"household_id": string,"id": string,"image_url": string,"name": string,"net_quantity": number,"unit_family": Database["public"]['Enums']["unit_family"]
-            }[]
-                           },
 "shelf_life_for_item":
 { Args: { "p_item_id": string }; Returns: {
               "days": number,"origin": Database["public"]['Enums']["shelf_life_origin"],"recommended_location": Database["public"]['Enums']["storage_location"]
@@ -874,11 +817,6 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
-"ticket_associations_for":
-{ Args: { "p_household_id": string,"p_keys": (string)[] }; Returns: {
-              "barcode": string,"brand": string,"confirmations": number,"line_key": string,"name": string,"net_quantity": number,"product_id": string,"store_key": string,"unit_family": Database["public"]['Enums']["unit_family"]
-            }[]
-                           },
 "today_for_user":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -930,30 +868,6 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "inventory_items"
-        isOneToOne: true
-        isSetofReturn: false
-      } },
-"update_ticket_association":
-{ Args: { "p_brand": string,"p_id": string,"p_name": string }; Returns: {
-              "barcode": string | null,
-"brand": string | null,
-"confirmations": number,
-"created_at": string,
-"id": string,
-"line_key": string,
-"match_score": number | null,
-"name": string,
-"net_quantity": number | null,
-"product_id": string | null,
-"source": string,
-"store_key": string,
-"unit_family": Database["public"]['Enums']["unit_family"] | null,
-"updated_at": string,
-"user_id": string
-            }
-                          SetofOptions: {
-        from: "*"
-        to: "ticket_associations"
         isOneToOne: true
         isSetofReturn: false
       } },

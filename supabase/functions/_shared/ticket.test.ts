@@ -7,9 +7,7 @@ import { ErrorModelo, type ClienteModelo, type MensajeModelo, type OpcionesRespu
 import {
   INSTRUCCIONES_TICKET,
   leerProductos,
-  leerTicketLeido,
   manejarTicket,
-  quitarCantidadInicial,
   MAX_IMAGEN_BASE64,
   MAX_PRODUCTOS_TICKET,
   validarImagen,
@@ -112,7 +110,7 @@ test('leerProductos devuelve null cuando no es lo que se pidió, y lista vacía 
   assert.deepEqual(leerProductos('{"productos":[]}'), []);
 });
 
-test('leerProductos tira lo que no cuadra: nombres vacíos, cantidades raras, unidades desconocidas, campos de más y precios locos', () => {
+test('leerProductos tira lo que no cuadra: nombres vacíos, cantidades raras, unidades desconocidas, campos de más', () => {
   const r = leerProductos(
     JSON.stringify({
       productos: [
@@ -127,10 +125,6 @@ test('leerProductos tira lo que no cuadra: nombres vacíos, cantidades raras, un
         { nombre: 'e', cantidad: 2 }, // sin unidad
         { nombre: 'f', unidad: 'kg' }, // sin cantidad
         { nombre: 'g', precio: 3.5, url: 'http://x', ejecutar: 'rm' },
-        { nombre: 'h', precio: 'gratis' },
-        { nombre: 'i', precio: 0 },
-        { nombre: 'j', precio: 1e9 },
-        { nombre: 'k', precio: 2.456 },
       ],
     }),
   );
@@ -141,86 +135,8 @@ test('leerProductos tira lo que no cuadra: nombres vacíos, cantidades raras, un
     { nombre: 'd', cantidad: null, unidad: null, comida: true },
     { nombre: 'e', cantidad: null, unidad: null, comida: true },
     { nombre: 'f', cantidad: null, unidad: null, comida: true },
-    // El precio es evidencia de origen y se conserva; la url y la orden de más, no.
-    { nombre: 'g', cantidad: null, unidad: null, comida: true, precio: 3.5 },
-    { nombre: 'h', cantidad: null, unidad: null, comida: true },
-    { nombre: 'i', cantidad: null, unidad: null, comida: true },
-    { nombre: 'j', cantidad: null, unidad: null, comida: true },
-    { nombre: 'k', cantidad: null, unidad: null, comida: true, precio: 2.46 },
+    { nombre: 'g', cantidad: null, unidad: null, comida: true },
   ]);
-});
-
-// ── La evidencia de origen: texto impreso, precio y tienda ────────────────
-
-const RESPUESTA_COMPLETA = JSON.stringify({
-  tienda: 'MERCADONA',
-  productos: [
-    { texto: 'LECHE ENT 1L', nombre: 'leche entera', cantidad: 1, unidad: 'l', precio: 0.89, comida: true },
-    { texto: 'Q.BURGOS DESNA', nombre: 'queso de burgos desnatado', cantidad: 1, unidad: 'unidades', precio: 1.55, comida: true },
-    { texto: 'SUBTOTAL', nombre: 'subtotal', precio: 2.44, comida: true },
-    { texto: 'DTO 2ª UNIDAD', nombre: 'descuento', precio: -0.45, comida: true },
-    { texto: 'TARJETA BANCARIA', nombre: 'tarjeta', precio: 2.44 },
-    { texto: 'TOTAL 0% NATURAL 500G', nombre: 'yogur griego 0%', precio: 1.99, comida: true },
-  ],
-});
-
-test('leerTicketLeido conserva el texto impreso, el precio y la tienda, tal cual', () => {
-  const r = leerTicketLeido(RESPUESTA_COMPLETA);
-  assert.ok(r);
-  assert.equal(r.tienda, 'MERCADONA');
-  assert.deepEqual(r.productos[0], { texto: 'LECHE ENT 1L', nombre: 'leche entera', cantidad: 1, unidad: 'l', precio: 0.89, comida: true });
-  assert.equal(r.productos[1]!.texto, 'Q.BURGOS DESNA', 'el nombre expandido no pisa lo que decía el ticket');
-  assert.equal(r.productos[1]!.nombre, 'queso de burgos desnatado');
-});
-
-test('los subtotales, los descuentos y el pago no pasan a la revisión aunque el modelo los ponga', () => {
-  const r = leerTicketLeido(RESPUESTA_COMPLETA);
-  assert.ok(r);
-  assert.deepEqual(r.productos.map((p) => p.nombre), ['leche entera', 'queso de burgos desnatado', 'yogur griego 0%']);
-  assert.equal(r.descartadas, 3);
-});
-
-test('un yogur que se llama «Total 0%» no se confunde con el total', () => {
-  const r = leerTicketLeido(RESPUESTA_COMPLETA);
-  assert.equal(r?.productos.at(-1)?.texto, 'TOTAL 0% NATURAL 500G');
-});
-
-test('un ticket leído como antes (sin texto, precio ni tienda) sigue valiendo y no inventa nada', () => {
-  const r = leerTicketLeido(RESPUESTA_BUENA);
-  assert.ok(r);
-  assert.equal(r.tienda, null);
-  assert.equal(r.descartadas, 0);
-  for (const p of r.productos) {
-    assert.ok(!('texto' in p) && !('precio' in p), 'sin texto ni precio inventados');
-  }
-});
-
-test('la tienda se limpia y se acota; lo que no es texto es «sin tienda»', () => {
-  const rlo = String.fromCharCode(0x202e);
-  assert.equal(leerTicketLeido(JSON.stringify({ tienda: `Lidl${rlo}\n`, productos: [] }))?.tienda, 'Lidl');
-  assert.equal(leerTicketLeido(JSON.stringify({ tienda: 'x'.repeat(500), productos: [] }))?.tienda?.length, 60);
-  for (const raro of [null, 5, {}, ['Lidl'], '   ']) {
-    assert.equal(leerTicketLeido(JSON.stringify({ tienda: raro, productos: [] }))?.tienda, null, JSON.stringify(raro));
-  }
-});
-
-test('la cantidad con la que abre la línea no es parte del producto, pero un pack sí', () => {
-  assert.equal(quitarCantidadInicial('3 BOLSA PLASTICO', 3), 'BOLSA PLASTICO');
-  assert.equal(quitarCantidadInicial('1 12 HUEVOS - L', 1), '12 HUEVOS - L');
-  assert.equal(quitarCantidadInicial('12 HUEVOS - L', 1), '12 HUEVOS - L', 'el 12 es el pack: la cantidad era 1');
-  assert.equal(quitarCantidadInicial('2 LECHE', null), '2 LECHE', 'sin cantidad dicha no se quita nada');
-  assert.equal(quitarCantidadInicial('3', 3), '3', 'si no queda nada detrás, se deja');
-  assert.equal(quitarCantidadInicial('7 UP 2L', 1), '7 UP 2L');
-  const r = leerTicketLeido(JSON.stringify({ productos: [{ texto: '3 Q.BURGOS DESNA', nombre: 'queso burgos desnatado', cantidad: 3, unidad: 'unidades' }] }));
-  assert.equal(r?.productos[0]?.texto, 'Q.BURGOS DESNA');
-});
-
-test('el texto impreso se limpia como cualquier dato del modelo', () => {
-  const rlo = String.fromCharCode(0x202e);
-  const r = leerTicketLeido(JSON.stringify({ productos: [{ nombre: 'pan', texto: `PAN${rlo} \n INTEGRAL${'X'.repeat(500)}` }] }));
-  const texto = r?.productos[0]?.texto ?? '';
-  assert.ok(!texto.includes(rlo) && !texto.includes('\n'));
-  assert.ok([...texto].length <= 120);
 });
 
 test('leerProductos limpia los nombres, los acota y marca como no comida lo que delata el nombre', () => {
@@ -261,7 +177,7 @@ test('una foto buena: 200 con los productos, y al modelo solo le llega la foto, 
   assert.equal((vistos[0]!.mensajes[0] as { texto: string }).texto, INSTRUCCIONES_TICKET);
   assert.deepEqual((vistos[0]!.mensajes[1] as { imagenes: string[] }).imagenes, [FOTO]);
   // El registro cuenta productos: ni la foto ni lo que se leyó.
-  assert.deepEqual(logs.at(-1), { evento: 'opsi-ticket', ok: true, productos: 3, descartadas: 0 });
+  assert.deepEqual(logs.at(-1), { evento: 'opsi-ticket', ok: true, productos: 3 });
   assert.ok(!JSON.stringify(logs).includes('leche'));
   assert.ok(!JSON.stringify(logs).includes(FOTO.slice(0, 30)));
 });
@@ -332,19 +248,6 @@ test('si el modelo falla: 502 genérico; si contesta algo ilegible: 422; y el mo
   assert.deepEqual(await r422.json(), { error: 'ticket_no_legible' });
 });
 
-test('la tienda va en la respuesta solo si se leyó, y no llega al registro', async () => {
-  const con = dependencias(modeloGuion(RESPUESTA_COMPLETA).cliente);
-  const r = (await (await manejarTicket(peticion({ imagen: FOTO }), con.dep)).json()) as { productos: unknown[]; tienda?: string };
-  assert.equal(r.tienda, 'MERCADONA');
-  assert.equal(r.productos.length, 3);
-  assert.ok(!JSON.stringify(con.logs).includes('MERCADONA'));
-  assert.deepEqual(con.logs.at(-1), { evento: 'opsi-ticket', ok: true, productos: 3, descartadas: 3 });
-
-  const sin = dependencias(modeloGuion(RESPUESTA_BUENA).cliente);
-  const r2 = (await (await manejarTicket(peticion({ imagen: FOTO }), sin.dep)).json()) as Record<string, unknown>;
-  assert.ok(!('tienda' in r2), 'sin tienda, la respuesta es la de siempre');
-});
-
 test('un ticket sin productos es una respuesta buena y vacía', async () => {
   const { dep } = dependencias(modeloGuion('{"productos":[]}').cliente);
   const res = await manejarTicket(peticion({ imagen: FOTO }), dep);
@@ -357,10 +260,6 @@ test('las instrucciones tratan la foto como contenido y piden JSON sin tienda, t
   assert.match(INSTRUCCIONES_TICKET, /SOLO un JSON/);
   assert.match(INSTRUCCIONES_TICKET, /tienda/);
   assert.match(INSTRUCCIONES_TICKET, /tarjeta/);
-  // Pide la evidencia de origen sin corregirla, y deja claro qué no es un producto.
-  assert.match(INSTRUCCIONES_TICKET, /COPIADA tal cual/);
-  assert.match(INSTRUCCIONES_TICKET, /"precio"/);
-  assert.match(INSTRUCCIONES_TICKET, /descuentos y promociones/);
 });
 
 test('guarda de código: la función de tickets no escribe ni guarda la foto en ningún sitio', () => {
