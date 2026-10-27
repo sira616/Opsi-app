@@ -1,6 +1,7 @@
 import { supabase } from '@/shared/lib/supabase';
 
 import { paraEnviar, type Mensaje } from './mensajes';
+import { leerPropuestas, type PropuestaChat } from './propuestas';
 
 /**
  * La costura entre la pantalla del chat y quien contesta: la Edge Function `opsi-chat`.
@@ -43,7 +44,10 @@ async function esperaDelLimite(error: unknown): Promise<number | null> {
   return typeof espera === 'number' && Number.isFinite(espera) && espera > 0 ? espera : 60;
 }
 
-export async function responder(conversacion: readonly Mensaje[]): Promise<string> {
+/** Lo que contesta el chat: el texto y, si las hay, las propuestas que la persona confirma o rechaza. */
+export type RespuestaChat = { texto: string; propuestas: PropuestaChat[] };
+
+export async function responder(conversacion: readonly Mensaje[]): Promise<RespuestaChat> {
   const { data, error } = await supabase.functions.invoke('opsi-chat', {
     body: { mensajes: paraEnviar(conversacion) },
   });
@@ -55,9 +59,11 @@ export async function responder(conversacion: readonly Mensaje[]): Promise<strin
     if (espera !== null) throw new ErrorLimiteChat(espera);
     throw error;
   }
-  const respuesta = (data as { respuesta?: unknown } | null)?.respuesta;
+  const cuerpo = data as { respuesta?: unknown; propuestas?: unknown } | null;
+  const respuesta = cuerpo?.respuesta;
   if (typeof respuesta !== 'string' || respuesta.trim() === '') {
     throw new Error('opsi-chat no devolvió una respuesta');
   }
-  return respuesta;
+  // Las propuestas vienen de un modelo: se leen con desconfianza y lo que no cuadra no existe.
+  return { texto: respuesta, propuestas: leerPropuestas(cuerpo?.propuestas) };
 }
