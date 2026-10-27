@@ -37,12 +37,11 @@ poder leer una fila (lo decide la RLS). Ver «Lo que el cliente NO garantiza» a
 | `(app)/(tabs)/lista` | Sesión | Las listas de la compra de la nevera activa |
 | `(app)/productos` | Sesión | Tus productos ⭐: almacén con buscador, filtro (escaneados / a mano) y una ficha por producto, desde la que se guarda en la nevera que se elija o se apunta en una o varias listas de ella. Premium lo decide el servidor |
 | `(app)/gastos` | Sesión | Lo que más gastas ⭐, entero: la pestaña de Premium enseña cinco y esta pantalla la lista completa. Premium lo decide el servidor |
-| `(app)/chat` | Sesión | La pantalla del chat de Opsi ⭐ (solo Premium: con el plan básico enseña un candado). La conversación vive en memoria y **sale a un proveedor de IA** (`opsi-chat`). Las **propuestas** del modelo (apuntar, guardar, gastar, tirar) se enseñan en tarjetas con «Sí» y «No» y **solo con el «Sí»** las ejecuta la app, con la sesión de la persona y por las funciones de siempre; el modelo no escribe. `?mensaje=` solo rellena el cuadro de escribir (limpiado), nunca lo envía |
+| `(app)/chat` | Sesión | La pantalla del chat de Opsi. **Hoy no habla con nadie**: la conversación vive en memoria y no sale del móvil. `?mensaje=` solo rellena el cuadro de escribir (limpiado), nunca lo envía. Antes de conectar un modelo hay que revisar esta fila y `docs/PRIVACIDAD.md` |
 | `(app)/perfil` | Sesión | Tu perfil personal (opcional, dato sensible): pide el permiso antes de enseñar nada que rellenar, guarda cada toque y borra todo con confirmación. Solo lo ve su dueña; **hoy nada recomienda con él** |
 | `(app)/(tabs)/premium` | Sesión | Pestaña de Opsi Premium ⭐ (donde estaba el chat): color de la app, tus productos y lo que más gastas. Lo premium lo decide el servidor; la pantalla solo enseña candados |
 | `(app)/alta` | Sesión | Alta en la nevera activa, a mano o con los datos de un producto escaneado |
 | `(app)/escanear` | Sesión | Cámara para leer un código de barras, con entrada a mano como alternativa |
-| `(app)/ticket` | Sesión | Leer un ticket ⭐ (solo Premium): avisa de que la foto **sale a un proveedor de IA** y no se guarda, hace la foto, enseña lo leído en una **revisión editable** y solo guarda al confirmar. Sin cámara en el navegador |
 | `(app)/elemento/[id]` | Sesión | Detalle y acciones de un elemento |
 | `(app)/editar-elemento/[id]` | Sesión | Corregir un elemento que no esté cerrado |
 | `(app)/cambiar-nevera` | Sesión | Selector de nevera |
@@ -154,7 +153,6 @@ Una en código, el resto previstas. El modelo de amenazas de cada una está en [
 | `lookup-barcode` | 2 | Usuario con sesión (verificado dentro de la función) | Código de barras (no es personal) | Código y tests; sin desplegar. **Al desplegar, la migración `20261024100000_nutricion` va ANTES** que esta versión: `buscarEnCatalogo` hace el embed `product_nutrition(nutrition_data_at)` en el camino crítico del escáner y, sin la tabla, todos los escaneos darían 500 |
 | `daily-digest` | 3 | Cron del servidor (`pg_cron`) | Hora y zona de cada persona | Sin diseñar |
 | `opsi-chat` | 5 | Usuario con sesión (verificado dentro de la función, con el token de la persona; **sin clave de servicio**) | Nombres, cantidades y fechas del inventario y la lista, y lo que se pregunta: **sale a un proveedor de IA** (hoy Ollama Cloud, en desarrollo). **No lee salud, perfil ni nutrición** | Código, tests y conectada a la app. **No escribe nada**: lee y **propone** (la persona confirma en la app y es la app quien ejecuta, con su sesión). Solo Premium, solo habla de cocina (puerta del tema) y con cuota por persona (20/h, 100/día); sin desplegar. Modelo de amenazas: §10 |
-| `opsi-ticket` | 5 | Usuario con sesión (verificado dentro de la función, con el token de la persona; **sin clave de servicio**) | **La foto de un ticket**, que **sale a un proveedor de IA** (hoy Ollama Cloud, en desarrollo). **No se guarda ni se registra**: la función no escribe nada, y solo devuelve nombre, cantidad, unidad y «comida» de cada línea | Código, tests y conectada a la app. Solo Premium, comparte la cuota de IA con el chat, y la persona **revisa y confirma** antes de guardar nada. Modelo de amenazas: §11 |
 | `parse-receipt` | 6 | Usuario con sesión | Fotos de tickets | Sin diseñar. Riesgo alto (PII) |
 
 ## Colas, workers y cron

@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useRef } from 'react';
 import { View } from 'react-native';
 
-import { Barcode, PencilSimple, Receipt } from 'phosphor-react-native';
+import { Barcode, PencilSimple } from 'phosphor-react-native';
 
 import { Button } from '@/shared/ui/Button';
 import { HojaInferior } from '@/shared/ui/HojaInferior';
@@ -14,8 +14,7 @@ type Props = {
 };
 
 /**
- * «Añadir producto»: las formas de hacerlo, cada una en su botón: escanear, leer un ticket
- * (Premium) o escribirlo a mano.
+ * «Añadir producto»: las dos formas de hacerlo, cada una en su botón.
  *
  * Escanear y escribir a mano eran dos botones sueltos en la cabecera del inventario; ahora
  * hay uno solo, que abre esta hoja. Cada opción cierra la hoja y abre su pantalla un
@@ -27,7 +26,7 @@ export function HojaAnadir({ visible, onClose }: Props) {
   const c = useTheme();
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function ir(ruta: '/escanear' | '/alta' | '/ticket') {
+  function ir(ruta: '/escanear' | '/alta') {
     onClose();
     if (espera.current) clearTimeout(espera.current);
     espera.current = setTimeout(() => router.push(ruta), 300);
@@ -40,12 +39,6 @@ export function HojaAnadir({ visible, onClose }: Props) {
           label="Escanear producto"
           onPress={() => ir('/escanear')}
           icon={<Barcode size={20} color={c.ground} weight="bold" />}
-        />
-        <Button
-          label="Leer un ticket ⭐"
-          variant="quiet"
-          onPress={() => ir('/ticket')}
-          icon={<Receipt size={20} color={c.inkMuted} weight="bold" />}
         />
         <Button
           label="Añadir a mano"

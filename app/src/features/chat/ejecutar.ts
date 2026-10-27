@@ -24,7 +24,7 @@ import { toBase } from '@/shared/lib/units';
  */
 export async function ejecutarPropuesta(
   p: PropuestaChat,
-  contexto: { nevera: Nevera; queryClient: QueryClient; invalidar?: boolean },
+  contexto: { nevera: Nevera; queryClient: QueryClient },
 ): Promise<string> {
   const { nevera, queryClient } = contexto;
   try {
@@ -76,20 +76,13 @@ export async function ejecutarPropuesta(
         for (const e of p.elementos) await actions.discard(e.id, 'chat');
         return `Tirado: ${p.elementos.length} ${p.elementos.length === 1 ? 'elemento' : 'elementos'}.`;
       }
-
-      // Los cuatro tipos están arriba; esto solo existe para que un tipo nuevo sin hacer no pase en silencio.
-      default:
-        throw new Error('Esa propuesta no se sabe hacer.');
     }
   } finally {
-    // Pase lo que pase (también a medias), lo que se ve tiene que ponerse al día. Quien llama varias
-    // veces seguidas (el ticket) lo desactiva y lo hace una vez al final.
-    if (contexto.invalidar !== false) {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(nevera.id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.lista }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.premium }),
-      ]);
-    }
+    // Pase lo que pase (también a medias), lo que se ve tiene que ponerse al día.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.priorityList(nevera.id) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.lista }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.premium }),
+    ]);
   }
 }

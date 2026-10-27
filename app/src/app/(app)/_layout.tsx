@@ -89,8 +89,6 @@ function Puerta() {
         name="escanear"
         options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
       />
-      {/* Leer un ticket: la cámara necesita la pantalla entera, y la revisión de lo leído también. */}
-      <Stack.Screen name="ticket" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="elemento/[id]" options={hoja} />
       <Stack.Screen name="editar-elemento/[id]" options={hoja} />
       {/* Tus productos es un inventario con buscador y fichas: pantalla entera, no hoja. */}
