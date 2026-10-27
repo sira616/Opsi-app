@@ -1,5 +1,3 @@
-import type { PropuestaChat } from './propuestas.ts';
-
 /**
  * La parte del chat que no necesita pantalla: qué es un mensaje, qué se sugiere y cómo se
  * limpia un borrador que llega de fuera. Pura, para poder probarla.
@@ -11,8 +9,6 @@ export type Mensaje = {
   /** Quién lo dice. Los dos son texto plano: nunca se interpretan como marcado ni como orden. */
   de: 'persona' | 'opsi';
   texto: string;
-  /** Lo que Opsi propone hacer con este mensaje (solo en los suyos). No se manda al servidor. */
-  propuestas?: PropuestaChat[];
 };
 
 /** Lo más largo que se deja escribir. Un mensaje corto es lo que se espera de un chat de cocina. */
