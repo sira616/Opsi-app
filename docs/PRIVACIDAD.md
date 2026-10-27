@@ -19,6 +19,7 @@
 |---|---|---|
 | **Cuenta:** nombre de usuario, contraseña (guardada cifrada, nunca en claro) y, si lo añades, un correo | Entrar y recuperar la cuenta | Solo tú |
 | **Tu nevera:** lo que guardas, cantidades, fechas, historial de cada cosa y las listas de la compra **compartidas** de esa nevera | Decirte qué gastar primero | Tú y **las personas con las que compartes esa nevera** |
+| **La foto de un ticket** (solo si usas «Leer un ticket», que es de Premium) | Leer los productos que has comprado. **La foto sale de tu móvil hacia un servicio de IA para leerla y Opsi no la guarda en ningún sitio** (ni en el móvil, ni en la base de datos, ni en el registro): se manda, se lee y se olvida. Un ticket puede llevar datos que no quieras compartir (la tienda, a veces los últimos dígitos de una tarjeta o un número de cliente): la pantalla lo dice **antes** de hacer la foto, para que lo tapes. Lo único que Opsi conserva es lo que tú confirmas guardar (los productos) | Solo el proveedor de IA, mientras la lee. Lo leído lo ves solo tú |
 | **Tus listas de la compra individuales** | Apuntar lo que quieres comprar, desde cualquiera de tus neveras | **Solo tú**, nunca quien comparte nevera contigo |
 | **Ajustes:** zona horaria, hora del resumen, color, listas por omisión | Que la app funcione a tu manera | Solo tú |
 | **Cuándo usas el chat** (solo la fecha y hora de cada mensaje, **nunca lo que escribes**) | Poner un límite de mensajes por persona, porque cada uno cuesta | Solo tú: nadie, ni tú, lo lee a mano; solo lo cuenta el servidor. Se borra a los dos días y con la cuenta |
@@ -42,7 +43,7 @@ El aspecto claro u oscuro se guarda en tu aparato, no en tu cuenta.
 |---|---|---|
 | **Supabase** (alojamiento de la base de datos y la cuenta) | Todo lo anterior, cifrado en tránsito | Región prevista: UE. `[Confirmar región y contrato de encargado]` |
 | **Open Food Facts** | Solo el código de barras que escaneas o de un producto cuya nutrición abres, desde el servidor | No recibe datos personales. Sus datos son abiertos (ODbL) |
-| **Proveedor de IA** (la asistente, solo en desarrollo) | Los mensajes de la conversación abierta (los últimos 20) y, cuando el modelo lo pide, los resultados de mirar tu inventario y tu lista de la compra: nombres, cantidades y fechas. No se envían alérgenos, ingredientes ni tu correo | Hoy: Ollama Cloud, solo con datos de prueba. **`[Pendiente: proveedor, país y contrato del modelo de producción (Q4) antes de abrirla a personas reales]`** |
+| **Proveedor de IA** (la asistente y el lector de tickets, solo en desarrollo) | **Asistente:** los mensajes de la conversación abierta (los últimos 20) y, cuando el modelo lo pide, los resultados de mirar tu inventario y tu lista de la compra: nombres, cantidades y fechas. **Lector de tickets:** la **foto del ticket** que haces, y nada más. No se envían alérgenos, ingredientes ni tu correo | Hoy: Ollama Cloud, solo con datos de prueba. **`[Pendiente: proveedor, país y contrato del modelo de producción (Q4) antes de abrirla a personas reales]`** |
 
 Los datos de salud **no** salen de tu cuenta: ninguna función del servidor los lee, y el cruce con los productos se hace en tu móvil.
 

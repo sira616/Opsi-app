@@ -317,6 +317,31 @@ NULL = OFF no declara nada. «Sin datos» nunca es cero.
 
 ---
 
+## 11 · Leer un ticket (`opsi-ticket`, Opsi Premium ⭐)
+
+Una Edge Function (`supabase/functions/opsi-ticket`, lógica en `_shared/ticket.ts`) que recibe la **foto de un ticket**, se la pasa a un modelo que ve y devuelve la lista de productos. Es lo más delicado que sale hacia el proveedor de IA: **una imagen**, que puede llevar más datos de los que parece. Comparte con el chat (§10) la sesión, la cuota de IA y la puerta de Premium (`gastarCuota` → `use_chat_quota`), y **no usa clave de servicio**.
+
+**Flujo:** la pantalla avisa de que la foto sale hacia un servicio de IA y de que no se guarda → cámara → la app manda la foto en base64 con el token de la persona → la función **verifica la sesión** → **valida que es un JPEG o un PNG** en base64 y con tope → **comprueba el plan y gasta cuota** → **una llamada al modelo, sin herramientas y pidiendo solo JSON** → valida y limpia lo que contesta → devuelve `{ productos }`. La app lo enseña en una pantalla de **revisión editable** y **no guarda nada** hasta que la persona lo confirma.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **I**nfo disclosure | **La foto lleva datos que la persona no quiere compartir** (tarjeta, número de cliente, dirección) y sale a un tercero | La pantalla lo dice **antes** de la foto (aviso con «Entendido, hacer la foto»; no hay forma de llegar a la cámara sin pasar por él) y recomienda taparlos. El prompt le pide al modelo que ignore todo lo que no sean productos, y **la respuesta solo lleva nombre, cantidad, unidad y «comida»**: lo demás se tira. **Pendiente, como el chat:** contrato de encargado con el proveedor, región y que no conserve ni entrene con lo enviado (🔴 antes de producción) | revisión; `docs/PRIVACIDAD.md` |
+| **I**nfo disclosure | **La foto se guarda o se registra** (disco, base de datos, log) | **No se guarda en ningún sitio**: el manejador no la escribe, el registro cuenta productos pero no incluye ni la foto ni lo leído, y un test lee el código de la función y falla si aparece una escritura a la base de datos, al almacenamiento o al disco, o una clave de servicio | `ticket.test.ts` (el registro no sale; guarda de código) |
+| **I**nfo disclosure | Ver o gastar lo de otra persona | La sesión y la cuota van con el token de quien manda la foto; la función no lee ningún dato de la base de datos más que la cuota | `ticket.test.ts` |
+| **T**ampering | **Inyección por la foto**: un ticket (o algo escrito en él) con una orden para el modelo | El modelo **no tiene herramientas**, así que no hay nada que una orden pueda hacer salvo cambiar la lista que devuelve; las instrucciones tratan todo lo que sale en la foto como contenido; lo que contesta se valida (campos y tipos exactos, nombres limpios y acotados, cantidades acotadas, 60 líneas como mucho); y **nada se guarda sin pasar por la pantalla de revisión**, donde la persona ve cada línea | `ticket.test.ts` (`leerProductos`), `lineas.test.ts` en la app |
+| **T**ampering | El modelo devuelve algo que no es lo pedido, o con campos de más | `leerProductos` devuelve `null` si no es un JSON con `productos` (422 `ticket_no_legible`), y tira lo que no cuadra; la app lo vuelve a leer con desconfianza | `ticket.test.ts`, `lineas.test.ts` |
+| **T**ampering | Guardar lo que no es comida (tabaco…) por esta vía | El nombre manda sobre lo que diga el modelo (`nombreEsNoComida`), y la pantalla no deja marcar ni guardar esas líneas; lo que el modelo marca como «no comida» (bolsas, limpieza) sale **sin marcar** | `ticket.test.ts`, `lineas.test.ts` |
+| **D**oS / coste | Mandar fotos enormes o sin parar | Tope de 8 MB de base64 (413 antes de leer el cuerpo si lo declara), solo JPEG o PNG (se reconoce por cómo empieza, sin decodificar), y la **cuota de IA por persona** (20/h, 100/día, compartida con el chat) **antes** de llamar al modelo; si no se puede comprobar la cuota, no se lee (503) | `ticket.test.ts` |
+| **E**levation | Leer tickets sin ser premium | `use_chat_quota` comprueba el plan antes de gastar nada (42501, pista `premium`) y la función contesta 403 `solo_premium` sin llamar al modelo | `ticket.test.ts`, `cuota_chat_test.sql` |
+| **R**epudiation | Qué se leyó o de qué ticket | **A propósito** no se guarda: ni la foto ni lo leído (solo cuántos productos, para saber el uso) | `ticket.test.ts` |
+
+**Lo que no cubre:**
+- **El modelo se puede equivocar al leer** (abreviaturas, cantidades, productos de más o de menos): por eso la revisión es obligatoria y editable. Probado con un ticket real: de 24 líneas, el modelo expandió la mayoría de las abreviaturas y marcó mal alguna («ultra white p4»), y la persona lo corrige antes de guardar.
+- **No se oculta nada de la foto antes de mandarla**: Opsi no sabe qué zonas del ticket son datos personales. Se avisa y se confía en que la persona tape lo que quiera.
+- **Nada de esto se ha probado en un móvil.** La función sí, de punta a punta contra el Supabase local con un ticket real.
+
+---
+
 ## Lo que este documento todavía no cubre
 
 `daily-digest` (fase 3) y `parse-receipt` (fase 6) no tienen tabla STRIDE. La segunda es de las de más

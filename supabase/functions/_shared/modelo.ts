@@ -19,7 +19,9 @@ export type LlamadaHerramienta = {
 };
 
 export type MensajeModelo =
-  | { rol: 'system' | 'user'; texto: string }
+  | { rol: 'system'; texto: string }
+  /** `imagenes`: fotos en base64 (sin el prefijo `data:`), para modelos que ven. Solo las usa `opsi-ticket`. */
+  | { rol: 'user'; texto: string; imagenes?: string[] }
   | { rol: 'assistant'; texto: string; llamadas?: LlamadaHerramienta[] }
   | { rol: 'tool'; nombre: string; texto: string };
 
@@ -32,11 +34,20 @@ export type DescripcionHerramienta = {
 
 export type RespuestaModelo = { texto: string; llamadas: LlamadaHerramienta[] };
 
+/** Cómo se quiere la respuesta, cuando no vale la de siempre. */
+export type OpcionesRespuesta = {
+  /** El modelo contesta solo JSON (para extraer datos de una foto en vez de conversar). */
+  json?: boolean;
+  /** 0 = lo más fiel posible a lo que se ve; la conversación usa 0,3. */
+  temperatura?: number;
+};
+
 export interface ClienteModelo {
   responder(
     mensajes: readonly MensajeModelo[],
     herramientas: readonly DescripcionHerramienta[],
     senal?: AbortSignal,
+    opciones?: OpcionesRespuesta,
   ): Promise<RespuestaModelo>;
 }
 
@@ -104,12 +115,13 @@ type CuerpoOllama = {
 
 export function crearClienteOllama(config: ConfigOllama, fetchFn: FetchFn = fetch): ClienteModelo {
   return {
-    async responder(mensajes, herramientas, senal) {
+    async responder(mensajes, herramientas, senal, opciones) {
       const cuerpo = {
         model: config.modelo,
         stream: false,
+        ...(opciones?.json ? { format: 'json' } : {}),
         // Una conversación de cocina no necesita inventiva: cuanto más bajo, menos se inventa.
-        options: { temperature: 0.3 },
+        options: { temperature: opciones?.temperatura ?? 0.3 },
         messages: mensajes.map(aFormatoOllama),
         tools: herramientas.map((h) => ({
           type: 'function',
@@ -159,7 +171,7 @@ function aFormatoOllama(m: MensajeModelo): Record<string, unknown> {
     case 'system':
       return { role: 'system', content: m.texto };
     case 'user':
-      return { role: 'user', content: m.texto };
+      return { role: 'user', content: m.texto, ...(m.imagenes?.length ? { images: m.imagenes } : {}) };
     case 'assistant':
       return {
         role: 'assistant',

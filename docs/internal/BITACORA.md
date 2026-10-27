@@ -1351,6 +1351,28 @@ Dos límites, tras probar la 0.5.0: el chat contestó a historia y a quién es u
 
 **Lo que NO se ha hecho:** la tarjeta nunca se ha visto en un móvil; guardar no pregunta fecha ni nevera (va a la activa); y una propuesta acepta o rechaza **entera**, sin editar una línea suelta (para eso está el «No» y volver a decirlo).
 
+### D-57 · Leer un ticket con una foto · 2026-10-25
+
+**Lo que se pidió:** que la IA lea la foto de un ticket y abra una pantalla donde confirmar toda la compra, con la opción de cambiar, añadir o quitar productos.
+
+**Cómo funciona.** «Añadir producto» → **«Leer un ticket ⭐»** (solo Premium) abre `/ticket`, a pantalla entera:
+
+1. **Aviso**, antes de la cámara y sin forma de saltárselo: la foto se envía a un servicio de IA para leerla, Opsi no la guarda, y si el ticket lleva datos que no quieras compartir (tarjeta, número de cliente) hay que taparlos.
+2. **Cámara** y **lectura** (~4 s para un ticket de 24 líneas).
+3. **Revisión editable**: una fila por producto con casilla, nombre, cantidad y unidad (se toca para cambiarla), «Añadir una línea» y desmarcar lo que sobre. Lo que el lector dice que **no es comida** (bolsas, limpieza) sale **sin marcar**; el tabaco no se puede marcar ni guardar. **No se guarda nada hasta pulsar «Guardar N productos en {nevera}».**
+4. **Guardar**, fila a fila y por las mismas funciones de siempre (`ejecutarPropuesta` → `createItem`, con el pasillo y el sitio que adivina el nombre y **sin fecha**). Cada fila que entra se marca como guardada, así que si algo falla a medias no se repite al reintentar. Opcional y a la vista: **«Tachar de mis listas lo que ya has comprado»**, con los nombres que se tacharían, por nombre igual sin importar mayúsculas, acentos ni plural.
+
+**El servidor** (`opsi-ticket`, `_shared/ticket.ts`): sesión → foto válida (JPEG o PNG en base64, tope de 8 MB) → plan y cuota (**la misma puerta de Premium y la misma cuota de IA que el chat**: `use_chat_quota` pasa a un ayudante común, `_shared/cuota.ts`) → **una llamada al modelo sin herramientas que contesta solo JSON** → se valida y se limpia → `{ productos: [{ nombre, cantidad, unidad, comida }] }`. Para esto el cliente del modelo admite imágenes y pedir JSON (`modelo.ts`). **La foto no se guarda ni se registra** (un test lee el código y falla si aparece una escritura o una clave de servicio), el registro cuenta productos y nada más, y un ticket que dijera «ignora lo anterior» no puede hacer nada: no hay herramientas y todo vuelve a la pantalla de revisión.
+
+**Probado con un ticket REAL** (el que dejaste en Descargas, de un supermercado, torcido y cortado, con abreviaturas): 24 líneas en 4,1 s. Con la primera versión del prompt el modelo dejaba casi todo abreviado («prot 0% nat», «q.burgos desna»); con una lista corta de abreviaturas habituales en el prompt salió «proteínas 0% natural», «medallones merluza», «queso burgos desnatado», «ensalada iv de temporada», «atún claro pack de 6». Marca bien las bolsas como no comida; **se equivoca con alguna cosa** («ultra white p4» como no comida, «T. cherry 500g» como «cherry») y por eso la revisión es obligatoria. Un ticket sintético con papel de cocina y detergente: 8 líneas, los dos no-comida sin marcar. De punta a punta contra el Supabase local con una cuenta de prueba (borrada después): 403 con el plan básico, 400 con una foto inválida, 200 con los productos, y **0 líneas y 0 elementos creados** por la función.
+
+**Lo que NO se ha hecho:**
+- Nada de la pantalla se ha visto en un móvil (cámara, revisión, teclado, el área segura de arriba).
+- **La foto sale a un tercero** y los 🔴 de siempre siguen abiertos: contrato de encargado con el proveedor, región y que no conserve ni entrene con lo enviado, antes de producción. Está en `docs/PRIVACIDAD.md` y en el modelo de amenazas (§11).
+- No se puede elegir una foto de la galería (haría falta `expo-image-picker`; con el lío de dependencias de este proyecto se dejó fuera): solo cámara.
+- Las cantidades del ticket no distinguen un pack («yogur natural x4») de una unidad: la persona lo ajusta. Y los productos se guardan **sin fecha de caducidad**; salen en «Sin fecha».
+- Todos los tickets cuentan para la cuota de IA (20 por hora, 100 al día, compartida con el chat).
+
 ## 3. Convenciones
 
 ### Ramas
