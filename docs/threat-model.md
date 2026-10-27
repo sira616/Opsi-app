@@ -342,6 +342,39 @@ Una Edge Function (`supabase/functions/opsi-ticket`, lógica en `_shared/ticket.
 
 ---
 
+## 12 · Marcas en los tickets (`opsi-marcas`, Opsi Premium ⭐)
+
+Una Edge Function (`supabase/functions/opsi-marcas`, lógica en `_shared/marcas.ts`, `resolver.ts` y `fuentes-marcas.ts`) que, **después** de que `opsi-ticket` haya leído un ticket, dice qué producto y qué marca podría ser cada línea. **No usa un modelo de IA**, **no usa clave de servicio** y **no escribe nada**: lee con el token de la persona (RLS) y lo único que cambia en la base de datos es el contador de su cupo. Lo que la persona confirma lo guarda la app, con su sesión, por funciones de la base de datos. Explicación completa: [`MARCAS.md`](MARCAS.md).
+
+**Flujo:** la app manda por tandas las líneas (texto impreso, nombre leído, tienda) → la función **verifica la sesión** → **valida el cuerpo** (16 KB, 16 líneas, ids sin repetir, una nevera) → **comprueba que es premium** → lee las **asociaciones** de la persona y busca en el **catálogo** que ve → pregunta a **Open Food Facts** solo si hace falta y hay cupo → puntúa y decide → devuelve candidatos con sus razones. La app los enseña y **la persona confirma, elige, escribe o deja sin identificar**; solo lo que hace a propósito se recuerda.
+
+| STRIDE | Amenaza concreta | Mitigación | Dónde se prueba |
+|---|---|---|---|
+| **I**nfo disclosure | **Lo que compra la persona llega a Open Food Facts** | Solo salen las **palabras del producto** reducidas a letras y cifras, y un filtro de país fijo: ni la tienda, ni el importe, ni la nevera, ni quién pregunta. Host fijo, sin redirecciones. Antes de producción hay que confirmar con OFF la política de uso del buscador de texto (🟠) | `marcas.test.ts`, `off-busqueda.test.ts` |
+| **I**nfo disclosure | **Las asociaciones revelan qué compra y dónde** | `ticket_associations` es **solo de su dueña** (RLS por `auth.uid()`), sin permisos de escritura sueltos, sin acceso para `anon` ni `service_role`; se va con la cuenta, y la RLS ya deja a su dueña leer y borrar las suyas (corregir, por función), **pero la app no tiene hoy ninguna pantalla para hacerlo** (🟠 en PENDIENTES). **No se guarda el ticket, ni sus líneas, ni la foto** | `marcas_test.sql`, `privilegios_test.sql` |
+| **I**nfo disclosure | El registro de la función o el de quien la llama guarda lo que compra | El registro cuenta líneas y estados por fuente; **un test comprueba que no sale ni el texto de ninguna línea ni la tienda** | `marcas.test.ts` |
+| **I**nfo disclosure | Ver o gastar lo de otra persona; ver productos privados de otra nevera | Todo va con el token de quien manda: la RLS limita historial y catálogo; `search_catalog` solo ve el global y UNA nevera propia; `ticket_associations_for` devuelve sin enlazar un producto privado de otra nevera | `marcas_test.sql` |
+| **T**ampering | **Lo que devuelve Open Food Facts lo edita cualquiera**: nombres con caracteres ocultos, imágenes de otro dominio, códigos que no son de comida, tabaco, marcas en el campo equivocado | Pasa por los **mismos filtros que una ficha** (`off.ts`): texto limpio y acotado, imagen solo de `images.openfoodfacts.org`, GTIN con dígito de control válido, prefijos que no son comida y tabaco fuera. La app lo vuelve a leer con desconfianza. Un resultado raro se queda en una opción que la persona puede descartar: **no se asigna una marca por nombre solo** | `off-busqueda.test.ts`, `resolver.test.ts`, `marcas.test.ts` (app) |
+| **T**ampering | **Inyección en la consulta de búsqueda** (operadores, comillas, otro campo) | `textoDeBusqueda` reduce a `[a-z0-9]` en minúsculas (sin comillas ni dos puntos; los operadores son en mayúsculas); el código solo cifras; el filtro de país va en el código, no en la entrada | `off-busqueda.test.ts` |
+| **T**ampering | **Envenenar la caché** de resultados | La caché es **en memoria del proceso**, la rellena solo código del servidor tras los filtros, y no hay ninguna tabla compartida que el cliente pueda escribir. Lo que se pierde (no se comparte entre instancias) es el precio | `fuentes-marcas.test.ts` |
+| **T**ampering | **Aprender una marca equivocada** y aplicarla después a otra cosa | Solo se escribe por función y **solo tras una acción explícita** de la persona (confirmar, elegir, escribir): una sugerencia sin tocar no se aprende. Solo se aplica a texto **idéntico** (con tamaño) y, como prueba fuerte, en la **misma tienda**; en otra tienda es una pista. Un tamaño contradicho impide asignarla sola. Una corrección sustituye a la anterior | `resolver.test.ts`, `fuentes-marcas.test.ts`, `marcas_test.sql` |
+| **T**ampering | Enlazar un elemento a un producto privado ajeno | `confirm_ticket_association` (corre sin RLS) **comprueba a mano** que quien llama ve el producto; `create_item` lo vuelve a comprobar; la app, si falla, guarda sin enlace | `marcas_test.sql` |
+| **T**ampering | **Duplicar o ensuciar el catálogo global** | La app **no escribe en el global**: un código va por `lookup-barcode` (único por código, con sus filtros); el privado, por `ensure_private_product` (busca o crea, con candado) | `marcas_test.sql` |
+| **D**oS / coste | **Agotar el cupo de OFF de todos** | `consume_off_search`: solo Premium; mira primero el tope **de la persona** (60/h) y solo lo que concede toca el global (10/min, aparte del de códigos de barras): una cuenta que insiste no gasta el de las demás más allá del suyo. Si OFF dice 429 o no contesta, la línea sigue sin marca | `marcas_test.sql`, `marcas.test.ts` |
+| **D**oS / coste | Peticiones enormes | 16 KB y 16 líneas por petición (la app pide de 8 en 8: cada línea es una búsqueda en el catálogo), ids acotados y únicos, textos acotados y limpios de caracteres ocultos; 413 antes de leer si lo declara | `marcas.test.ts` |
+| **E**levation | Usarlo sin ser premium | 403 `solo_premium` **antes** de leer nada; `consume_off_search` y `confirm_ticket_association` dan 42501 (pista `premium`) | `marcas.test.ts`, `marcas_test.sql` |
+| **E**levation | Que la función escriba donde no debe | Sin clave de servicio, sin `.from()`, `.insert()` ni `.upsert()`, y **solo cuatro `rpc`** (`my_plan`, `ticket_associations_for`, `search_catalog`, `consume_off_search`): un test lee el código y falla si aparece otra cosa | `marcas.test.ts` |
+| **R**epudiation | Por qué se asignó una marca | Cada asociación guarda su origen, la puntuación con que se propuso y cuántas veces se confirmó | `marcas_test.sql` |
+
+**Lo que no cubre:**
+- **No se ha medido la exactitud** con un conjunto etiquetado de tickets. La puntuación es una heurística con umbrales conservadores, no una probabilidad. Una prueba real con un ticket de 24 líneas dio 1 asignada sola, 10 con opciones y 13 sin candidatos.
+- **Open Food Facts puede estar equivocado, incompleto o caído**; la persona es quien confirma, y la importación no depende de ello.
+- **Ningún catálogo de supermercado está conectado** (no hay una fuente pública y permitida): la tienda solo ordena y acota lo recordado.
+- **La marca que escribe la persona se guarda tal cual** (con los mismos límites de longitud y caracteres que cualquier texto suyo), y se ve en Ajustes.
+- **Nada de la pantalla se ha probado en un móvil.**
+
+---
+
 ## Lo que este documento todavía no cubre
 
 `daily-digest` (fase 3) y `parse-receipt` (fase 6) no tienen tabla STRIDE. La segunda es de las de más
