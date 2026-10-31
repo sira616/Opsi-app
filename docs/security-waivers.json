@@ -1,13 +1,5 @@
 [
   {
-    "id": "GHSA-86w9-cpqp-85rv",
-    "paquete": "node-forge",
-    "gravedad": "high",
-    "motivo": "La verificación de firmas RSA PKCS#1 v1.5 acepta elementos anidados de más. Lo usan @expo/cli y @expo/code-signing-certificates, que son herramientas de línea de comandos (certificados y firma de actualizaciones OTA). Opsi no usa actualizaciones OTA: no tiene expo-updates ni sección `updates` en app.json, y ninguna comprobación de firmas de la app pasa por esta librería. NO hay versión corregida publicada: la 1.4.0 que usamos es la última. Revisado el 2026-10-19: sigue sin versión corregida (node-forge 1.4.0 es la última publicada) y el motivo sigue valiendo.",
-    "hasta": "2026-12-07",
-    "quitar_cuando": "node-forge publique una versión corregida. Revisar de nuevo si algún día se añade expo-updates: entonces deja de valer este motivo."
-  },
-  {
     "id": "GHSA-mrhx-c7xc-m3w5",
     "paquete": "zod",
     "gravedad": "high",
