@@ -588,6 +588,18 @@ const CAMPOS_OFF = [
   'additives_tags',
 ].join(',');
 
+/**
+ * El User-Agent con el que Opsi se presenta ante OFF, o null si no sirve. Su política de uso pide el
+ * nombre de la app y un contacto, y es lo que les permite escribirnos antes de bloquearnos. Sin uno bueno
+ * NO se llama a OFF (en lugar de hacerlo anónimamente). Se rechaza el valor de ejemplo de `.env.example`:
+ * copiarlo sin cambiarlo es identificarse con un correo que no existe. Lo usan `lookup-barcode` y
+ * `opsi-marcas`: es UNA identidad.
+ */
+export function userAgentValido(valor: string | undefined | null): string | null {
+  const v = (valor ?? '').trim();
+  return /^[\x20-\x7E]{8,200}$/.test(v) && !/ejemplo\.com/i.test(v) ? v : null;
+}
+
 export const TIEMPO_MAXIMO_MS = 4000;
 export const MAX_CUERPO_OFF = 256 * 1024;
 

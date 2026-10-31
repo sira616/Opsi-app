@@ -55,7 +55,7 @@ function transcripcion(conversacion: readonly Mensaje[]): string {
  */
 export function leerVeredicto(texto: string): boolean {
   const sinBorrador = texto.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  const palabras =
+  const palabras: string[] =
     quitarCaracteresOcultos(sinBorrador)
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')

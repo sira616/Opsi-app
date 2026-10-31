@@ -131,6 +131,20 @@ export async function fetchLista(listaId: string): Promise<LineaLista[]> {
   return [...pendientes, ...compradas];
 }
 
+/**
+ * Lo que está pendiente de comprar en TODAS las listas de la persona (individuales y de sus neveras),
+ * con lo mínimo para compararlo por nombre. La RLS decide qué listas son suyas.
+ */
+export async function fetchPendientes(): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from('shopping_list_items')
+    .select('id, name')
+    .eq('is_purchased', false)
+    .limit(400);
+  if (error) throw error;
+  return (data ?? []) as { id: string; name: string }[];
+}
+
 /** Una línea concreta, para rellenar el alta cuando se guarda lo comprado. */
 export async function fetchLinea(id: string): Promise<LineaLista | null> {
   const { data, error } = await supabase
