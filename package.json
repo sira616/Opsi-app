@@ -40,7 +40,7 @@
     "test:app": "node --test \"app/src/**/*.test.ts\""
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite": "^0.5.15",
     "supabase": "^2.121.0"
   }
 }
